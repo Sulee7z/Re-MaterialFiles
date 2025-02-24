@@ -42,12 +42,13 @@ jobs:
         distribution: 'temurin'
         java-version: '21'
 
-    - name: Build with Gradle
-      uses: gradle/actions/setup-gradle@v3 #Todo: Step: Set up Gradle
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
       with:
-        gradle-home-cache-cleanup: true
         gradle-version: current
-        arguments: assembleRelease --parallel
+
+    - name: Build with Gradle
+      run: gradle assembleRelease --parallel
 
     - name: Rename artifact
       working-directory: app/build/outputs/apk/release/
