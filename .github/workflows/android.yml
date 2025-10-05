@@ -49,7 +49,9 @@ jobs:
         gradle-version: release-candidate
 
     - name: Build with Gradle
-      run: gradle build
+      run: |
+        sed -i "/jcenter()/d" build.gradle
+        gradle build
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
