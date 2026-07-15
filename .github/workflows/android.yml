@@ -12,7 +12,7 @@ jobs:
 
     steps:
     - name: Check out repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
       with:
         ref: 'master'
         submodules: true
@@ -44,17 +44,18 @@ jobs:
         java-version: '25'
 
     - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v4
+      uses: gradle/actions/setup-gradle@v5
       with:
         gradle-version: release-candidate
 
     - name: Build with Gradle
       run: |
         sed -i "/jcenter()/d" build.gradle
-        gradle build
+        sed -i 's/dav4jvm:02fe1a95e6/dav4jvm:02fe1a95e6b86e323bec3784d7d2fe2d4081dde6/g' build.gradle
+        gradle build --stacktrace
 
     - name: Upload artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: MaterialFiles Build.${{steps.GetCommit.outputs.commitCount}}
         path: app/build/outputs/

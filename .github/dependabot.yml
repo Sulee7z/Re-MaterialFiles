@@ -26,6 +26,8 @@ updates:
       - dependency-name: "com.github.bitfireAT:dav4jvm"
       - dependency-name: "com.hierynomus:smbj"
       - dependency-name: "de.psdev.licensesdialog:licensesdialog"
+      - dependency-name: "androidx.core:core-ktx"
+        versions: ["1.19.x"]
     groups:
       app-dependencies:
         patterns: ["*"]
