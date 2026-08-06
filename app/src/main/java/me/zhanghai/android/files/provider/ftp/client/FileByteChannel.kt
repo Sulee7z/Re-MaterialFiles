@@ -18,9 +18,24 @@ class FileByteChannel(
     private val client: FTPClient,
     private val releaseClient: (FTPClient) -> Unit,
     private val path: String,
-    isAppend: Boolean
+    isAppend: Boolean,
+    truncate: Boolean
 ) : AbstractFileByteChannel(isAppend, joinCancelledRead = true) {
     private val clientLock = Any()
+
+    init {
+        if (truncate) {
+            // FTP's REST+STOR does not truncate the tail of an existing file, so truncate it
+            // explicitly by storing empty data before any write happens.
+            synchronized(clientLock) {
+                InputStream::class.nullInputStream().use {
+                    if (!client.storeFile(path, it)) {
+                        client.throwNegativeReplyCodeException()
+                    }
+                }
+            }
+        }
+    }
 
     @Throws(IOException::class)
     override fun onRead(position: Long, size: Int): ByteBuffer {

@@ -281,7 +281,7 @@ object Client {
     }
 
     @Throws(IOException::class)
-    fun openByteChannel(path: Path, isAppend: Boolean): SeekableByteChannel {
+    fun openByteChannel(path: Path, isAppend: Boolean, truncate: Boolean): SeekableByteChannel {
         val authority = path.authority
         val client = acquireClient(authority)
         if (!client.hasFeature(FTPCmd.REST)) {
@@ -289,7 +289,7 @@ object Client {
         }
         return NotifyEntryModifiedSeekableByteChannel(
             FileByteChannel(
-                client, { releaseClient(authority, client) }, path.remotePath, isAppend
+                client, { releaseClient(authority, client) }, path.remotePath, isAppend, truncate
             ), path as Java8Path
         )
     }

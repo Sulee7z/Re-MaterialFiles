@@ -221,6 +221,7 @@ object FtpFileSystemProvider : FileSystemProvider(), PathObservableProvider, Sea
         if (openOptions.write && !openOptions.truncateExisting) {
             throw UnsupportedOperationException("Missing ${StandardOpenOption.TRUNCATE_EXISTING}")
         }
+        var fileExists = false
         if (openOptions.write || openOptions.create || openOptions.createNew ||
             openOptions.noFollowLinks) {
             val fileFile = try {
@@ -228,6 +229,7 @@ object FtpFileSystemProvider : FileSystemProvider(), PathObservableProvider, Sea
             } catch (e: IOException) {
                 throw e.toFileSystemExceptionForFtp(file.toString())
             }
+            fileExists = fileFile != null
             if (openOptions.createNew && fileFile != null) {
                 throw FileAlreadyExistsException(file.toString())
             }
@@ -251,7 +253,11 @@ object FtpFileSystemProvider : FileSystemProvider(), PathObservableProvider, Sea
             throw UnsupportedOperationException(attributes.contentToString())
         }
         try {
-            return Client.openByteChannel(file, openOptions.append)
+            // Truncate is only needed when the file already exists: FTP's REST+STOR does not
+            // truncate the tail of an existing file by itself.
+            return Client.openByteChannel(
+                file, openOptions.append, openOptions.truncateExisting && fileExists
+            )
         } catch (e: IOException) {
             throw e.toFileSystemExceptionForFtp(file.toString())
         }
