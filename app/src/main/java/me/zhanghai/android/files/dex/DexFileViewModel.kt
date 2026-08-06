@@ -29,7 +29,9 @@ class DexFileViewModel(private val path: Path) : ViewModel() {
         _dexFileLiveData.value = DataState.Loading()
         AsyncTask.THREAD_POOL_EXECUTOR.execute {
             val value: DataState<DexFile> = try {
-                val bytes = Files.readAllBytes(path)
+                // Files.readAllBytes() requires channel.size(), which is unsupported on remote
+                // file systems (FTP/SFTP/SMB/WebDAV), so read the stream instead.
+                val bytes = Files.newInputStream(path).use { it.readBytes() }
                 val dexFile = DexParser.parse(bytes)
                 disassembler = DexDisassembler(dexFile)
                 DataState.Success(dexFile)
