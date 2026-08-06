@@ -6,7 +6,7 @@
 > - [Hai Zhang](https://github.com/zhanghai) —— 原版 Material Files 的作者，感谢他带来了如此优秀的开源文件管理器。
 > - [Citrinae-Lime](https://github.com/Citrinae-Lime) —— Sora-Editor 版本分支的作者，感谢他对原版的二次开发与维护。
 
-## 本分支新增功能（MT 管理器风格逆向工具）
+## 本分支新增功能
 
 本分支在 Sora-Editor 版基础上，添加了一系列面向 APK 逆向/分析的工具（长按文件 → 菜单）：
 
