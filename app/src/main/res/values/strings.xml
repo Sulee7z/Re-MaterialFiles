@@ -835,7 +835,7 @@
     <string name="apk_sign_signing">Signing…</string>
     <string name="apk_sign_done_format">Signed: %1$s</string>
     <string name="apk_sign_error">Signing failed</string>
-    <string name="apk_sign_v1_note">Uses APK Signature Scheme v1</string>
+    <string name="apk_sign_v1_note">Uses APK Signature Schemes v1 + v2 + v3</string>
 
     <string name="apk_rename_done_format">Renamed to %1$s</string>
     <string name="apk_rename_error">Rename failed</string>

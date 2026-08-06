@@ -689,7 +689,7 @@
     <string name="apk_sign_signing">签名中…</string>
     <string name="apk_sign_done_format">已签名: %1$s</string>
     <string name="apk_sign_error">签名失败</string>
-    <string name="apk_sign_v1_note">使用 APK 签名方案 v1</string>
+    <string name="apk_sign_v1_note">使用 APK 签名方案 v1 + v2 + v3</string>
 
     <string name="apk_rename_done_format">已重命名为 %1$s</string>
     <string name="apk_rename_error">重命名失败</string>

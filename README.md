@@ -1,13 +1,44 @@
+# Material Files (Sora-Editor 增强分支)
+
+> **这是一个分支项目。** 本仓库基于 [zhanghai/MaterialFiles](https://github.com/zhanghai/MaterialFiles)（原作者：Hai Zhang）及其 [Citrinae-Lime/MaterialFiles.Sora-Editor](https://github.com/Citrinae-Lime/MaterialFiles.Sora-Editor)（Sora-Editor 版本）分支修改而来。
+>
+> **特别鸣谢：**
+> - [Hai Zhang](https://github.com/zhanghai) —— 原版 Material Files 的作者，感谢他带来了如此优秀的开源文件管理器。
+> - [Citrinae-Lime](https://github.com/Citrinae-Lime) —— Sora-Editor 版本分支的作者，感谢他对原版的二次开发与维护。
+
+## 本分支新增功能（MT 管理器风格逆向工具）
+
+本分支在 Sora-Editor 版基础上，添加了一系列面向 APK 逆向/分析的工具（长按文件 → 菜单）：
+
+- **DEX 分析器**：解析 APK 内的 DEX 文件（类/方法/字段/指令级），支持导出 Smali 源码、正则搜索、查看类引用。
+- **APK 字符串搜索**：在 DEX 与 .so 文件中批量搜索字符串。
+- **ELF 分析器**：查看 .so 文件的 ELF 头、程序头、节区与字符串表。
+- **十六进制查看器/编辑器**：任意文件的 Hex 查看与编辑。
+- **AndroidManifest 解码**：AXML 二进制 XML → 可读文本（版本号、minSdk、targetSdk、组件等）。
+- **APK 对比**：比较两个 APK 的签名信息是否一致。
+- **时间戳编辑**：修改文件的修改时间。
+- **Logcat 查看器**：Root 或非 Root 环境查看系统日志。
+- **Activity 启动器**：列出已安装应用，启动任意 Activity。
+- **文件内容搜索**：在当前目录递归搜索文本内容（区分大小写、仅文本过滤）。
+- **批量重命名**：多选文件后统一加前缀/后缀、查找替换、自动编号。
+- **签名 APK**：使用 **APK Signature Scheme v1 + v2 + v3** 签名 APK（内置密钥库选择、密码输入，签名结果可正常安装于 Android 8.0+）。
+- **带版本号重命名**：自动读取 APK 版本名并重命名为 `名称_版本号.apk`。
+- **安装 APK**：直接通过系统安装器安装 APK 文件。
+
+> 签名功能基于 BouncyCastle 自研实现，v1（JAR 签名）/v2/v3 均通过 `apksigner verify` 验证。
+
+---
+
 # Material Files
 
-[![Android CI 状态](https://img.shields.io/github/actions/workflow/status/Citrinae-Lime/MaterialFiles.Sora-Editor/android.yml?style=for-the-badge&label=%E5%8E%9F%E7%89%88%20%E7%8A%B6%E6%80%81)](https://github.com/Citrinae-Lime/MaterialFiles.Sora-Editor/actions/workflows/android.yml)
-[![Sora-Editor版 状态](https://img.shields.io/github/actions/workflow/status/Citrinae-Lime/MaterialFiles.Sora-Editor/Sora-Editor.yml?style=for-the-badge&label=Sora-Editor%E7%89%88%20%E7%8A%B6%E6%80%81)](https://github.com/Citrinae-Lime/MaterialFiles.Sora-Editor/actions/workflows/Sora-Editor.yml)
-[![GitHub 发行版](https://img.shields.io/github/v/release/Citrinae-Lime/MaterialFiles.Sora-Editor?include_prereleases&display_name=release&style=for-the-badge)](https://github.com/Citrinae-Lime/MaterialFiles.Sora-Editor/releases)
+[![Android CI 状态](https://img.shields.io/github/actions/workflow/status/Sulee7z/MaterialFiles.Sora-Editor/android.yml?style=for-the-badge&label=%E5%8E%9F%E7%89%88%20%E7%8A%B6%E6%80%81)](https://github.com/Sulee7z/MaterialFiles.Sora-Editor/actions/workflows/android.yml)
+[![Sora-Editor版 状态](https://img.shields.io/github/actions/workflow/status/Sulee7z/MaterialFiles.Sora-Editor/Sora-Editor.yml?style=for-the-badge&label=Sora-Editor%E7%89%88%20%E7%8A%B6%E6%80%81)](https://github.com/Sulee7z/MaterialFiles.Sora-Editor/actions/workflows/Sora-Editor.yml)
+[![GitHub 发行版](https://img.shields.io/github/v/release/Sulee7z/MaterialFiles.Sora-Editor?include_prereleases&display_name=release&style=for-the-badge)](https://github.com/Sulee7z/MaterialFiles.Sora-Editor/releases)
 [![许可证](https://img.shields.io/github/license/zhanghai/MaterialFiles?color=blue&style=for-the-badge)](LICENSE)
 
 一个开源的 Material Design 文件管理器，适用于 Android 8.0+。
 
-[<img alt="下载应用，请到 GitHub" src="https://raw.githubusercontent.com/Kunzisoft/Github-badge/main/get-it-on-github.png" width="240">](https://github.com/Citrinae-Lime/MaterialFiles.Sora-Editor/releases/latest/)
+[<img alt="下载应用，请到 GitHub" src="https://raw.githubusercontent.com/Kunzisoft/Github-badge/main/get-it-on-github.png" width="240">](https://github.com/Sulee7z/MaterialFiles.Sora-Editor/releases/latest/)
 
 [在 Transifex 上帮助翻译](https://www.transifex.com/zhanghai/MaterialFiles/)（[搜索 Android 和 GNOME 的翻译](https://translations.zhanghai.me/)、[微软语言资源](https://learn.microsoft.com/en-us/globalization/reference/microsoft-language-resources)、[MIME 类型翻译](https://gitlab.freedesktop.org/xdg/shared-mime-info/-/tree/master/po)）
 

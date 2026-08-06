@@ -104,7 +104,7 @@ import me.zhanghai.android.files.hex.HexViewerActivity
 import me.zhanghai.android.files.logcat.LogcatActivity
 import me.zhanghai.android.files.activitylauncher.ActivityLauncherActivity
 import me.zhanghai.android.files.apkmanifest.AndroidManifestDecoder
-import me.zhanghai.android.files.apksign.ApkV1Signer
+import me.zhanghai.android.files.apksign.ApkSigner
 import me.zhanghai.android.files.contentsearch.ContentSearchActivity
 import me.zhanghai.android.files.fileproperties.FilePropertiesDialogFragment
 import me.zhanghai.android.files.navigation.BookmarkDirectories
@@ -1987,7 +1987,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                     cacheDirectory,
                     file.name.substringBeforeLast('.', file.name) + "-signed.apk"
                 )
-                ApkV1Signer.sign(inputFile, outputFile, privateKey, certificate)
+                ApkSigner.sign(inputFile, outputFile, privateKey, certificate)
                 outputFile
             } catch (e: Throwable) {
                 withContext(Dispatchers.Main) {

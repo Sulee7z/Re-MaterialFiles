@@ -84,7 +84,7 @@ object ApkV1Signer {
                 }
                 val bytes = zipFile.getInputStream(entry).use { it.readBytes() }
                 val block =
-                    "Name: ${entry.name}\r\nSHA-1-Digest: ${sha1(bytes)}\r\n".toByteArray(
+                    "Name: ${entry.name}\r\nSHA1-Digest: ${sha1(bytes)}\r\n".toByteArray(
                         Charsets.UTF_8
                     )
                 sectionBlocks.add(block)
@@ -99,13 +99,13 @@ object ApkV1Signer {
     ): ByteArray {
         val main = StringBuilder()
         main.append("Signature-Version: 1.0\r\n")
-        main.append("SHA-1-Digest-Manifest: ").append(sha1(manifest)).append("\r\n\r\n")
+        main.append("SHA1-Digest-Manifest: ").append(sha1(manifest)).append("\r\n\r\n")
         val builder = StringBuilder()
         sections.forEach { section ->
             val text = String(section, Charsets.UTF_8)
             val name = text.substringAfter("Name: ").substringBefore("\r\n")
             builder.append("Name: ").append(name).append("\r\n")
-            builder.append("SHA-1-Digest: ").append(sha1(section)).append("\r\n\r\n")
+            builder.append("SHA1-Digest: ").append(sha1(section)).append("\r\n\r\n")
         }
         return (main.toString() + builder).toByteArray(Charsets.UTF_8)
     }
