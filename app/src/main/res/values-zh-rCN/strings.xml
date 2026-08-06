@@ -575,6 +575,29 @@
     <string name="dex_method_no_code">此方法没有代码</string>
     <string name="dex_smali_write_error">写入 smali 文件失败</string>
     <string name="dex_string_copied">已复制到剪贴板</string>
+
+    <string name="file_item_action_install">安装</string>
+    <string name="file_item_action_apk_string_search">搜索 APK 内字符串</string>
+    <string name="file_item_action_elf_analyze">ELF 分析</string>
+    <string name="file_item_action_hex_view">十六进制查看</string>
+
+    <string name="apk_string_search_title">APK 字符串搜索</string>
+    <string name="apk_string_search_error">读取 APK 失败</string>
+    <string name="apk_string_count_format">共 %2$d 个字符串,显示 %1$d 个</string>
+    <string name="apk_string_file_format">%1$s</string>
+
+    <string name="elf_analyze_title">ELF 分析器</string>
+    <string name="elf_analyze_error">解析 ELF 文件失败</string>
+    <string name="elf_not_an_elf">不是有效的 ELF 文件</string>
+    <string name="elf_strings_tab">字符串</string>
+    <string name="elf_info_tab">信息</string>
+
+    <string name="hex_viewer_title">十六进制查看器</string>
+    <string name="hex_viewer_error">读取文件失败</string>
+    <string name="hex_viewer_offset">偏移</string>
+    <string name="hex_viewer_go">跳转</string>
+    <string name="hex_viewer_page_format">%1$s - %2$s / %3$s</string>
+    <string name="hex_viewer_size_unknown">大小未知</string>
     
     <string name="word_warp">文字换行</string>
     <string name="syntax_highlighting">语法高亮</string>

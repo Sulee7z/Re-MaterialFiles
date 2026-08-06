@@ -722,6 +722,29 @@
     <string name="dex_smali_write_error">Failed to write smali file</string>
     <string name="dex_string_copied">Copied to clipboard</string>
 
+    <string name="file_item_action_install">Install</string>
+    <string name="file_item_action_apk_string_search">Search strings in APK</string>
+    <string name="file_item_action_elf_analyze">Analyze ELF</string>
+    <string name="file_item_action_hex_view">View as hex</string>
+
+    <string name="apk_string_search_title">APK string search</string>
+    <string name="apk_string_search_error">Failed to read APK</string>
+    <string name="apk_string_count_format">%1$d of %2$d strings</string>
+    <string name="apk_string_file_format">%1$s</string>
+
+    <string name="elf_analyze_title">ELF analyzer</string>
+    <string name="elf_analyze_error">Failed to parse ELF file</string>
+    <string name="elf_not_an_elf">Not a valid ELF file</string>
+    <string name="elf_strings_tab">Strings</string>
+    <string name="elf_info_tab">Info</string>
+
+    <string name="hex_viewer_title">Hex viewer</string>
+    <string name="hex_viewer_error">Failed to read file</string>
+    <string name="hex_viewer_offset">Offset</string>
+    <string name="hex_viewer_go">Go</string>
+    <string name="hex_viewer_page_format">%1$s - %2$s / %3$s</string>
+    <string name="hex_viewer_size_unknown">Unknown size</string>
+
     <string name="ftp_server_title">FTP server</string>
     <string name="ftp_server_state_title">Status</string>
     <string name="ftp_server_state_summary_starting">Starting…</string>

@@ -479,6 +479,12 @@ class FileListAdapter(
         menu.findItem(R.id.action_extract).isVisible = file.isArchiveFile
         menu.findItem(R.id.action_dex_analyze).isVisible =
             file.name.endsWith(".dex", ignoreCase = true)
+        menu.findItem(R.id.action_install).isVisible = file.mimeType.isApk
+        menu.findItem(R.id.action_apk_string_search).isVisible = file.mimeType.isApk
+        menu.findItem(R.id.action_elf_analyze).isVisible =
+            file.name.endsWith(".so", ignoreCase = true) ||
+                file.name.endsWith(".elf", ignoreCase = true)
+        menu.findItem(R.id.action_hex_view).isVisible = !isDirectory
         menu.findItem(R.id.action_archive).isVisible = !isArchivePath
         menu.findItem(R.id.action_add_bookmark).isVisible = isDirectory
         holder.popupMenu.setOnMenuItemClickListener {
@@ -509,6 +515,22 @@ class FileListAdapter(
                 }
                 R.id.action_dex_analyze -> {
                     listener.showDexAnalyzer(file)
+                    true
+                }
+                R.id.action_install -> {
+                    listener.installFile(file)
+                    true
+                }
+                R.id.action_apk_string_search -> {
+                    listener.showApkStringSearch(file)
+                    true
+                }
+                R.id.action_elf_analyze -> {
+                    listener.showElfAnalyzer(file)
+                    true
+                }
+                R.id.action_hex_view -> {
+                    listener.showHexViewer(file)
                     true
                 }
                 R.id.action_archive -> {
@@ -628,6 +650,10 @@ class FileListAdapter(
         fun showRenameFileDialog(file: FileItem)
         fun extractFile(file: FileItem)
         fun showDexAnalyzer(file: FileItem)
+        fun installFile(file: FileItem)
+        fun showApkStringSearch(file: FileItem)
+        fun showElfAnalyzer(file: FileItem)
+        fun showHexViewer(file: FileItem)
         fun showCreateArchiveDialog(file: FileItem)
         fun shareFile(file: FileItem)
         fun copyPath(file: FileItem)

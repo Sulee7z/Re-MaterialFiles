@@ -343,6 +343,24 @@
             android:theme="@style/Theme.MaterialFiles" />
 
         <activity
+            android:name="me.zhanghai.android.files.apksearch.ApkStringSearchActivity"
+            android:exported="true"
+            android:label="@string/apk_string_search_title"
+            android:theme="@style/Theme.MaterialFiles" />
+
+        <activity
+            android:name="me.zhanghai.android.files.elf.ElfAnalyzerActivity"
+            android:exported="true"
+            android:label="@string/elf_analyze_title"
+            android:theme="@style/Theme.MaterialFiles" />
+
+        <activity
+            android:name="me.zhanghai.android.files.hex.HexViewerActivity"
+            android:exported="true"
+            android:label="@string/hex_viewer_title"
+            android:theme="@style/Theme.MaterialFiles" />
+
+        <activity
             android:name="me.zhanghai.android.files.viewer.image.ImageViewerActivity"
             android:exported="true"
             android:label="@string/image_viewer_title"

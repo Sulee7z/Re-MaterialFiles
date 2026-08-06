@@ -74,6 +74,10 @@ import me.zhanghai.android.files.filejob.FileJobService
 import me.zhanghai.android.files.filelist.FileSortOptions.By
 import me.zhanghai.android.files.filelist.FileSortOptions.Order
 import me.zhanghai.android.files.dex.DexAnalyzerActivity
+import me.zhanghai.android.files.apksearch.ApkStringSearchActivity
+import me.zhanghai.android.files.elf.ElfAnalyzerActivity
+import me.zhanghai.android.files.hex.HexViewerActivity
+import me.zhanghai.android.files.file.fileProviderUri
 import me.zhanghai.android.files.fileproperties.FilePropertiesDialogFragment
 import me.zhanghai.android.files.navigation.BookmarkDirectories
 import me.zhanghai.android.files.navigation.BookmarkDirectory
@@ -1446,6 +1450,38 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     override fun showDexAnalyzer(file: FileItem) {
         startActivity(
             DexAnalyzerActivity::class.createIntent().apply {
+                extraPath = file.path
+            }
+        )
+    }
+
+    override fun installFile(file: FileItem) {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(file.path.fileProviderUri, file.mimeType.value)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(intent)
+    }
+
+    override fun showApkStringSearch(file: FileItem) {
+        startActivity(
+            ApkStringSearchActivity::class.createIntent().apply {
+                extraPath = file.path
+            }
+        )
+    }
+
+    override fun showElfAnalyzer(file: FileItem) {
+        startActivity(
+            ElfAnalyzerActivity::class.createIntent().apply {
+                extraPath = file.path
+            }
+        )
+    }
+
+    override fun showHexViewer(file: FileItem) {
+        startActivity(
+            HexViewerActivity::class.createIntent().apply {
                 extraPath = file.path
             }
         )
