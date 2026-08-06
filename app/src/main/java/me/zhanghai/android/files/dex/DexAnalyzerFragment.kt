@@ -123,8 +123,9 @@ class DexAnalyzerFragment : Fragment() {
                 is DataState.Error -> {
                     binding.progress.isVisible = false
                     binding.errorText.isVisible = true
-                    binding.errorText.text = state.throwable.localizedMessage
-                        ?: getString(R.string.dex_analyze_error_unknown)
+                    binding.errorText.text = state.throwable.javaClass.simpleName + ": " +
+                        (state.throwable.localizedMessage
+                            ?: getString(R.string.dex_analyze_error_unknown))
                 }
                 is DataState.Success -> {
                     binding.progress.isVisible = false

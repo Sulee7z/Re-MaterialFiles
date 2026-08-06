@@ -46,10 +46,10 @@ class DexDisassembler(private val dex: DexFile) {
             0x1c -> Opcode("const-class", "21c")
             0x1d -> Opcode("monitor-enter", "11x")
             0x1e -> Opcode("monitor-exit", "11x")
-            0x1f -> Opcode("check-cast", "21t")
+            0x1f -> Opcode("check-cast", "21c")
             0x20 -> Opcode("instance-of", "22c")
             0x21 -> Opcode("array-length", "12x")
-            0x22 -> Opcode("new-instance", "21t")
+            0x22 -> Opcode("new-instance", "21c")
             0x23 -> Opcode("new-array", "22c")
             0x24 -> Opcode("filled-new-array", "35c")
             0x25 -> Opcode("filled-new-array/range", "3rc")
@@ -65,77 +65,80 @@ class DexDisassembler(private val dex: DexFile) {
             0x2f -> Opcode("cmpl-double", "23x")
             0x30 -> Opcode("cmpg-double", "23x")
             0x31 -> Opcode("cmp-long", "23x")
-            in 0x32..0x3f -> Opcode(
+            in 0x32..0x37 -> Opcode(
+                arrayOf("if-eq", "if-ne", "if-lt", "if-ge", "if-gt", "if-le")[index - 0x32], "22t"
+            )
+            in 0x38..0x3d -> Opcode(
+                arrayOf("if-eqz", "if-nez", "if-ltz", "if-gez", "if-gtz", "if-lez"
+                )[index - 0x38], "21t"
+            )
+            in 0x3e..0x43 -> Opcode("unused", "10x")
+            in 0x44..0x51 -> Opcode(
+                arrayOf(
+                    "aget", "aget-wide", "aget-object", "aget-boolean", "aget-byte", "aget-char",
+                    "aget-short", "aput", "aput-wide", "aput-object", "aput-boolean", "aput-byte",
+                    "aput-char", "aput-short"
+                )[index - 0x44], "23x"
+            )
+            in 0x52..0x5f -> Opcode(
                 arrayOf(
                     "iget", "iget-wide", "iget-object", "iget-boolean", "iget-byte", "iget-char",
                     "iget-short", "iput", "iput-wide", "iput-object", "iput-boolean", "iput-byte",
                     "iput-char", "iput-short"
-                )[index - 0x32], "22c"
+                )[index - 0x52], "22c"
             )
-            in 0x40..0x4d -> Opcode(
+            in 0x60..0x6d -> Opcode(
                 arrayOf(
                     "sget", "sget-wide", "sget-object", "sget-boolean", "sget-byte", "sget-char",
                     "sget-short", "sput", "sput-wide", "sput-object", "sput-boolean", "sput-byte",
                     "sput-char", "sput-short"
-                )[index - 0x40], "21c"
+                )[index - 0x60], "21c"
             )
-            in 0x4e..0x52 -> Opcode(
-                arrayOf("invoke-virtual", "invoke-super", "invoke-direct", "invoke-static",
-                    "invoke-interface")[index - 0x4e], "35c"
-            )
-            0x53 -> Opcode("invoke-unused", "35c")
-            in 0x54..0x58 -> Opcode(
-                arrayOf("invoke-virtual/range", "invoke-super/range", "invoke-direct/range",
-                    "invoke-static/range", "invoke-interface/range")[index - 0x54], "3rc"
-            )
-            0x59 -> Opcode("invoke-unused/range", "3rc")
-            in 0x5a..0x5f -> Opcode("unused", "35c")
-            in 0x60..0x6d -> Opcode("unused", "10x")
             in 0x6e..0x72 -> Opcode(
                 arrayOf("invoke-virtual", "invoke-super", "invoke-direct", "invoke-static",
                     "invoke-interface")[index - 0x6e], "35c"
             )
-            0x73 -> Opcode("invoke-unused", "35c")
+            0x73 -> Opcode("unused", "35c")
             in 0x74..0x78 -> Opcode(
                 arrayOf("invoke-virtual/range", "invoke-super/range", "invoke-direct/range",
                     "invoke-static/range", "invoke-interface/range")[index - 0x74], "3rc"
             )
-            0x79 -> Opcode("invoke-unused/range", "3rc")
+            0x79 -> Opcode("unused", "3rc")
             in 0x7a..0x7f -> Opcode("unused", "10x")
             in 0x80..0x8f -> Opcode("unused", "22c")
             in 0x90..0x9a -> Opcode(
-                arrayOf("add-int/2addr", "sub-int/2addr", "mul-int/2addr", "div-int/2addr",
-                    "rem-int/2addr", "and-int/2addr", "or-int/2addr", "xor-int/2addr",
-                    "shl-int/2addr", "shr-int/2addr", "ushr-int/2addr")[index - 0x90], "12x"
+                arrayOf("add-int", "sub-int", "mul-int", "div-int", "rem-int", "and-int",
+                    "or-int", "xor-int", "shl-int", "shr-int", "ushr-int")[index - 0x90], "23x"
             )
             in 0x9b..0xa5 -> Opcode(
-                arrayOf("add-long/2addr", "sub-long/2addr", "mul-long/2addr", "div-long/2addr",
-                    "rem-long/2addr", "and-long/2addr", "or-long/2addr", "xor-long/2addr",
-                    "shl-long/2addr", "shr-long/2addr", "ushr-long/2addr")[index - 0x9b], "12x"
+                arrayOf("add-long", "sub-long", "mul-long", "div-long", "rem-long", "and-long",
+                    "or-long", "xor-long", "shl-long", "shr-long", "ushr-long")[index - 0x9b], "23x"
             )
             in 0xa6..0xaa -> Opcode(
-                arrayOf("add-float/2addr", "sub-float/2addr", "mul-float/2addr",
-                    "div-float/2addr", "rem-float/2addr")[index - 0xa6], "12x"
+                arrayOf("add-float", "sub-float", "mul-float", "div-float",
+                    "rem-float")[index - 0xa6], "23x"
             )
             in 0xab..0xaf -> Opcode(
-                arrayOf("add-double/2addr", "sub-double/2addr", "mul-double/2addr",
-                    "div-double/2addr", "rem-double/2addr")[index - 0xab], "12x"
+                arrayOf("add-double", "sub-double", "mul-double", "div-double",
+                    "rem-double")[index - 0xab], "23x"
             )
             in 0xb0..0xba -> Opcode(
-                arrayOf("add-int", "sub-int", "mul-int", "div-int", "rem-int", "and-int",
-                    "or-int", "xor-int", "shl-int", "shr-int", "ushr-int")[index - 0xb0], "23x"
+                arrayOf("add-int/2addr", "sub-int/2addr", "mul-int/2addr", "div-int/2addr",
+                    "rem-int/2addr", "and-int/2addr", "or-int/2addr", "xor-int/2addr",
+                    "shl-int/2addr", "shr-int/2addr", "ushr-int/2addr")[index - 0xb0], "12x"
             )
             in 0xbb..0xc5 -> Opcode(
-                arrayOf("add-long", "sub-long", "mul-long", "div-long", "rem-long", "and-long",
-                    "or-long", "xor-long", "shl-long", "shr-long", "ushr-long")[index - 0xbb], "23x"
+                arrayOf("add-long/2addr", "sub-long/2addr", "mul-long/2addr", "div-long/2addr",
+                    "rem-long/2addr", "and-long/2addr", "or-long/2addr", "xor-long/2addr",
+                    "shl-long/2addr", "shr-long/2addr", "ushr-long/2addr")[index - 0xbb], "12x"
             )
             in 0xc6..0xca -> Opcode(
-                arrayOf("add-float", "sub-float", "mul-float", "div-float",
-                    "rem-float")[index - 0xc6], "23x"
+                arrayOf("add-float/2addr", "sub-float/2addr", "mul-float/2addr",
+                    "div-float/2addr", "rem-float/2addr")[index - 0xc6], "12x"
             )
             in 0xcb..0xcf -> Opcode(
-                arrayOf("add-double", "sub-double", "mul-double", "div-double",
-                    "rem-double")[index - 0xcb], "23x"
+                arrayOf("add-double/2addr", "sub-double/2addr", "mul-double/2addr",
+                    "div-double/2addr", "rem-double/2addr")[index - 0xcb], "12x"
             )
             in 0xd0..0xd7 -> Opcode(
                 arrayOf("add-int/lit16", "rsub-int", "mul-int/lit16", "div-int/lit16",
@@ -303,12 +306,8 @@ class DexDisassembler(private val dex: DexFile) {
                 }
                 "35c" -> {
                     val argCount = (unit shr 12) and 0xf
+                    val index = insns[position + 1].toInt() and 0xffff
                     val registers = readInvokeRegisters(insns, position, argCount)
-                    val index = if (argCount == 5) {
-                        insns[position + 2].toInt() and 0xfff
-                    } else {
-                        insns[position + 2].toInt() and 0xffff
-                    }
                     Decoded(opcode.name, "$registers, ${renderReference(op, index)}", 3)
                 }
                 "3rc" -> {
@@ -324,8 +323,8 @@ class DexDisassembler(private val dex: DexFile) {
                 }
                 "45cc" -> {
                     val argCount = (unit shr 12) and 0xf
+                    val index = insns[position + 1].toInt() and 0xffff
                     val registers = readInvokeRegisters(insns, position, argCount)
-                    val index = insns[position + 2].toInt() and 0xffff
                     val protoIndex = insns[position + 3].toInt() and 0xffff
                     Decoded(
                         opcode.name,
@@ -355,16 +354,19 @@ class DexDisassembler(private val dex: DexFile) {
     }
 
     private fun readInvokeRegisters(insns: ShortArray, position: Int, argCount: Int): String {
-        val word1 = insns[position + 1].toInt() and 0xffff
+        // 35c: word0 = A(15-12) | G(11-8) | op(7-0); word1 = index; word2 = C(3-0) D(7-4)
+        // E(11-8) F(15-12); G is the 5th register when argCount == 5.
+        val word0 = insns[position].toInt() and 0xffff
         val word2 = insns[position + 2].toInt() and 0xffff
         val registers = if (argCount <= 4) {
             (0 until argCount).map { index ->
-                (word1 shr (index * 4)) and 0xf
+                (word2 shr (index * 4)) and 0xf
             }
         } else {
+            val g = (word0 shr 8) and 0xf
             listOf(
-                (word2 shr 12) and 0xf, word1 and 0xf, (word1 shr 4) and 0xf,
-                (word1 shr 8) and 0xf, (word1 shr 12) and 0xf
+                word2 and 0xf, (word2 shr 4) and 0xf, (word2 shr 8) and 0xf,
+                (word2 shr 12) and 0xf, g
             ).take(argCount)
         }
         return "{" + registers.joinToString(", ") { "v$it" } + "}"
@@ -384,23 +386,22 @@ class DexDisassembler(private val dex: DexFile) {
             }
             0xfe -> "method-handle@$index"
             0xff -> "proto@$index"
-            in 0x32..0x4d -> if (index in dex.fields.indices) {
+            in 0x52..0x6d -> if (index in dex.fields.indices) {
                 val field = dex.fields[index]
                 "${field.className}->${field.name}:${field.type}"
             } else {
                 "field@$index"
             }
-            in 0x4e..0x53, in 0x6e..0x73, in 0xfa..0xfa -> if (index in dex.methods.indices) {
+            in 0x6e..0x73, in 0x74..0x79, in 0xfa..0xfa, in 0xfc..0xfc -> if (index in dex.methods.indices) {
                 dex.methods[index].toString()
             } else {
                 "method@$index"
             }
-            in 0x54..0x59, in 0x74..0x79, in 0xfb..0xfb -> if (index in dex.methods.indices) {
+            in 0xfb..0xfb, in 0xfd..0xfd -> if (index in dex.methods.indices) {
                 dex.methods[index].toString()
             } else {
                 "method@$index"
             }
-            in 0xfc..0xfd -> "callsite@$index"
             else -> "index@$index"
         }
     }

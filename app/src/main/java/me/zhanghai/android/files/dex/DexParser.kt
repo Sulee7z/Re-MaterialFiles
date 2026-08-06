@@ -65,16 +65,16 @@ object DexParser {
             val shortyIndex = buffer.getInt(protoOffset)
             val returnTypeIndex = buffer.getInt(protoOffset + 4)
             val parametersOffset = buffer.getInt(protoOffset + 8)
+            // A type_list: uint size followed by ushort type indices, padded to 4 bytes.
             val parameters = if (parametersOffset == 0) {
                 emptyList()
             } else {
-                val (parametersSize, firstSizeEnd) = readUleb128(bytes, parametersOffset)
+                val parametersSize = readU32(bytes, parametersOffset)
                 val parameterTypeIndices = ArrayList<String>(parametersSize)
-                var typeIndexOffset = firstSizeEnd
-                repeat(parametersSize) {
-                    val (typeIndex, end) = readUleb128(bytes, typeIndexOffset)
-                    parameterTypeIndices.add(types[typeIndex])
-                    typeIndexOffset = end
+                repeat(parametersSize) { parameterIndex ->
+                    parameterTypeIndices.add(
+                        types[readU16(bytes, parametersOffset + 4 + parameterIndex * 2)]
+                    )
                 }
                 parameterTypeIndices
             }
@@ -165,8 +165,19 @@ object DexParser {
         val (virtualMethodsSize, virtualMethodsSizeEnd) = readUleb128(bytes, directMethodsSizeEnd)
         var position = virtualMethodsSizeEnd
         val fieldDefs = ArrayList<DexFieldDef>(staticFieldsSize + instanceFieldsSize)
+        // Each section (static fields, instance fields, direct methods, virtual methods) has its
+        // own index accumulator starting from 0.
         var fieldIndexDiff = 0
-        repeat(staticFieldsSize + instanceFieldsSize) {
+        repeat(staticFieldsSize) {
+            val (fieldIndexDiffValue, fieldIndexDiffEnd) = readUleb128(bytes, position)
+            fieldIndexDiff += fieldIndexDiffValue
+            position = fieldIndexDiffEnd
+            val (accessFlags, accessFlagsEnd) = readUleb128(bytes, position)
+            position = accessFlagsEnd
+            fieldDefs.add(DexFieldDef(fieldRefs[fieldIndexDiff], accessFlags))
+        }
+        fieldIndexDiff = 0
+        repeat(instanceFieldsSize) {
             val (fieldIndexDiffValue, fieldIndexDiffEnd) = readUleb128(bytes, position)
             fieldIndexDiff += fieldIndexDiffValue
             position = fieldIndexDiffEnd
@@ -176,7 +187,19 @@ object DexParser {
         }
         val methodDefs = ArrayList<DexMethodDef>(directMethodsSize + virtualMethodsSize)
         var methodIndexDiff = 0
-        repeat(directMethodsSize + virtualMethodsSize) {
+        repeat(directMethodsSize) {
+            val (methodIndexDiffValue, methodIndexDiffEnd) = readUleb128(bytes, position)
+            methodIndexDiff += methodIndexDiffValue
+            position = methodIndexDiffEnd
+            val (accessFlags, accessFlagsEnd) = readUleb128(bytes, position)
+            position = accessFlagsEnd
+            val (codeOffset, codeOffsetEnd) = readUleb128(bytes, position)
+            position = codeOffsetEnd
+            val code = if (codeOffset == 0) null else readCodeItem(bytes, codeOffset)
+            methodDefs.add(DexMethodDef(methodRefs[methodIndexDiff], accessFlags, code))
+        }
+        methodIndexDiff = 0
+        repeat(virtualMethodsSize) {
             val (methodIndexDiffValue, methodIndexDiffEnd) = readUleb128(bytes, position)
             methodIndexDiff += methodIndexDiffValue
             position = methodIndexDiffEnd
@@ -191,22 +214,33 @@ object DexParser {
     }
 
     private fun readCodeItem(bytes: ByteArray, offset: Int): DexCode {
-        val (registersSize, registersSizeEnd) = readUleb128(bytes, offset)
-        val (insSize, insSizeEnd) = readUleb128(bytes, registersSizeEnd)
-        val (outsSize, outsSizeEnd) = readUleb128(bytes, insSizeEnd)
-        val (_, triesSizeEnd) = readUleb128(bytes, outsSizeEnd)
-        val (_, debugInfoOffsetEnd) = readUleb128(bytes, triesSizeEnd)
-        val insnsSize = (bytes[debugInfoOffsetEnd].toInt() and 0xff) or
-            ((bytes[debugInfoOffsetEnd + 1].toInt() and 0xff) shl 8)
-        val insnsOffset = debugInfoOffsetEnd + 2
+        // The code item header uses fixed-size fields: ushort registers_size, ushort ins_size,
+        // ushort outs_size, ushort tries_size, uint debug_info_off, ushort insns_size, followed
+        // by 2 bytes of padding so that insns start on a 4-byte boundary.
+        var position = offset
+        val registersSize = readU16(bytes, position)
+        position += 2
+        val insSize = readU16(bytes, position)
+        position += 2
+        val outsSize = readU16(bytes, position)
+        position += 2
+        position += 2 // tries_size
+        position += 4 // debug_info_off
+        val insnsSize = readU16(bytes, position)
+        position += 4 // insns_size and padding
         val insns = ShortArray(insnsSize)
         repeat(insnsSize) { index ->
-            val byteOffset = insnsOffset + index * 2
-            insns[index] = ((bytes[byteOffset].toInt() and 0xff) or
-                ((bytes[byteOffset + 1].toInt() and 0xff) shl 8)).toShort()
+            insns[index] = readU16(bytes, position + index * 2).toShort()
         }
         return DexCode(registersSize, insSize, outsSize, insns)
     }
+
+    private fun readU16(bytes: ByteArray, offset: Int): Int =
+        (bytes[offset].toInt() and 0xff) or ((bytes[offset + 1].toInt() and 0xff) shl 8)
+
+    private fun readU32(bytes: ByteArray, offset: Int): Int =
+        (bytes[offset].toInt() and 0xff) or ((bytes[offset + 1].toInt() and 0xff) shl 8) or
+            ((bytes[offset + 2].toInt() and 0xff) shl 16) or ((bytes[offset + 3].toInt() and 0xff) shl 24)
 
     private fun readUleb128(bytes: ByteArray, offset: Int): Pair<Int, Int> {
         var result = 0
