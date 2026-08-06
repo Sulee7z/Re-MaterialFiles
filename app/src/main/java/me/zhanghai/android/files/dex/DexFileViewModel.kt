@@ -13,7 +13,7 @@ import java8.nio.file.Files
 import java8.nio.file.Path
 import me.zhanghai.android.files.util.DataState
 
-class DexFileViewModel(path: Path) : ViewModel() {
+class DexFileViewModel(private val path: Path) : ViewModel() {
 
     private val _dexFileLiveData = MutableLiveData<DataState<DexFile>>()
     val dexFileLiveData: LiveData<DataState<DexFile>>
@@ -28,7 +28,7 @@ class DexFileViewModel(path: Path) : ViewModel() {
     fun load() {
         _dexFileLiveData.value = DataState.Loading()
         AsyncTask.THREAD_POOL_EXECUTOR.execute {
-            val value = try {
+            val value: DataState<DexFile> = try {
                 val bytes = Files.readAllBytes(path)
                 val dexFile = DexParser.parse(bytes)
                 disassembler = DexDisassembler(dexFile)

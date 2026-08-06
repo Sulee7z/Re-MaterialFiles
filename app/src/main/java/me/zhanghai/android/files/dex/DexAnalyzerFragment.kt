@@ -187,7 +187,7 @@ class DexAnalyzerFragment : Fragment() {
         val members = dexClass.fields.map { MemberItem(dexClass, it, null) } +
             dexClass.methods.map { MemberItem(dexClass, null, it) }
         val membersAdapter = MemberListAdapter { member ->
-            member.method?.let { openMethodSmali(member.dexClass, it) }
+            member.methodDef?.let { openMethodSmali(member.dexClass, it) }
         }
         dialogBinding.membersRecyclerView.layoutManager = LinearLayoutManager(context)
         dialogBinding.membersRecyclerView.adapter = membersAdapter
@@ -307,21 +307,21 @@ private class StringListAdapter(
 
 private data class MemberItem(
     val dexClass: DexClass,
-    val field: DexFieldDef?,
-    val method: DexMethodDef?
+    val fieldDef: DexFieldDef?,
+    val methodDef: DexMethodDef?
 ) {
     val text: String
-        get() = if (field != null) {
-            val f = field.field
-            "${DexAccessFlags.forField(field.accessFlags)} ${f.type} ${f.name}"
+        get() = if (fieldDef != null) {
+            val f = fieldDef.field
+            "${DexAccessFlags.forField(fieldDef.accessFlags)} ${f.type} ${f.name}"
         } else {
-            val m = method!!.method
+            val m = methodDef!!.method
             val prefix = if (m.name == "<init>" || m.name == "<clinit>") {
                 "${m.className}->"
             } else {
                 ""
             }
-            "${DexAccessFlags.forMethod(method!!.accessFlags)} $prefix${m.name}${m.shortDescriptor}"
+            "${DexAccessFlags.forMethod(methodDef!!.accessFlags)} $prefix${m.name}${m.shortDescriptor}"
         }
 }
 

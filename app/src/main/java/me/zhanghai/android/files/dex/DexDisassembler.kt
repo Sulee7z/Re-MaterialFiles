@@ -193,7 +193,7 @@ class DexDisassembler(private val dex: DexFile) {
 
     private fun Long.toHex(): String = "0x%016x".format(this)
 
-    private class Decoded(
+    private data class Decoded(
         val opcode: String,
         val operands: String,
         val size: Int
@@ -377,7 +377,7 @@ class DexDisassembler(private val dex: DexFile) {
             } else {
                 "string@$index"
             }
-            in 0x1c, 0x1f..0x20, 0x22..0x25 -> if (index < dex.types.size) {
+            in 0x1c..0x1c, in 0x1f..0x20, in 0x22..0x25 -> if (index < dex.types.size) {
                 dex.types[index]
             } else {
                 "type@$index"
@@ -390,12 +390,12 @@ class DexDisassembler(private val dex: DexFile) {
             } else {
                 "field@$index"
             }
-            in 0x4e..0x53, 0x6e..0x73, 0xfa -> if (index in dex.methods.indices) {
+            in 0x4e..0x53, in 0x6e..0x73, in 0xfa..0xfa -> if (index in dex.methods.indices) {
                 dex.methods[index].toString()
             } else {
                 "method@$index"
             }
-            in 0x54..0x59, 0x74..0x79, 0xfb -> if (index in dex.methods.indices) {
+            in 0x54..0x59, in 0x74..0x79, in 0xfb..0xfb -> if (index in dex.methods.indices) {
                 dex.methods[index].toString()
             } else {
                 "method@$index"
