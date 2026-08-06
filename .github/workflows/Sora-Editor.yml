@@ -1,6 +1,12 @@
 name: MaterialFiles with Sora-Editor
 
-on: [workflow_dispatch, push]
+on:
+  workflow_dispatch:
+  push:
+    branches: [Sora-Editor_1.7, main]
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -11,29 +17,34 @@ jobs:
     - name: Check out repository
       uses: actions/checkout@v7
       with:
-        submodules: true
         show-progress: false
 
     - name: Get "latest" tag and short SHA
       id: get_tag
       run: |
-        tag=`curl -s 'https://api.github.com/repos/zhanghai/MaterialFiles/tags?per_page=1' | grep -Po '"name": "\K[^"]+'` && echo "tag=$tag" >> $GITHUB_OUTPUT
-        echo Short_SHA=$(git rev-parse --short "$GITHUB_SHA") >> $GITHUB_OUTPUT
+        tag=$(curl -s 'https://api.github.com/repos/zhanghai/MaterialFiles/tags?per_page=1' | grep -Po '"name": "\K[^"]+' || true)
+        if [ -z "$tag" ]; then
+          tag='1.7.4'
+        fi
+        echo "tag=$tag" >> $GITHUB_OUTPUT
+        echo "Short_SHA=$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_OUTPUT
 
     - name: Delete Non-Free Code
       run: |
         rm -rf app/src/main/java/me/zhanghai/android/files/nonfree
-        find -type f -exec sed -i '/\/\/#ifdef NONFREE/,/\/\/#endif/d' {} +
+        find app/src -type f -exec sed -i '/\/\/#ifdef NONFREE/,/\/\/#endif/d' {} +
 
     - name: Write Signing Configuration
-      if: github.event_name != 'pull_request'
       run: |
-        if [ ! -z "${{ secrets.KEY_STORE }}" ]; then
-          echo storePassword='${{ secrets.KEY_STORE_PASSWORD }}' >> signing.properties
-          echo keyAlias='${{ secrets.ALIAS }}' >> signing.properties
-          echo keyPassword='${{ secrets.KEY_STORE_PASSWORD }}' >> signing.properties
-          echo storeFile='key.jks' >> signing.properties
-          echo ${{ secrets.KEY_STORE }} | base64 --decode > key.jks
+        if [ -n "${{ secrets.KEY_STORE }}" ]; then
+          echo "storePassword='${{ secrets.KEY_STORE_PASSWORD }}'" >> signing.properties
+          echo "keyAlias='${{ secrets.ALIAS }}'" >> signing.properties
+          echo "keyPassword='${{ secrets.KEY_STORE_PASSWORD }}'" >> signing.properties
+          echo "storeFile='key.jks'" >> signing.properties
+          echo "${{ secrets.KEY_STORE }}" | base64 --decode > key.jks
+        else
+          echo "No signing secrets configured, falling back to debug signing"
+          sed -i 's/signingConfig signingConfigs.release/signingConfig signingConfigs.debug/' app/build.gradle
         fi
 
     - name: Set up JDK
@@ -44,21 +55,29 @@ jobs:
 
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v5
-      with:
-        gradle-version: current
 
     - name: Build with Gradle
-      run: gradle assembleRelease --parallel
+      run: ./gradlew assembleRelease --parallel --stacktrace
 
     - name: Rename artifact
       working-directory: app/build/outputs/apk/release/
-      run: mv app-release.apk MaterialFiles.Sora-Editor-${{steps.get_tag.outputs.tag}}@${{steps.get_tag.outputs.Short_SHA}}.apk
+      run: |
+        APK=$(ls app-release*.apk)
+        mv "$APK" "MaterialFiles.Sora-Editor-${{ steps.get_tag.outputs.tag }}@${{ steps.get_tag.outputs.Short_SHA }}.apk"
 
     - name: Upload artifact
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v4
       with:
-        name: MaterialFiles-release ${{steps.get_tag.outputs.tag}}@${{steps.get_tag.outputs.Short_SHA}}
-        path: app/build/outputs/apk/release/
+        name: MaterialFiles-release ${{ steps.get_tag.outputs.tag }}@${{ steps.get_tag.outputs.Short_SHA }}
+        path: app/build/outputs/apk/release/*.apk
         retention-days: 28
 
-    #Todo: Upload to release
+    - name: Upload to GitHub Release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release create \
+          "v${{ steps.get_tag.outputs.tag }}-build-${{ github.run_number }}" \
+          "app/build/outputs/apk/release/MaterialFiles.Sora-Editor-${{ steps.get_tag.outputs.tag }}@${{ steps.get_tag.outputs.Short_SHA }}.apk" \
+          --title "MaterialFiles Sora-Editor v${{ steps.get_tag.outputs.tag }} build #${{ github.run_number }}" \
+          --notes "Automated build of commit ${{ github.sha }}"
