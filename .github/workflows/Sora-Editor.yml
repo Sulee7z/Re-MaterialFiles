@@ -77,7 +77,7 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         gh release create \
-          "v${{ steps.get_tag.outputs.tag }}-build-${{ github.run_number }}" \
+          "${{ steps.get_tag.outputs.tag }}-build-${{ github.run_number }}" \
           "app/build/outputs/apk/release/MaterialFiles.Sora-Editor-${{ steps.get_tag.outputs.tag }}@${{ steps.get_tag.outputs.Short_SHA }}.apk" \
-          --title "MaterialFiles Sora-Editor v${{ steps.get_tag.outputs.tag }} build #${{ github.run_number }}" \
+          --title "MaterialFiles Sora-Editor ${{ steps.get_tag.outputs.tag }} build #${{ github.run_number }}" \
           --notes "Automated build of commit ${{ github.sha }}"
