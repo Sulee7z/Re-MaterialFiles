@@ -745,6 +745,43 @@
     <string name="hex_viewer_page_format">%1$s - %2$s / %3$s</string>
     <string name="hex_viewer_size_unknown">Unknown size</string>
 
+    <string name="file_list_action_show_logcat">Logcat</string>
+    <string name="file_list_action_show_activity_launcher">Activity launcher</string>
+
+    <string name="logcat_title">Logcat</string>
+    <string name="logcat_level">Level</string>
+    <string name="logcat_level_all">All</string>
+    <string name="logcat_refresh">Refresh</string>
+    <string name="logcat_error">Failed to read logcat</string>
+    <string name="logcat_count_format">%1$d lines</string>
+    <string name="logcat_no_root_hint">Note: reading all logs may require root</string>
+
+    <string name="activity_launcher_title">Activity launcher</string>
+    <string name="activity_launcher_search_apps">Search apps</string>
+    <string name="activity_launcher_apps_count_format">%1$d apps</string>
+    <string name="activity_launcher_activities_title">Activities</string>
+    <string name="activity_launcher_launcher_activity">(launcher)</string>
+    <string name="activity_launcher_no_activities">No activities</string>
+    <string name="activity_launcher_launch_failed">Failed to launch activity</string>
+
+    <string name="file_item_action_compare_apk">Compare with installed</string>
+    <string name="compare_apk_title">Compare with installed</string>
+    <string name="compare_apk_not_installed">Not installed</string>
+    <string name="compare_apk_installed_format">Installed: %1$s</string>
+    <string name="compare_apk_apk_format">APK: %1$s</string>
+    <string name="compare_apk_version_format">Version %1$s (%2$d)</string>
+    <string name="compare_apk_signature_match">Signatures match</string>
+    <string name="compare_apk_signature_mismatch">Signatures differ</string>
+    <string name="compare_apk_signature_unknown">Signatures unknown</string>
+
+    <string name="file_item_action_set_timestamp">Change time</string>
+    <string name="set_timestamp_title">Change time</string>
+    <string name="set_timestamp_last_modified">Last modified</string>
+    <string name="set_timestamp_last_accessed">Last accessed</string>
+    <string name="set_timestamp_creation">Creation</string>
+    <string name="set_timestamp_apply">Apply</string>
+    <string name="set_timestamp_failed">Failed to change time</string>
+
     <string name="ftp_server_title">FTP server</string>
     <string name="ftp_server_state_title">Status</string>
     <string name="ftp_server_state_summary_starting">Starting…</string>

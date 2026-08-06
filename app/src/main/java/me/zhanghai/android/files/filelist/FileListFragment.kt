@@ -52,6 +52,27 @@ import com.leinardi.android.speeddial.SpeedDialView
 import java8.nio.file.Path
 import java8.nio.file.Paths
 import kotlinx.parcelize.Parcelize
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import android.content.pm.PackageInfo
+import android.widget.LinearLayout
+import androidx.lifecycle.lifecycleScope
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import java8.nio.file.attribute.FileTime
+import java8.nio.file.Files
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import me.zhanghai.android.files.app.packageManager
+import me.zhanghai.android.files.compat.longVersionCodeCompat
+import me.zhanghai.android.files.util.getPackageArchiveInfoCompat
+import me.zhanghai.android.files.util.sha1Digest
+import me.zhanghai.android.files.util.toHexString
 import me.zhanghai.android.files.R
 import me.zhanghai.android.files.app.application
 import me.zhanghai.android.files.app.clipboardManager
@@ -77,6 +98,8 @@ import me.zhanghai.android.files.dex.DexAnalyzerActivity
 import me.zhanghai.android.files.apksearch.ApkStringSearchActivity
 import me.zhanghai.android.files.elf.ElfAnalyzerActivity
 import me.zhanghai.android.files.hex.HexViewerActivity
+import me.zhanghai.android.files.logcat.LogcatActivity
+import me.zhanghai.android.files.activitylauncher.ActivityLauncherActivity
 import me.zhanghai.android.files.file.fileProviderUri
 import me.zhanghai.android.files.fileproperties.FilePropertiesDialogFragment
 import me.zhanghai.android.files.navigation.BookmarkDirectories
@@ -536,6 +559,14 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             }
             R.id.action_open_in_terminal -> {
                 openInTerminal()
+                true
+            }
+            R.id.action_show_logcat -> {
+                startActivity(LogcatActivity::class.createIntent())
+                true
+            }
+            R.id.action_show_activity_launcher -> {
+                startActivity(ActivityLauncherActivity::class.createIntent())
                 true
             }
             R.id.action_add_bookmark -> {
@@ -1486,6 +1517,194 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             }
         )
     }
+
+    override fun compareApk(file: FileItem) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val message = try {
+                compareApkWithInstalled(file)
+            } catch (e: Throwable) {
+                e.javaClass.simpleName + ": " + (e.localizedMessage ?: "")
+            }
+            withContext(Dispatchers.Main) {
+                MaterialAlertDialogBuilder(requireContext())
+                    .setTitle(R.string.compare_apk_title)
+                    .setMessage(message)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+        }
+    }
+
+    private fun compareApkWithInstalled(file: FileItem): String {
+        @Suppress("DEPRECATION")
+        var packageInfoFlags = (PackageManager.GET_PERMISSIONS or PackageManager.GET_SIGNATURES)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            packageInfoFlags = packageInfoFlags or PackageManager.GET_SIGNING_CERTIFICATES
+        }
+        val (apkPackageInfo, closeable) =
+            packageManager.getPackageArchiveInfoCompat(file.path, packageInfoFlags)
+        val apkPackageInfoValue = apkPackageInfo ?: throw IOException("ApplicationInfo is null")
+        val apkSigningCertificates = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            apkPackageInfoValue.signingInfo?.apkContentsSigners
+        } else {
+            @Suppress("DEPRECATION")
+            apkPackageInfoValue.signatures
+        }
+        val apkSigningDigests = (apkSigningCertificates ?: emptyArray())
+            .map { it.toByteArray().sha1Digest().toHexString() }
+        closeable?.close()
+        val builder = StringBuilder()
+        builder.append(getString(R.string.compare_apk_apk_format, formatApkVersion(apkPackageInfoValue)))
+            .append('\n')
+        val installedPackageInfo = try {
+            packageManager.getPackageInfo(
+                apkPackageInfoValue.packageName,
+                PackageManager.GET_SIGNING_CERTIFICATES or PackageManager.GET_SIGNATURES
+            )
+        } catch (e: PackageManager.NameNotFoundException) {
+            null
+        }
+        if (installedPackageInfo == null) {
+            builder.append(getString(R.string.compare_apk_not_installed))
+        } else {
+            builder.append(
+                getString(
+                    R.string.compare_apk_installed_format,
+                    formatApkVersion(installedPackageInfo)
+                )
+            ).append('\n')
+            val installedSigningCertificates = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                installedPackageInfo.signingInfo?.apkContentsSigners
+            } else {
+                @Suppress("DEPRECATION")
+                installedPackageInfo.signatures
+            }
+            val installedSigningDigests = (installedSigningCertificates ?: emptyArray())
+                .map { it.toByteArray().sha1Digest().toHexString() }
+            builder.append(
+                if (apkSigningDigests.isNotEmpty() &&
+                    apkSigningDigests == installedSigningDigests
+                ) {
+                    getString(R.string.compare_apk_signature_match)
+                } else if (apkSigningDigests.isEmpty() || installedSigningDigests.isEmpty()) {
+                    getString(R.string.compare_apk_signature_unknown)
+                } else {
+                    getString(R.string.compare_apk_signature_mismatch)
+                }
+            )
+        }
+        return builder.toString()
+    }
+
+    private fun formatApkVersion(packageInfo: PackageInfo): String = getString(
+        R.string.compare_apk_version_format, packageInfo.versionName,
+        packageInfo.longVersionCodeCompat
+    )
+
+    override fun showSetTimestampDialog(file: FileItem) {
+        val now = System.currentTimeMillis()
+        var lastModified = now
+        var lastAccessed = now
+        var creation = now
+        val dialogBuilder = MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.set_timestamp_title)
+            .setNegativeButton(android.R.string.cancel, null)
+        val view = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            val padding = (16 * resources.displayMetrics.density).toInt()
+            setPadding(padding, padding, padding, padding)
+        }
+        fun addTimeRow(labelRes: Int, initial: Long, onSet: (Long) -> Unit) {
+            val row = LinearLayout(requireContext()).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+            }
+            val label = TextView(requireContext()).apply {
+                text = getString(labelRes)
+            }
+            val value = TextView(requireContext()).apply {
+                text = formatTimestamp(initial)
+                setTextColor(
+                    androidx.core.content.ContextCompat.getColor(
+                        requireContext(), R.color.color_primary
+                    )
+                )
+                val margin = (8 * resources.displayMetrics.density).toInt()
+                setPadding(margin, 0, 0, 0)
+            }
+            row.addView(label)
+            row.addView(value)
+            row.setOnClickListener {
+                pickTimestamp(initial) { time ->
+                    onSet(time)
+                    value.text = formatTimestamp(time)
+                }
+            }
+            view.addView(row)
+        }
+        addTimeRow(R.string.set_timestamp_last_modified, lastModified) {
+            lastModified = it
+        }
+        addTimeRow(R.string.set_timestamp_last_accessed, lastAccessed) {
+            lastAccessed = it
+        }
+        addTimeRow(R.string.set_timestamp_creation, creation) {
+            creation = it
+        }
+        dialogBuilder.setView(view)
+            .setPositiveButton(R.string.set_timestamp_apply) { _, _ ->
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        Files.setLastModifiedTime(file.path, FileTime.fromMillis(lastModified))
+                        try {
+                            Files.setAttribute(file.path, "lastAccessTime", FileTime.fromMillis(lastAccessed))
+                        } catch (e: UnsupportedOperationException) {
+                        }
+                        try {
+                            Files.setAttribute(file.path, "creationTime", FileTime.fromMillis(creation))
+                        } catch (e: UnsupportedOperationException) {
+                        }
+                        viewModel.reload()
+                    } catch (e: Throwable) {
+                        withContext(Dispatchers.Main) {
+                            showToast(e.localizedMessage ?: getString(R.string.set_timestamp_failed))
+                        }
+                    }
+                }
+            }
+        dialogBuilder.show()
+    }
+
+    private fun pickTimestamp(initial: Long, onSet: (Long) -> Unit) {
+        val calendar = Calendar.getInstance().apply { timeInMillis = initial }
+        DatePickerDialog(
+            requireContext(),
+            { _, year, month, dayOfMonth ->
+                calendar.set(Calendar.YEAR, year)
+                calendar.set(Calendar.MONTH, month)
+                calendar.set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                TimePickerDialog(
+                    requireContext(),
+                    { _, hourOfDay, minute ->
+                        calendar.set(Calendar.HOUR_OF_DAY, hourOfDay)
+                        calendar.set(Calendar.MINUTE, minute)
+                        calendar.set(Calendar.SECOND, 0)
+                        calendar.set(Calendar.MILLISECOND, 0)
+                        onSet(calendar.timeInMillis)
+                    },
+                    calendar.get(Calendar.HOUR_OF_DAY),
+                    calendar.get(Calendar.MINUTE),
+                    true
+                ).show()
+            },
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
+        ).show()
+    }
+
+    private fun formatTimestamp(time: Long): String =
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(time))
 
     private fun showCreateFileDialog() {
         CreateFileDialogFragment.show(this)

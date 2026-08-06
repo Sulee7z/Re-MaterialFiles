@@ -361,6 +361,18 @@
             android:theme="@style/Theme.MaterialFiles" />
 
         <activity
+            android:name="me.zhanghai.android.files.logcat.LogcatActivity"
+            android:exported="true"
+            android:label="@string/logcat_title"
+            android:theme="@style/Theme.MaterialFiles" />
+
+        <activity
+            android:name="me.zhanghai.android.files.activitylauncher.ActivityLauncherActivity"
+            android:exported="true"
+            android:label="@string/activity_launcher_title"
+            android:theme="@style/Theme.MaterialFiles" />
+
+        <activity
             android:name="me.zhanghai.android.files.viewer.image.ImageViewerActivity"
             android:exported="true"
             android:label="@string/image_viewer_title"

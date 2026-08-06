@@ -52,6 +52,14 @@
         android:title="@string/file_item_action_hex_view" />
 
     <item
+        android:id="@+id/action_compare_apk"
+        android:title="@string/file_item_action_compare_apk" />
+
+    <item
+        android:id="@+id/action_set_timestamp"
+        android:title="@string/file_item_action_set_timestamp" />
+
+    <item
         android:id="@+id/action_archive"
         android:title="@string/file_item_action_archive" />
 
