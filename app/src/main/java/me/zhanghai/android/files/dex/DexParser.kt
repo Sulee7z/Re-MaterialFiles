@@ -132,19 +132,112 @@ object DexParser {
             } else {
                 readClassData(bytes, classDataOffset, fieldRefs, methodRefs)
             }
+            val className = types[classIndex]
+            val references = mutableListOf<DexReference>()
+            if (superclassIndex >= 0) {
+                references += DexReference(className, "superclass", types[superclassIndex])
+            }
+            interfaces.forEach { references += DexReference(className, "implements", it) }
+            fieldDefs.forEach {
+                references += DexReference(className, "field type", it.field.type)
+            }
+            methodDefs.forEach { methodDef ->
+                val proto = methodDef.method.proto
+                references += DexReference(className, "method return", proto.returnType)
+                proto.parameters.forEach {
+                    references += DexReference(className, "method param", it)
+                }
+                methodDef.code?.let { code ->
+                    scanCodeReferences(code.insns, types, fieldRefs, methodRefs)
+                        .forEach { (kind, target) ->
+                            references += DexReference(className, kind, target)
+                        }
+                }
+            }
             classes.add(
                 DexClass(
-                    types[classIndex],
+                    className,
                     accessFlags,
                     if (superclassIndex >= 0) types[superclassIndex] else null,
                     interfaces,
                     if (sourceFileIndex >= 0) strings[sourceFileIndex] else null,
                     fieldDefs,
-                    methodDefs
+                    methodDefs,
+                    references
                 )
             )
         }
         return DexFile(version, strings, types, fieldRefs, methodRefs, classes)
+    }
+
+    /**
+     * Scans method bytecode for references to types, fields and methods.
+     */
+    private fun scanCodeReferences(
+        insns: ShortArray,
+        types: List<String>,
+        fields: List<DexFieldRef>,
+        methods: List<DexMethodRef>
+    ): List<Pair<String, String>> {
+        val result = mutableListOf<Pair<String, String>>()
+        var position = 0
+        while (position < insns.size) {
+            val unit = insns[position].toInt() and 0xffff
+            val op = unit and 0xff
+            val refIndex = if (position + 1 < insns.size) {
+                insns[position + 1].toInt() and 0xffff
+            } else {
+                0
+            }
+            when (op) {
+                in 0x1c..0x1c, in 0x1f..0x25 -> {
+                    if (refIndex < types.size) {
+                        result.add(codeOpName(op) to types[refIndex])
+                    }
+                }
+                in 0x52..0x6d -> {
+                    if (refIndex < fields.size) {
+                        val field = fields[refIndex]
+                        result.add(codeOpName(op) to "${field.className}->${field.name}:${field.type}")
+                    }
+                }
+                in 0x6e..0x72, in 0x74..0x78, in 0xfa..0xfd -> {
+                    if (refIndex < methods.size) {
+                        result.add(codeOpName(op) to methods[refIndex].toString())
+                    }
+                }
+            }
+            position += codeOpUnitSize(op)
+        }
+        return result
+    }
+
+    private fun codeOpName(op: Int): String = when (op) {
+        0x1c -> "const-class"
+        0x1f -> "check-cast"
+        0x20 -> "instance-of"
+        0x22 -> "new-instance"
+        0x23 -> "new-array"
+        0x24, 0x25 -> "filled-new-array"
+        in 0x52..0x5f -> "field"
+        in 0x60..0x6d -> "field"
+        in 0x6e..0x72, in 0x74..0x78 -> "invoke"
+        0xfa, 0xfb -> "invoke-polymorphic"
+        0xfc, 0xfd -> "invoke-custom"
+        else -> "reference"
+    }
+
+    private fun codeOpUnitSize(op: Int): Int = when (op) {
+        0x00, 0x01, 0x04, 0x07, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x1d, 0x1e, 0x21, 0x27, 0x28,
+        in 0xb0..0xcf -> 1
+        0x02, 0x05, 0x08, 0x13, 0x15, 0x16, 0x19, 0x1a, 0x1c, 0x1f,
+        0x20, 0x22, 0x23, 0x29, 0x2d, 0x2e, 0x2f, 0x30, 0x31,
+        in 0x32..0x3d, in 0x44..0x6d, in 0x90..0xaa, in 0xd0..0xe3 -> 2
+        0x03, 0x06, 0x09, 0x14, 0x17, 0x18, 0x1b, 0x24, 0x25, 0x26,
+        0x2a, 0x2b, 0x2c, in 0x6e..0x79, 0xfc, 0xfd, 0xfe, 0xff -> 3
+        0xfa, 0xfb -> 4
+        else -> 1
     }
 
     private fun checkRange(bytes: ByteArray, offset: Int, length: Long) {

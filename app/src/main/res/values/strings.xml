@@ -721,6 +721,7 @@
     <string name="dex_method_no_code">This method has no code</string>
     <string name="dex_smali_write_error">Failed to write smali file</string>
     <string name="dex_string_copied">Copied to clipboard</string>
+    <string name="dex_find_references">Find references</string>
 
     <string name="file_item_action_install">Install</string>
     <string name="file_item_action_apk_string_search">Search strings in APK</string>
@@ -824,6 +825,7 @@
     <string name="batch_rename_conflict">Name conflict</string>
 
     <string name="file_item_action_sign_apk">Sign APK</string>
+    <string name="file_item_action_convert_encoding">Convert encoding</string>
     <string name="file_item_action_rename_apk">Rename with version</string>
     <string name="apk_sign_title">Sign APK</string>
     <string name="apk_sign_keystore">Keystore</string>
@@ -836,6 +838,15 @@
     <string name="apk_sign_done_format">Signed: %1$s</string>
     <string name="apk_sign_error">Signing failed</string>
     <string name="apk_sign_v1_note">Uses APK Signature Schemes v1 + v2 + v3</string>
+    <string name="file_item_action_auto_sign_apk">Quick sign APK</string>
+
+    <string name="encoding_convert_source">Source encoding</string>
+    <string name="encoding_convert_target">Target encoding</string>
+    <string name="encoding_convert_convert">Convert</string>
+    <string name="encoding_convert_done_format">Converted: %1$s → %2$s</string>
+    <string name="encoding_convert_error">Conversion failed</string>
+    <string name="encoding_convert_decode_error">Cannot decode with the source encoding</string>
+    <string name="encoding_convert_encode_error">Cannot encode with the target encoding</string>
 
     <string name="apk_rename_done_format">Renamed to %1$s</string>
     <string name="apk_rename_error">Rename failed</string>

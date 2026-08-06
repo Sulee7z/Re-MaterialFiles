@@ -54,6 +54,15 @@ data class DexMethodDef(
     val code: DexCode?
 )
 
+/**
+ * A reference from one class to a type, field or method, recorded while parsing the DEX.
+ */
+data class DexReference(
+    val ownerClass: String,
+    val kind: String,
+    val target: String
+)
+
 data class DexClass(
     val className: String,
     val accessFlags: Int,
@@ -61,7 +70,8 @@ data class DexClass(
     val interfaces: List<String>,
     val sourceFile: String?,
     val fields: List<DexFieldDef>,
-    val methods: List<DexMethodDef>
+    val methods: List<DexMethodDef>,
+    val references: List<DexReference> = emptyList()
 )
 
 class DexFile(
@@ -71,7 +81,36 @@ class DexFile(
     val fields: List<DexFieldRef>,
     val methods: List<DexMethodRef>,
     val classes: List<DexClass>
-)
+) {
+    /**
+     * Finds where the given type (class descriptor like "Landroid/app/Activity;") is
+     * referenced. Returns (owner class, reference kind) pairs.
+     */
+    fun findClassReferences(typeName: String): List<Pair<String, String>> =
+        classes.flatMap { cls ->
+            cls.references.filter { it.target == typeName }
+                .map { it.ownerClass to it.kind }
+        }
+
+    /**
+     * Finds where the given method (key like "Landroid/app/Activity;->onCreate(Landroid/os/Bundle;)V")
+     * is referenced.
+     */
+    fun findMethodReferences(methodKey: String): List<Pair<String, String>> =
+        classes.flatMap { cls ->
+            cls.references.filter { it.kind.startsWith("invoke") && it.target == methodKey }
+                .map { it.ownerClass to it.kind }
+        }
+
+    /**
+     * Finds where the given field (key like "Landroid/app/Activity;->mField:I") is referenced.
+     */
+    fun findFieldReferences(fieldKey: String): List<Pair<String, String>> =
+        classes.flatMap { cls ->
+            cls.references.filter { it.kind.startsWith("field") && it.target == fieldKey }
+                .map { it.ownerClass to it.kind }
+        }
+}
 
 object DexAccessFlags {
     private const val ACC_PUBLIC = 0x1

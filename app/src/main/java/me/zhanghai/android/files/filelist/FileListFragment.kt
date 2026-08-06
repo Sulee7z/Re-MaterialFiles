@@ -29,6 +29,7 @@ import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.Spinner
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContract
@@ -62,6 +63,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java.io.File
 import java.io.IOException
+import java.nio.charset.Charset
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -105,6 +107,7 @@ import me.zhanghai.android.files.logcat.LogcatActivity
 import me.zhanghai.android.files.activitylauncher.ActivityLauncherActivity
 import me.zhanghai.android.files.apkmanifest.AndroidManifestDecoder
 import me.zhanghai.android.files.apksign.ApkSigner
+import me.zhanghai.android.files.apksign.AutoSigner
 import me.zhanghai.android.files.contentsearch.ContentSearchActivity
 import me.zhanghai.android.files.fileproperties.FilePropertiesDialogFragment
 import me.zhanghai.android.files.navigation.BookmarkDirectories
@@ -1956,6 +1959,136 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 signApk(file, keystore, storePassword, alias, keyPassword)
             }
         dialogBuilder.show()
+    }
+
+    override fun autoSignApk(file: FileItem) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val result = try {
+                val cacheDirectory = File(requireContext().cacheDir, "apk-sign")
+                cacheDirectory.mkdirs()
+                val inputFile = File(cacheDirectory, "input-auto.apk")
+                Files.newInputStream(file.path).use { input ->
+                    inputFile.outputStream().use { output -> input.copyTo(output) }
+                }
+                val (privateKey, certificate) = AutoSigner.getOrCreateKey(requireContext())
+                val outputFile = File(
+                    cacheDirectory,
+                    file.name.substringBeforeLast('.', file.name) + "-signed.apk"
+                )
+                ApkSigner.sign(inputFile, outputFile, privateKey, certificate)
+                outputFile
+            } catch (e: Throwable) {
+                withContext(Dispatchers.Main) {
+                    showToast(e.localizedMessage ?: getString(R.string.apk_sign_error))
+                }
+                return@launch
+            }
+            withContext(Dispatchers.Main) {
+                val outputPath = file.path.parent.resolve(result.name)
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        Files.newInputStream(
+                            java8.nio.file.Paths.get(result.absolutePath)
+                        ).use { input ->
+                            Files.newOutputStream(outputPath).use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        withContext(Dispatchers.Main) {
+                            showToast(getString(R.string.apk_sign_done_format, result.name))
+                            viewModel.reload()
+                        }
+                    } catch (e: Throwable) {
+                        withContext(Dispatchers.Main) {
+                            showToast(e.localizedMessage ?: getString(R.string.apk_sign_error))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    override fun showEncodingConversionDialog(file: FileItem) {
+        val encodings = listOf(
+            "UTF-8", "GB18030", "GBK", "UTF-16LE", "UTF-16BE", "UTF-16",
+            "ISO-8859-1", "US-ASCII", "BIG5", "Shift_JIS"
+        )
+        val fromSpinner = Spinner(requireContext()).apply {
+            adapter = android.widget.ArrayAdapter(
+                requireContext(), android.R.layout.simple_spinner_item, encodings
+            ).apply {
+                setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            }
+            setSelection(0)
+        }
+        val toSpinner = Spinner(requireContext()).apply {
+            adapter = android.widget.ArrayAdapter(
+                requireContext(), android.R.layout.simple_spinner_item, encodings
+            ).apply {
+                setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            }
+            setSelection(0)
+        }
+        fun addRow(labelRes: Int, spinner: Spinner): LinearLayout {
+            val row = LinearLayout(requireContext()).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+            }
+            val label = TextView(requireContext()).apply {
+                text = getString(labelRes)
+                setTextAppearance(android.R.style.TextAppearance_Material_Small)
+            }
+            row.addView(label, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(spinner)
+            return row
+        }
+        val view = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            val padding = (16 * resources.displayMetrics.density).toInt()
+            setPadding(padding, padding, padding, padding)
+            addView(addRow(R.string.encoding_convert_source, fromSpinner))
+            addView(addRow(R.string.encoding_convert_target, toSpinner))
+        }
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.file_item_action_convert_encoding)
+            .setMessage(file.name)
+            .setView(view)
+            .setPositiveButton(R.string.encoding_convert_convert) { _, _ ->
+                val fromEncoding = encodings[fromSpinner.selectedItemPosition]
+                val toEncoding = encodings[toSpinner.selectedItemPosition]
+                convertFileEncoding(file, fromEncoding, toEncoding)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun convertFileEncoding(file: FileItem, fromEncoding: String, toEncoding: String) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val result = try {
+                val bytes = Files.newInputStream(file.path).use { it.readBytes() }
+                val text = try {
+                    String(bytes, Charset.forName(fromEncoding))
+                } catch (e: Exception) {
+                    throw java.io.IOException(getString(R.string.encoding_convert_decode_error))
+                }
+                val converted = try {
+                    text.toByteArray(Charset.forName(toEncoding))
+                } catch (e: Exception) {
+                    throw java.io.IOException(getString(R.string.encoding_convert_encode_error))
+                }
+                Files.newOutputStream(file.path).use { it.write(converted) }
+                getString(R.string.encoding_convert_done_format, fromEncoding, toEncoding)
+            } catch (e: Throwable) {
+                withContext(Dispatchers.Main) {
+                    showToast(e.localizedMessage ?: getString(R.string.encoding_convert_error))
+                }
+                return@launch
+            }
+            withContext(Dispatchers.Main) {
+                showToast(result)
+                viewModel.reload()
+            }
+        }
     }
 
     private fun signApk(

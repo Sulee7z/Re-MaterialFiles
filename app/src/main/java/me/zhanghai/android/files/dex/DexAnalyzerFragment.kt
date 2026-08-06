@@ -40,6 +40,8 @@ import me.zhanghai.android.files.databinding.DexAnalyzerFragmentBinding
 import me.zhanghai.android.files.databinding.DexClassDetailDialogBinding
 import me.zhanghai.android.files.databinding.DexClassItemBinding
 import me.zhanghai.android.files.databinding.DexMemberItemBinding
+import me.zhanghai.android.files.databinding.DexReferenceItemBinding
+import me.zhanghai.android.files.databinding.DexReferencesDialogBinding
 import me.zhanghai.android.files.databinding.DexStringItemBinding
 import me.zhanghai.android.files.filelist.FileListActivity
 import me.zhanghai.android.files.ui.ListAdapter
@@ -292,13 +294,69 @@ class DexAnalyzerFragment : Fragment() {
         } ?: getString(R.string.dex_class_superclass_none)
         val members = dexClass.fields.map { MemberItem(dexClass, it, null) } +
             dexClass.methods.map { MemberItem(dexClass, null, it) }
-        val membersAdapter = MemberListAdapter { member ->
-            member.methodDef?.let { openMethodSmali(member.dexClass, it) }
-        }
+        val membersAdapter = MemberListAdapter(
+            onMemberClick = { member ->
+                member.methodDef?.let { openMethodSmali(member.dexClass, it) }
+            },
+            onMemberLongClick = { member ->
+                showMemberReferences(member)
+            }
+        )
         dialogBinding.membersRecyclerView.layoutManager = LinearLayoutManager(context)
         dialogBinding.membersRecyclerView.adapter = membersAdapter
         membersAdapter.replace(members, true)
+        val dialog = MaterialAlertDialogBuilder(requireContext())
+            .setView(dialogBinding.root)
+            .setPositiveButton(R.string.dex_find_references) { _, _ ->
+                showFindReferencesDialog(
+                    dexClass.className, viewModel.findClassReferences(dexClass.className)
+                )
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+        dialogBinding.superclassText.setOnClickListener {
+            val superclassName = dexClass.superclassName ?: return@setOnClickListener
+            val owner = viewModel.classByName(superclassName)
+            if (owner != null) {
+                dialog.dismiss()
+                showClassDetail(owner)
+            }
+        }
+    }
+
+    private fun showMemberReferences(member: MemberItem) {
+        if (member.methodDef != null) {
+            val key = member.methodDef.method.toString()
+            showFindReferencesDialog(
+                key, viewModel.findMethodReferences(key)
+            )
+        } else if (member.fieldDef != null) {
+            val field = member.fieldDef.field
+            val key = "${field.className}->${field.name}:${field.type}"
+            showFindReferencesDialog(
+                key, viewModel.findFieldReferences(key)
+            )
+        }
+    }
+
+    private fun showFindReferencesDialog(
+        target: String,
+        references: List<Pair<String, String>>
+    ) {
+        val dialogBinding = DexReferencesDialogBinding.inflate(layoutInflater)
+        val referenceAdapter = ReferenceListAdapter { reference ->
+            val owner = viewModel.classByName(reference.ownerClass)
+            if (owner != null) {
+                showClassDetail(owner)
+            }
+        }
+        dialogBinding.referencesRecyclerView.layoutManager = LinearLayoutManager(context)
+        dialogBinding.referencesRecyclerView.adapter = referenceAdapter
+        val items = references.map { ReferenceItem(it.first, it.second) }
+        referenceAdapter.replace(items, true)
         MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.dex_find_references)
+            .setMessage(target)
             .setView(dialogBinding.root)
             .setNegativeButton(android.R.string.cancel, null)
             .show()
@@ -432,7 +490,8 @@ private data class MemberItem(
 }
 
 private class MemberListAdapter(
-    private val onMemberClick: (MemberItem) -> Unit
+    private val onMemberClick: (MemberItem) -> Unit,
+    private val onMemberLongClick: (MemberItem) -> Unit
 ) : ListAdapter<MemberItem, MemberListAdapter.ViewHolder>(
     object : DiffUtil.ItemCallback<MemberItem>() {
         override fun areItemsTheSame(oldItem: MemberItem, newItem: MemberItem): Boolean =
@@ -455,5 +514,42 @@ private class MemberListAdapter(
         val item = getItem(position)
         holder.binding.memberText.text = item.text
         holder.binding.root.setOnClickListener { onMemberClick(item) }
+        holder.binding.root.setOnLongClickListener {
+            onMemberLongClick(item)
+            true
+        }
+    }
+}
+
+private data class ReferenceItem(
+    val ownerClass: String,
+    val kind: String
+)
+
+private class ReferenceListAdapter(
+    private val onReferenceClick: (ReferenceItem) -> Unit
+) : ListAdapter<ReferenceItem, ReferenceListAdapter.ViewHolder>(
+    object : DiffUtil.ItemCallback<ReferenceItem>() {
+        override fun areItemsTheSame(oldItem: ReferenceItem, newItem: ReferenceItem): Boolean =
+            oldItem == newItem
+
+        override fun areContentsTheSame(oldItem: ReferenceItem, newItem: ReferenceItem): Boolean =
+            oldItem == newItem
+    }
+) {
+    class ViewHolder(val binding: DexReferenceItemBinding) : RecyclerView.ViewHolder(binding.root)
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder =
+        ViewHolder(
+            DexReferenceItemBinding.inflate(
+                LayoutInflater.from(parent.context), parent, false
+            )
+        )
+
+    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+        val item = getItem(position)
+        holder.binding.ownerText.text = item.ownerClass
+        holder.binding.kindText.text = item.kind
+        holder.binding.root.setOnClickListener { onReferenceClick(item) }
     }
 }

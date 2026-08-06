@@ -488,8 +488,10 @@ class FileListAdapter(
         menu.findItem(R.id.action_compare_apk).isVisible = file.mimeType.isApk
         menu.findItem(R.id.action_view_manifest).isVisible = file.mimeType.isApk
         menu.findItem(R.id.action_set_timestamp).isVisible = !isReadOnly
+        menu.findItem(R.id.action_auto_sign_apk).isVisible = file.mimeType.isApk
         menu.findItem(R.id.action_sign_apk).isVisible = file.mimeType.isApk
         menu.findItem(R.id.action_rename_apk).isVisible = file.mimeType.isApk
+        menu.findItem(R.id.action_convert_encoding).isVisible = !isDirectory && isTextFile(file)
         menu.findItem(R.id.action_archive).isVisible = !isArchivePath
         menu.findItem(R.id.action_add_bookmark).isVisible = isDirectory
         holder.popupMenu.setOnMenuItemClickListener {
@@ -550,12 +552,20 @@ class FileListAdapter(
                     listener.showSetTimestampDialog(file)
                     true
                 }
+                R.id.action_auto_sign_apk -> {
+                    listener.autoSignApk(file)
+                    true
+                }
                 R.id.action_sign_apk -> {
                     listener.showSignApkDialog(file)
                     true
                 }
                 R.id.action_rename_apk -> {
                     listener.renameApkWithVersion(file)
+                    true
+                }
+                R.id.action_convert_encoding -> {
+                    listener.showEncodingConversionDialog(file)
                     true
                 }
                 R.id.action_archive -> {
@@ -603,6 +613,14 @@ class FileListAdapter(
 
     companion object {
         private val PAYLOAD_STATE_CHANGED = Any()
+
+        private val TEXT_FILE_EXTENSIONS = setOf(
+            "txt", "log", "xml", "json", "html", "htm", "css", "js", "ts", "java", "kt",
+            "kts", "c", "h", "cpp", "hpp", "py", "go", "rs", "sh", "bat", "cmd", "ps1",
+            "md", "csv", "tsv", "ini", "cfg", "conf", "properties", "gradle", "smali",
+            "yml", "yaml", "toml", "sql", "svg", "xsd", "xsl", "pro", "rc", "mk",
+            "gitignore", "editorconfig"
+        )
 
         private val CALLBACK = object : DiffUtil.ItemCallback<FileItem>() {
             override fun areItemsTheSame(oldItem: FileItem, newItem: FileItem): Boolean =
@@ -663,6 +681,14 @@ class FileListAdapter(
         lateinit var popupMenu: PopupMenu
     }
 
+    private fun isTextFile(file: FileItem): Boolean {
+        if (file.mimeType.type == "text") {
+            return true
+        }
+        val extension = file.name.substringAfterLast('.', "").lowercase()
+        return extension in TEXT_FILE_EXTENSIONS
+    }
+
     interface Listener {
         fun clearSelectedFiles()
         fun selectFile(file: FileItem, selected: Boolean)
@@ -682,8 +708,10 @@ class FileListAdapter(
         fun compareApk(file: FileItem)
         fun showManifest(file: FileItem)
         fun showSetTimestampDialog(file: FileItem)
+        fun autoSignApk(file: FileItem)
         fun showSignApkDialog(file: FileItem)
         fun renameApkWithVersion(file: FileItem)
+        fun showEncodingConversionDialog(file: FileItem)
         fun showCreateArchiveDialog(file: FileItem)
         fun shareFile(file: FileItem)
         fun copyPath(file: FileItem)

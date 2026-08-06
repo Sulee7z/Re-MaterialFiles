@@ -64,12 +64,20 @@
         android:title="@string/file_item_action_set_timestamp" />
 
     <item
+        android:id="@+id/action_auto_sign_apk"
+        android:title="@string/file_item_action_auto_sign_apk" />
+
+    <item
         android:id="@+id/action_sign_apk"
         android:title="@string/file_item_action_sign_apk" />
 
     <item
         android:id="@+id/action_rename_apk"
         android:title="@string/file_item_action_rename_apk" />
+
+    <item
+        android:id="@+id/action_convert_encoding"
+        android:title="@string/file_item_action_convert_encoding" />
 
     <item
         android:id="@+id/action_archive"

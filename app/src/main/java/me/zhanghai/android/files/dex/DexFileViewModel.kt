@@ -45,4 +45,16 @@ class DexFileViewModel(private val path: Path) : ViewModel() {
     fun dexFile(): DexFile? = (dexFileLiveData.value as? DataState.Success)?.data
 
     fun disassemble(method: DexMethodDef): String = disassembler?.disassemble(method) ?: ""
+
+    fun classByName(className: String): DexClass? =
+        dexFile()?.classes?.find { it.className == className }
+
+    fun findClassReferences(typeName: String): List<Pair<String, String>> =
+        dexFile()?.findClassReferences(typeName) ?: emptyList()
+
+    fun findMethodReferences(methodKey: String): List<Pair<String, String>> =
+        dexFile()?.findMethodReferences(methodKey) ?: emptyList()
+
+    fun findFieldReferences(fieldKey: String): List<Pair<String, String>> =
+        dexFile()?.findFieldReferences(fieldKey) ?: emptyList()
 }

@@ -575,6 +575,7 @@
     <string name="dex_method_no_code">此方法没有代码</string>
     <string name="dex_smali_write_error">写入 smali 文件失败</string>
     <string name="dex_string_copied">已复制到剪贴板</string>
+    <string name="dex_find_references">查找引用</string>
 
     <string name="file_item_action_install">安装</string>
     <string name="file_item_action_apk_string_search">搜索 APK 内字符串</string>
@@ -679,6 +680,7 @@
 
     <string name="file_item_action_sign_apk">签名 APK</string>
     <string name="file_item_action_rename_apk">带版本号重命名</string>
+    <string name="file_item_action_convert_encoding">编码转换</string>
     <string name="apk_sign_title">签名 APK</string>
     <string name="apk_sign_keystore">密钥库</string>
     <string name="apk_sign_keystore_password">密钥库密码</string>
@@ -690,6 +692,15 @@
     <string name="apk_sign_done_format">已签名: %1$s</string>
     <string name="apk_sign_error">签名失败</string>
     <string name="apk_sign_v1_note">使用 APK 签名方案 v1 + v2 + v3</string>
+    <string name="file_item_action_auto_sign_apk">一键签名 APK</string>
+
+    <string name="encoding_convert_source">源编码</string>
+    <string name="encoding_convert_target">目标编码</string>
+    <string name="encoding_convert_convert">转换</string>
+    <string name="encoding_convert_done_format">已转换: %1$s → %2$s</string>
+    <string name="encoding_convert_error">转换失败</string>
+    <string name="encoding_convert_decode_error">无法用源编码解码</string>
+    <string name="encoding_convert_encode_error">无法用目标编码编码</string>
 
     <string name="apk_rename_done_format">已重命名为 %1$s</string>
     <string name="apk_rename_error">重命名失败</string>
