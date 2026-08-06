@@ -709,6 +709,19 @@
     <string name="text_editor_encoding">Encoding</string>
     <string name="text_editor_close_message">Are you sure you want to discard unsaved changes to this document?</string>
 
+    <string name="dex_analyze_title">DEX analyzer</string>
+    <string name="file_item_action_dex_analyze">Analyze DEX</string>
+    <string name="dex_analyze_error_unknown">Unknown error</string>
+    <string name="dex_search_classes">Search classes</string>
+    <string name="dex_search_strings">Search strings</string>
+    <string name="dex_string_count_format">%1$d of %2$d strings</string>
+    <string name="dex_class_description_format">%1$s · %2$d methods</string>
+    <string name="dex_class_superclass_format">extends %1$s</string>
+    <string name="dex_class_superclass_none">extends &lt;none&gt;</string>
+    <string name="dex_method_no_code">This method has no code</string>
+    <string name="dex_smali_write_error">Failed to write smali file</string>
+    <string name="dex_string_copied">Copied to clipboard</string>
+
     <string name="ftp_server_title">FTP server</string>
     <string name="ftp_server_state_title">Status</string>
     <string name="ftp_server_state_summary_starting">Starting…</string>

@@ -73,6 +73,7 @@ import me.zhanghai.android.files.file.isImage
 import me.zhanghai.android.files.filejob.FileJobService
 import me.zhanghai.android.files.filelist.FileSortOptions.By
 import me.zhanghai.android.files.filelist.FileSortOptions.Order
+import me.zhanghai.android.files.dex.DexAnalyzerActivity
 import me.zhanghai.android.files.fileproperties.FilePropertiesDialogFragment
 import me.zhanghai.android.files.navigation.BookmarkDirectories
 import me.zhanghai.android.files.navigation.BookmarkDirectory
@@ -1440,6 +1441,14 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     override fun showPropertiesDialog(file: FileItem) {
         FilePropertiesDialogFragment.show(file, this)
+    }
+
+    override fun showDexAnalyzer(file: FileItem) {
+        startActivity(
+            DexAnalyzerActivity::class.createIntent().apply {
+                extraPath = file.path
+            }
+        )
     }
 
     private fun showCreateFileDialog() {

@@ -337,6 +337,12 @@
         </activity>
 
         <activity
+            android:name="me.zhanghai.android.files.dex.DexAnalyzerActivity"
+            android:exported="true"
+            android:label="@string/dex_analyze_title"
+            android:theme="@style/Theme.MaterialFiles" />
+
+        <activity
             android:name="me.zhanghai.android.files.viewer.image.ImageViewerActivity"
             android:exported="true"
             android:label="@string/image_viewer_title"

@@ -477,6 +477,8 @@ class FileListAdapter(
         menu.findItem(R.id.action_delete).isVisible = !isReadOnly
         menu.findItem(R.id.action_rename).isVisible = !isReadOnly
         menu.findItem(R.id.action_extract).isVisible = file.isArchiveFile
+        menu.findItem(R.id.action_dex_analyze).isVisible =
+            file.name.endsWith(".dex", ignoreCase = true)
         menu.findItem(R.id.action_archive).isVisible = !isArchivePath
         menu.findItem(R.id.action_add_bookmark).isVisible = isDirectory
         holder.popupMenu.setOnMenuItemClickListener {
@@ -503,6 +505,10 @@ class FileListAdapter(
                 }
                 R.id.action_extract -> {
                     listener.extractFile(file)
+                    true
+                }
+                R.id.action_dex_analyze -> {
+                    listener.showDexAnalyzer(file)
                     true
                 }
                 R.id.action_archive -> {
@@ -621,6 +627,7 @@ class FileListAdapter(
         fun confirmDeleteFile(file: FileItem)
         fun showRenameFileDialog(file: FileItem)
         fun extractFile(file: FileItem)
+        fun showDexAnalyzer(file: FileItem)
         fun showCreateArchiveDialog(file: FileItem)
         fun shareFile(file: FileItem)
         fun copyPath(file: FileItem)

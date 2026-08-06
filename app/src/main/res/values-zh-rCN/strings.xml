@@ -562,6 +562,19 @@
     <string name="text_editor_reload_message">您确定要重新加载吗？对此文档未保存的变更将丢失。</string>
     <string name="text_editor_encoding">编码</string>
     <string name="text_editor_close_message">您确定要舍弃对此文档未保存的变更吗？</string>
+
+    <string name="dex_analyze_title">DEX 分析器</string>
+    <string name="file_item_action_dex_analyze">DEX 分析</string>
+    <string name="dex_analyze_error_unknown">未知错误</string>
+    <string name="dex_search_classes">搜索类</string>
+    <string name="dex_search_strings">搜索字符串</string>
+    <string name="dex_string_count_format">共 %2$d 个字符串,显示 %1$d 个</string>
+    <string name="dex_class_description_format">%1$s · %2$d 个方法</string>
+    <string name="dex_class_superclass_format">继承 %1$s</string>
+    <string name="dex_class_superclass_none">无继承</string>
+    <string name="dex_method_no_code">此方法没有代码</string>
+    <string name="dex_smali_write_error">写入 smali 文件失败</string>
+    <string name="dex_string_copied">已复制到剪贴板</string>
     
     <string name="word_warp">文字换行</string>
     <string name="syntax_highlighting">语法高亮</string>
