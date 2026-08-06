@@ -58,6 +58,7 @@ import android.content.pm.PackageInfo
 import android.widget.LinearLayout
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import java.io.File
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -100,6 +101,7 @@ import me.zhanghai.android.files.elf.ElfAnalyzerActivity
 import me.zhanghai.android.files.hex.HexViewerActivity
 import me.zhanghai.android.files.logcat.LogcatActivity
 import me.zhanghai.android.files.activitylauncher.ActivityLauncherActivity
+import me.zhanghai.android.files.apkmanifest.AndroidManifestDecoder
 import me.zhanghai.android.files.file.fileProviderUri
 import me.zhanghai.android.files.fileproperties.FilePropertiesDialogFragment
 import me.zhanghai.android.files.navigation.BookmarkDirectories
@@ -156,6 +158,7 @@ import me.zhanghai.android.files.util.supportsExternalStorageManager
 import me.zhanghai.android.files.util.takeIfNotEmpty
 import me.zhanghai.android.files.util.valueCompat
 import me.zhanghai.android.files.util.viewModels
+import me.zhanghai.android.files.viewer.text.TextEditorActivity
 import me.zhanghai.android.files.util.withChooser
 import me.zhanghai.android.files.viewer.image.ImageViewerActivity
 import kotlin.math.roundToInt
@@ -1594,6 +1597,44 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             )
         }
         return builder.toString()
+    }
+
+    override fun showManifest(file: FileItem) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val path = try {
+                decodeAndCacheManifest(file)
+            } catch (e: Throwable) {
+                withContext(Dispatchers.Main) {
+                    showToast(e.localizedMessage ?: getString(R.string.manifest_decode_error))
+                }
+                return@launch
+            }
+            withContext(Dispatchers.Main) {
+                startActivity(
+                    TextEditorActivity::class.createIntent().apply {
+                        extraPath = path
+                    }
+                )
+            }
+        }
+    }
+
+    private fun decodeAndCacheManifest(file: FileItem): Path {
+        val cacheDirectory = File(requireContext().cacheDir, "manifest-cache")
+        cacheDirectory.mkdirs()
+        val cacheFile = File(cacheDirectory, "AndroidManifest.xml")
+        Files.newInputStream(file.path).use { input ->
+            cacheFile.outputStream().use { output -> input.copyTo(output) }
+        }
+        val manifestBytes = java.util.zip.ZipFile(cacheFile).use { zipFile ->
+            val entry = zipFile.getEntry("AndroidManifest.xml")
+                ?: throw IOException("AndroidManifest.xml not found")
+            zipFile.getInputStream(entry).use { it.readBytes() }
+        }
+        val decoded = AndroidManifestDecoder.decode(manifestBytes)
+        val outputFile = File(cacheDirectory, "AndroidManifest-decoded.xml")
+        Files.write(Paths.get(outputFile.absolutePath), decoded.toByteArray())
+        return Paths.get(outputFile.absolutePath)
     }
 
     private fun formatApkVersion(packageInfo: PackageInfo): String = getString(

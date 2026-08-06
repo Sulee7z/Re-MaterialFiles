@@ -635,6 +635,20 @@
     <string name="set_timestamp_creation">创建时间</string>
     <string name="set_timestamp_apply">应用</string>
     <string name="set_timestamp_failed">修改时间失败</string>
+
+    <string name="search_regex">正则</string>
+
+    <string name="dex_export_smali">导出 smali</string>
+    <string name="dex_export_smali_done_format">已导出 %1$d 个类</string>
+    <string name="dex_export_smali_error">导出 smali 失败</string>
+
+    <string name="file_item_action_view_manifest">查看清单</string>
+    <string name="manifest_decode_error">解析清单失败</string>
+
+    <string name="hex_edit">编辑</string>
+    <string name="hex_save">保存</string>
+    <string name="hex_save_success">已保存</string>
+    <string name="hex_save_error">保存失败</string>
     
     <string name="word_warp">文字换行</string>
     <string name="syntax_highlighting">语法高亮</string>

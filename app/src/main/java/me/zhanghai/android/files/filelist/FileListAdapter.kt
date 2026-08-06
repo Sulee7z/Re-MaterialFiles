@@ -486,6 +486,7 @@ class FileListAdapter(
                 file.name.endsWith(".elf", ignoreCase = true)
         menu.findItem(R.id.action_hex_view).isVisible = !isDirectory
         menu.findItem(R.id.action_compare_apk).isVisible = file.mimeType.isApk
+        menu.findItem(R.id.action_view_manifest).isVisible = file.mimeType.isApk
         menu.findItem(R.id.action_set_timestamp).isVisible = !isReadOnly
         menu.findItem(R.id.action_archive).isVisible = !isArchivePath
         menu.findItem(R.id.action_add_bookmark).isVisible = isDirectory
@@ -537,6 +538,10 @@ class FileListAdapter(
                 }
                 R.id.action_compare_apk -> {
                     listener.compareApk(file)
+                    true
+                }
+                R.id.action_view_manifest -> {
+                    listener.showManifest(file)
                     true
                 }
                 R.id.action_set_timestamp -> {
@@ -665,6 +670,7 @@ class FileListAdapter(
         fun showElfAnalyzer(file: FileItem)
         fun showHexViewer(file: FileItem)
         fun compareApk(file: FileItem)
+        fun showManifest(file: FileItem)
         fun showSetTimestampDialog(file: FileItem)
         fun showCreateArchiveDialog(file: FileItem)
         fun shareFile(file: FileItem)

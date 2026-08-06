@@ -42,5 +42,7 @@ class DexFileViewModel(private val path: Path) : ViewModel() {
         }
     }
 
+    fun dexFile(): DexFile? = (dexFileLiveData.value as? DataState.Success)?.data
+
     fun disassemble(method: DexMethodDef): String = disassembler?.disassemble(method) ?: ""
 }

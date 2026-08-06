@@ -106,13 +106,24 @@ class ApkStringSearchFragment : Fragment() {
     }
 
     private fun filterStrings(query: String) {
+        val regex = binding.regexCheckBox.isChecked
         lifecycleScope.launch {
             val (filtered, total) = withContext(Dispatchers.Default) {
                 val all = allStrings
                 val filtered = if (query.isEmpty()) {
                     all
                 } else {
-                    all.filter { it.string.contains(query, ignoreCase = true) }
+                    all.filter {
+                        if (regex) {
+                            try {
+                                Regex(query, RegexOption.IGNORE_CASE).containsMatchIn(it.string)
+                            } catch (e: Exception) {
+                                false
+                            }
+                        } else {
+                            it.string.contains(query, ignoreCase = true)
+                        }
+                    }
                 }
                 filtered to all.size
             }

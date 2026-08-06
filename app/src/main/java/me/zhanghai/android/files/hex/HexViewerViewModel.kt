@@ -34,6 +34,8 @@ class HexViewerViewModel(private val path: Path) : ViewModel() {
         get() = _pageLiveData
 
     private var fileSize: Long? = null
+    private var lastPageBytes: ByteArray = ByteArray(0)
+    private var lastPageOffset: Long = 0
 
     init {
         loadPage(0)
@@ -73,6 +75,8 @@ class HexViewerViewModel(private val path: Path) : ViewModel() {
                         read += result
                     }
                 }
+                lastPageBytes = bytes.copyOf(read)
+                lastPageOffset = offset
                 HexPage(
                     hexText = formatHex(bytes, read, offset),
                     rangeText = formatRange(offset, read)
@@ -81,6 +85,39 @@ class HexViewerViewModel(private val path: Path) : ViewModel() {
                 HexPage(error = e.javaClass.simpleName + ": " + e.message)
             }
             _pageLiveData.postValue(page)
+        }
+    }
+
+    fun editableText(): String {
+        val builder = StringBuilder()
+        var index = 0
+        while (index < lastPageBytes.size) {
+            val lineEnd = minOf(index + BYTES_PER_LINE, lastPageBytes.size)
+            for (i in index until lineEnd) {
+                builder.append("%02x ".format(lastPageBytes[i].toInt() and 0xff))
+            }
+            builder.append('\n')
+            index = lineEnd
+        }
+        return builder.toString()
+    }
+
+    fun saveEditableText(text: String) {
+        val hexChars = text.filter { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }
+        if (hexChars.length % 2 != 0) {
+            throw IllegalArgumentException("Invalid hex text")
+        }
+        val bytes = ByteArray(hexChars.length / 2)
+        for (index in bytes.indices) {
+            bytes[index] = hexChars.substring(index * 2, index * 2 + 2).toInt(16).toByte()
+        }
+        val channel = Files.newByteChannel(path, java8.nio.file.StandardOpenOption.WRITE)
+        channel.use {
+            it.position(lastPageOffset)
+            val buffer = java.nio.ByteBuffer.wrap(bytes)
+            while (buffer.hasRemaining()) {
+                it.write(buffer)
+            }
         }
     }
 

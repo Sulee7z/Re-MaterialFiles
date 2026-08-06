@@ -10,10 +10,14 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
+import android.view.Menu
+import android.view.MenuInflater
+import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SearchView
+import androidx.core.view.MenuProvider
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
@@ -37,6 +41,7 @@ import me.zhanghai.android.files.databinding.DexClassDetailDialogBinding
 import me.zhanghai.android.files.databinding.DexClassItemBinding
 import me.zhanghai.android.files.databinding.DexMemberItemBinding
 import me.zhanghai.android.files.databinding.DexStringItemBinding
+import me.zhanghai.android.files.filelist.FileListActivity
 import me.zhanghai.android.files.ui.ListAdapter
 import me.zhanghai.android.files.util.DataState
 import me.zhanghai.android.files.util.ParcelableArgs
@@ -77,6 +82,21 @@ class DexAnalyzerFragment : Fragment() {
             title = args.path.fileName.toString()
             setDisplayHomeAsUpEnabled(true)
         }
+
+        activity.addMenuProvider(object : MenuProvider {
+            override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
+                menuInflater.inflate(R.menu.dex_analyzer, menu)
+            }
+
+            override fun onMenuItemSelected(item: MenuItem): Boolean =
+                when (item.itemId) {
+                    R.id.action_export_smali -> {
+                        showExportSmaliDialog()
+                        true
+                    }
+                    else -> false
+                }
+        }, viewLifecycleOwner)
 
         binding.tabLayout.addOnTabSelectedListener(object :
             com.google.android.material.tabs.TabLayout.OnTabSelectedListener {
@@ -161,13 +181,14 @@ class DexAnalyzerFragment : Fragment() {
     }
 
     private fun filterStrings(query: String) {
+        val regex = binding.regexCheckBox.isChecked
         lifecycleScope.launch {
             val (filtered, total) = withContext(Dispatchers.Default) {
                 val all = allStrings
                 val filtered = if (query.isEmpty()) {
                     all
                 } else {
-                    all.filter { it.contains(query, ignoreCase = true) }
+                    all.filter { matchesQuery(query, it, regex) }
                 }
                 filtered to all.size
             }
@@ -176,6 +197,90 @@ class DexAnalyzerFragment : Fragment() {
                 R.string.dex_string_count_format, filtered.size, total
             )
         }
+    }
+
+    private fun matchesQuery(query: String, value: String, regex: Boolean): Boolean {
+        if (!regex) {
+            return value.contains(query, ignoreCase = true)
+        }
+        return try {
+            Regex(query, RegexOption.IGNORE_CASE).containsMatchIn(value)
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private val exportSmaliLauncher = registerForActivityResult(
+        FileListActivity.OpenDirectoryContract()
+    ) { directory ->
+        if (directory != null) {
+            exportSmali(directory)
+        }
+    }
+
+    private fun showExportSmaliDialog() {
+        val dexFile = viewModel.dexFile() ?: return
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.dex_export_smali)
+            .setMessage(getString(R.string.dex_class_description_format, "", dexFile.classes.size))
+            .setPositiveButton(R.string.dex_export_smali) { _, _ ->
+                exportSmaliLauncher.launch(null)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun exportSmali(directory: Path) {
+        val dexFile = viewModel.dexFile() ?: return
+        lifecycleScope.launch(Dispatchers.IO) {
+            val result = try {
+                var count = 0
+                for (cls in dexFile.classes) {
+                    val smali = buildSmaliFile(cls)
+                    val relativePath = cls.className.removePrefix("L").removeSuffix(";")
+                        .replace('.', '/')
+                    val filePath = directory.resolve("$relativePath.smali")
+                    Files.createDirectories(filePath.parent!!)
+                    Files.write(filePath, smali.toByteArray())
+                    count++
+                }
+                count
+            } catch (e: IOException) {
+                withContext(Dispatchers.Main) {
+                    showToast(e.localizedMessage ?: getString(R.string.dex_export_smali_error))
+                }
+                return@launch
+            }
+            withContext(Dispatchers.Main) {
+                showToast(getString(R.string.dex_export_smali_done_format, result))
+            }
+        }
+    }
+
+    private fun buildSmaliFile(dexClass: DexClass): String {
+        val builder = StringBuilder()
+        builder.append(".class ")
+            .append(DexAccessFlags.forClass(dexClass.accessFlags))
+            .append(' ').append(dexClass.className).append('\n')
+        dexClass.superclassName?.let {
+            builder.append(".super ").append(it).append('\n')
+        }
+        dexClass.interfaces.forEach {
+            builder.append(".implements ").append(it).append('\n')
+        }
+        if (dexClass.sourceFile != null) {
+            builder.append(".source \"").append(dexClass.sourceFile).append("\"\n")
+        }
+        builder.append('\n')
+        dexClass.fields.forEach { fieldDef ->
+            builder.append(".field ")
+                .append(DexAccessFlags.forField(fieldDef.accessFlags)).append(' ')
+                .append(fieldDef.field.name).append(':').append(fieldDef.field.type).append('\n')
+        }
+        dexClass.methods.forEach { methodDef ->
+            builder.append('\n').append(viewModel.disassemble(methodDef)).append('\n')
+        }
+        return builder.toString()
     }
 
     private fun showClassDetail(dexClass: DexClass) {

@@ -72,6 +72,13 @@
                     android:layout_height="wrap_content"
                     app:queryHint="@string/dex_search_strings" />
 
+                <CheckBox
+                    android:id="@+id/regexCheckBox"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/search_regex" />
+
                 <TextView
                     android:id="@+id/stringCountText"
                     android:layout_width="match_parent"

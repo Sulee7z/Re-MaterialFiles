@@ -782,6 +782,20 @@
     <string name="set_timestamp_apply">Apply</string>
     <string name="set_timestamp_failed">Failed to change time</string>
 
+    <string name="search_regex">Regex</string>
+
+    <string name="dex_export_smali">Export smali</string>
+    <string name="dex_export_smali_done_format">Exported %1$d classes</string>
+    <string name="dex_export_smali_error">Failed to export smali</string>
+
+    <string name="file_item_action_view_manifest">View manifest</string>
+    <string name="manifest_decode_error">Failed to decode manifest</string>
+
+    <string name="hex_edit">Edit</string>
+    <string name="hex_save">Save</string>
+    <string name="hex_save_success">Saved</string>
+    <string name="hex_save_error">Failed to save</string>
+
     <string name="ftp_server_title">FTP server</string>
     <string name="ftp_server_state_title">Status</string>
     <string name="ftp_server_state_summary_starting">Starting…</string>

@@ -13,7 +13,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
-import java8.nio.file.Files
 import java8.nio.file.Path
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -61,14 +60,53 @@ class HexViewerFragment : Fragment() {
         binding.nextButton.setOnClickListener {
             viewModel.loadPage(viewModel.currentPageOffset + HexViewerViewModel.PAGE_SIZE)
         }
+        binding.editCheckBox.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                binding.editorEditText.setText(viewModel.editableText())
+                binding.editorEditText.isVisible = true
+                binding.hexText.isVisible = false
+                binding.saveButton.isEnabled = true
+            } else {
+                binding.editorEditText.isVisible = false
+                binding.hexText.isVisible = true
+                binding.saveButton.isEnabled = false
+            }
+        }
+        binding.saveButton.setOnClickListener {
+            saveEdits()
+        }
 
         viewModel.pageLiveData.observe(viewLifecycleOwner) { page ->
             binding.progress.isVisible = page.loading
             binding.errorText.isVisible = page.error != null
             binding.errorText.text = page.error
-            binding.hexText.isVisible = !page.loading && page.error == null
+            binding.hexText.isVisible = !page.loading && page.error == null &&
+                !binding.editCheckBox.isChecked
             binding.hexText.text = page.hexText
             binding.rangeText.text = page.rangeText
+            if (binding.editCheckBox.isChecked) {
+                binding.editorEditText.setText(viewModel.editableText())
+            }
+        }
+    }
+
+    private fun saveEdits() {
+        val text = binding.editorEditText.text?.toString().orEmpty()
+        lifecycleScope.launch(Dispatchers.IO) {
+            val success = try {
+                viewModel.saveEditableText(text)
+                true
+            } catch (e: Exception) {
+                false
+            }
+            withContext(Dispatchers.Main) {
+                if (success) {
+                    showToast(getString(R.string.hex_save_success))
+                    viewModel.loadPage(viewModel.currentPageOffset)
+                } else {
+                    showToast(getString(R.string.hex_save_error))
+                }
+            }
         }
     }
 
