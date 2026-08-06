@@ -796,6 +796,50 @@
     <string name="hex_save_success">Saved</string>
     <string name="hex_save_error">Failed to save</string>
 
+    <string name="file_list_action_content_search">Search contents</string>
+    <string name="file_list_select_action_batch_rename">Batch rename</string>
+
+    <string name="content_search_title">Search contents</string>
+    <string name="content_search_hint">Search text in files</string>
+    <string name="content_search_case_sensitive">Case sensitive</string>
+    <string name="content_search_only_text">Text files only</string>
+    <string name="content_search_empty_query">Enter a search string</string>
+    <string name="content_search_no_results">No results</string>
+    <string name="content_search_result_count_format">%1$d matches</string>
+    <string name="content_search_scanning">Scanning…</string>
+    <string name="content_search_file_count_format">%1$d files</string>
+    <string name="content_search_error">Search failed</string>
+
+    <string name="batch_rename_title">Batch rename</string>
+    <string name="batch_rename_prefix">Prefix</string>
+    <string name="batch_rename_suffix">Suffix</string>
+    <string name="batch_rename_find">Find</string>
+    <string name="batch_rename_replace">Replace with</string>
+    <string name="batch_rename_numbering">Add numbering</string>
+    <string name="batch_rename_start">Start</string>
+    <string name="batch_rename_digits">Digits</string>
+    <string name="batch_rename_apply">Rename</string>
+    <string name="batch_rename_done_format">Renamed %1$d files</string>
+    <string name="batch_rename_failed_format">Failed: %1$s</string>
+    <string name="batch_rename_conflict">Name conflict</string>
+
+    <string name="file_item_action_sign_apk">Sign APK</string>
+    <string name="file_item_action_rename_apk">Rename with version</string>
+    <string name="apk_sign_title">Sign APK</string>
+    <string name="apk_sign_keystore">Keystore</string>
+    <string name="apk_sign_keystore_password">Keystore password</string>
+    <string name="apk_sign_key_alias">Key alias</string>
+    <string name="apk_sign_key_password">Key password</string>
+    <string name="apk_sign_choose_keystore">Choose keystore</string>
+    <string name="apk_sign_no_keystore">No keystore selected</string>
+    <string name="apk_sign_signing">Signing…</string>
+    <string name="apk_sign_done_format">Signed: %1$s</string>
+    <string name="apk_sign_error">Signing failed</string>
+    <string name="apk_sign_v1_note">Uses APK Signature Scheme v1</string>
+
+    <string name="apk_rename_done_format">Renamed to %1$s</string>
+    <string name="apk_rename_error">Rename failed</string>
+
     <string name="ftp_server_title">FTP server</string>
     <string name="ftp_server_state_title">Status</string>
     <string name="ftp_server_state_summary_starting">Starting…</string>

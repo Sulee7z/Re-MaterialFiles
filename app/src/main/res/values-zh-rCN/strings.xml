@@ -649,6 +649,50 @@
     <string name="hex_save">保存</string>
     <string name="hex_save_success">已保存</string>
     <string name="hex_save_error">保存失败</string>
+
+    <string name="file_list_action_content_search">内容搜索</string>
+    <string name="file_list_select_action_batch_rename">批量重命名</string>
+
+    <string name="content_search_title">内容搜索</string>
+    <string name="content_search_hint">在文件中搜索文本</string>
+    <string name="content_search_case_sensitive">区分大小写</string>
+    <string name="content_search_only_text">仅文本文件</string>
+    <string name="content_search_empty_query">请输入搜索内容</string>
+    <string name="content_search_no_results">无结果</string>
+    <string name="content_search_result_count_format">%1$d 处匹配</string>
+    <string name="content_search_scanning">扫描中…</string>
+    <string name="content_search_file_count_format">%1$d 个文件</string>
+    <string name="content_search_error">搜索失败</string>
+
+    <string name="batch_rename_title">批量重命名</string>
+    <string name="batch_rename_prefix">前缀</string>
+    <string name="batch_rename_suffix">后缀</string>
+    <string name="batch_rename_find">查找</string>
+    <string name="batch_rename_replace">替换为</string>
+    <string name="batch_rename_numbering">添加序号</string>
+    <string name="batch_rename_start">起始</string>
+    <string name="batch_rename_digits">位数</string>
+    <string name="batch_rename_apply">重命名</string>
+    <string name="batch_rename_done_format">已重命名 %1$d 个文件</string>
+    <string name="batch_rename_failed_format">失败: %1$s</string>
+    <string name="batch_rename_conflict">名称冲突</string>
+
+    <string name="file_item_action_sign_apk">签名 APK</string>
+    <string name="file_item_action_rename_apk">带版本号重命名</string>
+    <string name="apk_sign_title">签名 APK</string>
+    <string name="apk_sign_keystore">密钥库</string>
+    <string name="apk_sign_keystore_password">密钥库密码</string>
+    <string name="apk_sign_key_alias">别名</string>
+    <string name="apk_sign_key_password">密钥密码</string>
+    <string name="apk_sign_choose_keystore">选择密钥库</string>
+    <string name="apk_sign_no_keystore">未选择密钥库</string>
+    <string name="apk_sign_signing">签名中…</string>
+    <string name="apk_sign_done_format">已签名: %1$s</string>
+    <string name="apk_sign_error">签名失败</string>
+    <string name="apk_sign_v1_note">使用 APK 签名方案 v1</string>
+
+    <string name="apk_rename_done_format">已重命名为 %1$s</string>
+    <string name="apk_rename_error">重命名失败</string>
     
     <string name="word_warp">文字换行</string>
     <string name="syntax_highlighting">语法高亮</string>

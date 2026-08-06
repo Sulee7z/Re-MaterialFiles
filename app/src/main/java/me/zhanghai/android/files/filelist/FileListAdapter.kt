@@ -488,6 +488,8 @@ class FileListAdapter(
         menu.findItem(R.id.action_compare_apk).isVisible = file.mimeType.isApk
         menu.findItem(R.id.action_view_manifest).isVisible = file.mimeType.isApk
         menu.findItem(R.id.action_set_timestamp).isVisible = !isReadOnly
+        menu.findItem(R.id.action_sign_apk).isVisible = file.mimeType.isApk
+        menu.findItem(R.id.action_rename_apk).isVisible = file.mimeType.isApk
         menu.findItem(R.id.action_archive).isVisible = !isArchivePath
         menu.findItem(R.id.action_add_bookmark).isVisible = isDirectory
         holder.popupMenu.setOnMenuItemClickListener {
@@ -546,6 +548,14 @@ class FileListAdapter(
                 }
                 R.id.action_set_timestamp -> {
                     listener.showSetTimestampDialog(file)
+                    true
+                }
+                R.id.action_sign_apk -> {
+                    listener.showSignApkDialog(file)
+                    true
+                }
+                R.id.action_rename_apk -> {
+                    listener.renameApkWithVersion(file)
                     true
                 }
                 R.id.action_archive -> {
@@ -672,6 +682,8 @@ class FileListAdapter(
         fun compareApk(file: FileItem)
         fun showManifest(file: FileItem)
         fun showSetTimestampDialog(file: FileItem)
+        fun showSignApkDialog(file: FileItem)
+        fun renameApkWithVersion(file: FileItem)
         fun showCreateArchiveDialog(file: FileItem)
         fun shareFile(file: FileItem)
         fun copyPath(file: FileItem)

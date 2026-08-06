@@ -63,4 +63,10 @@
         android:orderInCategory="100"
         android:title="@string/select_range"
         app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_batch_rename"
+        android:orderInCategory="100"
+        android:title="@string/file_list_select_action_batch_rename"
+        app:showAsAction="never" />
 </menu>

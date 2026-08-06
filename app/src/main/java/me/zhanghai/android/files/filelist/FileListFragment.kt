@@ -25,7 +25,9 @@ import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
@@ -55,8 +57,8 @@ import kotlinx.parcelize.Parcelize
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.pm.PackageInfo
-import android.widget.LinearLayout
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java.io.File
 import java.io.IOException
@@ -102,7 +104,8 @@ import me.zhanghai.android.files.hex.HexViewerActivity
 import me.zhanghai.android.files.logcat.LogcatActivity
 import me.zhanghai.android.files.activitylauncher.ActivityLauncherActivity
 import me.zhanghai.android.files.apkmanifest.AndroidManifestDecoder
-import me.zhanghai.android.files.file.fileProviderUri
+import me.zhanghai.android.files.apksign.ApkV1Signer
+import me.zhanghai.android.files.contentsearch.ContentSearchActivity
 import me.zhanghai.android.files.fileproperties.FilePropertiesDialogFragment
 import me.zhanghai.android.files.navigation.BookmarkDirectories
 import me.zhanghai.android.files.navigation.BookmarkDirectory
@@ -572,6 +575,14 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 startActivity(ActivityLauncherActivity::class.createIntent())
                 true
             }
+            R.id.action_content_search -> {
+                startActivity(
+                    ContentSearchActivity::class.createIntent().apply {
+                        extraPath = viewModel.currentPath
+                    }
+                )
+                true
+            }
             R.id.action_add_bookmark -> {
                 addBookmark()
                 true
@@ -943,6 +954,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             menu.findItem(R.id.action_extract).isVisible = areAllFilesArchiveFiles
             val isCurrentPathReadOnly = viewModel.currentPath.fileSystem.isReadOnly
             menu.findItem(R.id.action_archive).isVisible = !isCurrentPathReadOnly
+            menu.findItem(R.id.action_batch_rename).isVisible = !isCurrentPathReadOnly
         }
         if (!overlayActionMode.isActive) {
             binding.appBarLayout.setExpanded(true)
@@ -1002,6 +1014,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             }
             R.id.action_select_range -> {
                 rangeSelectFiles()
+                true
+            }
+            R.id.action_batch_rename -> {
+                showBatchRenameDialog(viewModel.selectedFiles)
                 true
             }
             else -> false
@@ -1714,6 +1730,304 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 }
             }
         dialogBuilder.show()
+    }
+
+    private fun showBatchRenameDialog(files: FileItemSet) {
+        val dialogBuilder = MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.batch_rename_title)
+            .setNegativeButton(android.R.string.cancel, null)
+        val view = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            val padding = (16 * resources.displayMetrics.density).toInt()
+            setPadding(padding, padding, padding, padding)
+        }
+        fun addField(labelRes: Int, hint: String? = null): EditText {
+            val label = TextView(requireContext()).apply {
+                text = getString(labelRes)
+                setTextAppearance(android.R.style.TextAppearance_Material_Small)
+            }
+            val field = EditText(requireContext()).apply {
+                this.hint = hint
+                isSingleLine = true
+            }
+            view.addView(label)
+            view.addView(field)
+            return field
+        }
+        val prefixField = addField(R.string.batch_rename_prefix)
+        val suffixField = addField(R.string.batch_rename_suffix)
+        val findField = addField(R.string.batch_rename_find)
+        val replaceField = addField(R.string.batch_rename_replace)
+        val numberingCheckBox = CheckBox(requireContext()).apply {
+            text = getString(R.string.batch_rename_numbering)
+        }
+        view.addView(numberingCheckBox)
+        val numberingRow = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        val startField = EditText(requireContext()).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setText("1")
+        }
+        val digitsField = EditText(requireContext()).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setText("2")
+        }
+        numberingRow.addView(
+            TextView(requireContext()).apply { text = getString(R.string.batch_rename_start) }
+        )
+        numberingRow.addView(startField)
+        numberingRow.addView(
+            TextView(requireContext()).apply { text = getString(R.string.batch_rename_digits) }
+        )
+        numberingRow.addView(digitsField)
+        view.addView(numberingRow)
+        dialogBuilder.setView(view)
+            .setPositiveButton(R.string.batch_rename_apply) { _, _ ->
+                val prefix = prefixField.text?.toString().orEmpty()
+                val suffix = suffixField.text?.toString().orEmpty()
+                val find = findField.text?.toString()
+                val replace = replaceField.text?.toString().orEmpty()
+                val numbering = numberingCheckBox.isChecked
+                val start = startField.text?.toString()?.toIntOrNull() ?: 1
+                val digits = digitsField.text?.toString()?.toIntOrNull() ?: 2
+                applyBatchRename(
+                    files, prefix, suffix, find, replace, numbering, start, digits
+                )
+            }
+        dialogBuilder.show()
+    }
+
+    private fun applyBatchRename(
+        files: FileItemSet,
+        prefix: String,
+        suffix: String,
+        find: String?,
+        replace: String,
+        numbering: Boolean,
+        start: Int,
+        digits: Int
+    ) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val sortedFiles = files.sortedBy { it.name }
+            var renamed = 0
+            var number = start
+            for (file in sortedFiles) {
+                try {
+                    val base = file.name.substringBeforeLast('.', file.name)
+                    val extension = if (file.name.contains('.')) {
+                        file.name.substringAfterLast('.')
+                    } else {
+                        ""
+                    }
+                    var newBase = base
+                    if (!find.isNullOrEmpty()) {
+                        newBase = newBase.replace(find, replace)
+                    }
+                    val numberText = if (numbering) {
+                        number.toString().padStart(digits, '0')
+                    } else {
+                        ""
+                    }
+                    number++
+                    val newName = prefix + newBase + suffix + numberText +
+                        (if (extension.isEmpty()) "" else ".$extension")
+                    val target = file.path.parent.resolve(newName)
+                    if (Files.exists(target)) {
+                        withContext(Dispatchers.Main) {
+                            showToast(getString(R.string.batch_rename_conflict))
+                        }
+                        return@launch
+                    }
+                    Files.move(file.path, target)
+                    renamed++
+                } catch (e: Throwable) {
+                    withContext(Dispatchers.Main) {
+                        showToast(
+                            getString(R.string.batch_rename_failed_format, e.localizedMessage ?: "")
+                        )
+                    }
+                    return@launch
+                }
+            }
+            withContext(Dispatchers.Main) {
+                showToast(getString(R.string.batch_rename_done_format, renamed))
+                viewModel.reload()
+            }
+        }
+    }
+
+    override fun renameApkWithVersion(file: FileItem) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val versionName = getApkVersionName(file)
+                val base = file.name.substringBeforeLast('.', file.name)
+                var newName = "${base}_$versionName.apk"
+                var target = file.path.parent.resolve(newName)
+                var index = 1
+                while (Files.exists(target)) {
+                    newName = "${base}_$versionName($index).apk"
+                    target = file.path.parent.resolve(newName)
+                    index++
+                }
+                Files.move(file.path, target)
+                withContext(Dispatchers.Main) {
+                    showToast(getString(R.string.apk_rename_done_format, newName))
+                    viewModel.reload()
+                }
+            } catch (e: Throwable) {
+                withContext(Dispatchers.Main) {
+                    showToast(e.localizedMessage ?: getString(R.string.apk_rename_error))
+                }
+            }
+        }
+    }
+
+    private fun getApkVersionName(file: FileItem): String {
+        @Suppress("DEPRECATION")
+        val flags = PackageManager.GET_PERMISSIONS or PackageManager.GET_SIGNATURES
+        val (packageInfo, closeable) =
+            packageManager.getPackageArchiveInfoCompat(file.path, flags)
+        closeable?.close()
+        return packageInfo?.versionName ?: "unknown"
+    }
+
+    override fun showSignApkDialog(file: FileItem) {
+        var keystorePath: Path? = null
+        val dialogBuilder = MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.apk_sign_title)
+            .setNegativeButton(android.R.string.cancel, null)
+        val view = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            val padding = (16 * resources.displayMetrics.density).toInt()
+            setPadding(padding, padding, padding, padding)
+        }
+        val keystoreRow = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+        }
+        val keystoreText = TextView(requireContext()).apply {
+            text = getString(R.string.apk_sign_no_keystore)
+        }
+        val chooseButton = MaterialButton(requireContext()).apply {
+            text = getString(R.string.apk_sign_choose_keystore)
+        }
+        chooseButton.setOnClickListener {
+            keystorePickerCallback.callback = { path ->
+                if (path != null) {
+                    keystorePath = path
+                    keystoreText.text = path.fileName.toString()
+                }
+            }
+            keystorePickerLauncher.launch(listOf(MimeType.ANY))
+        }
+        keystoreRow.addView(keystoreText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        keystoreRow.addView(chooseButton)
+        view.addView(keystoreRow)
+        fun addPasswordField(labelRes: Int): EditText {
+            val label = TextView(requireContext()).apply {
+                text = getString(labelRes)
+                setTextAppearance(android.R.style.TextAppearance_Material_Small)
+            }
+            val field = EditText(requireContext()).apply {
+                inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                    android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+                isSingleLine = true
+            }
+            view.addView(label)
+            view.addView(field)
+            return field
+        }
+        val storePasswordField = addPasswordField(R.string.apk_sign_keystore_password)
+        val aliasField = addPasswordField(R.string.apk_sign_key_alias)
+        val keyPasswordField = addPasswordField(R.string.apk_sign_key_password)
+        view.addView(
+            TextView(requireContext()).apply {
+                text = getString(R.string.apk_sign_v1_note)
+                setTextAppearance(android.R.style.TextAppearance_Material_Small)
+            }
+        )
+        dialogBuilder.setView(view)
+            .setPositiveButton(R.string.file_item_action_sign_apk) { _, _ ->
+                val keystore = keystorePath ?: return@setPositiveButton
+                val storePassword = storePasswordField.text?.toString().orEmpty()
+                val alias = aliasField.text?.toString().orEmpty()
+                val keyPassword = keyPasswordField.text?.toString().orEmpty()
+                signApk(file, keystore, storePassword, alias, keyPassword)
+            }
+        dialogBuilder.show()
+    }
+
+    private fun signApk(
+        file: FileItem,
+        keystorePath: Path,
+        storePassword: String,
+        alias: String,
+        keyPassword: String
+    ) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val result = try {
+                val cacheDirectory = File(requireContext().cacheDir, "apk-sign")
+                cacheDirectory.mkdirs()
+                val inputFile = File(cacheDirectory, "input.apk")
+                Files.newInputStream(file.path).use { input ->
+                    inputFile.outputStream().use { output -> input.copyTo(output) }
+                }
+                val keyStore = java.security.KeyStore.getInstance(
+                    java.security.KeyStore.getDefaultType()
+                )
+                keystorePath.fileSystem.provider().newInputStream(keystorePath).use { stream ->
+                    keyStore.load(stream, storePassword.toCharArray())
+                }
+                val privateKey = keyStore.getKey(
+                    alias, keyPassword.toCharArray()
+                ) as java.security.PrivateKey
+                val certificate = keyStore.getCertificate(alias) as java.security.cert.X509Certificate
+                val outputFile = File(
+                    cacheDirectory,
+                    file.name.substringBeforeLast('.', file.name) + "-signed.apk"
+                )
+                ApkV1Signer.sign(inputFile, outputFile, privateKey, certificate)
+                outputFile
+            } catch (e: Throwable) {
+                withContext(Dispatchers.Main) {
+                    showToast(e.localizedMessage ?: getString(R.string.apk_sign_error))
+                }
+                return@launch
+            }
+            withContext(Dispatchers.Main) {
+                val outputPath = file.path.parent.resolve(result.name)
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        Files.newInputStream(
+                            java8.nio.file.Paths.get(result.absolutePath)
+                        ).use { input ->
+                            Files.newOutputStream(outputPath).use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        withContext(Dispatchers.Main) {
+                            showToast(getString(R.string.apk_sign_done_format, result.name))
+                            viewModel.reload()
+                        }
+                    } catch (e: Throwable) {
+                        withContext(Dispatchers.Main) {
+                            showToast(e.localizedMessage ?: getString(R.string.apk_sign_error))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private val keystorePickerCallback = object {
+        var callback: ((Path?) -> Unit)? = null
+    }
+    private val keystorePickerLauncher = registerForActivityResult(
+        FileListActivity.OpenFileContract()
+    ) { path ->
+        keystorePickerCallback.callback?.invoke(path)
+        keystorePickerCallback.callback = null
     }
 
     private fun pickTimestamp(initial: Long, onSet: (Long) -> Unit) {

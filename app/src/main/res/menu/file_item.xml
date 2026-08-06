@@ -64,6 +64,14 @@
         android:title="@string/file_item_action_set_timestamp" />
 
     <item
+        android:id="@+id/action_sign_apk"
+        android:title="@string/file_item_action_sign_apk" />
+
+    <item
+        android:id="@+id/action_rename_apk"
+        android:title="@string/file_item_action_rename_apk" />
+
+    <item
         android:id="@+id/action_archive"
         android:title="@string/file_item_action_archive" />
 
