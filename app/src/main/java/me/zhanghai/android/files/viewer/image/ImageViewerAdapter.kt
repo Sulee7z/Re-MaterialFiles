@@ -128,7 +128,19 @@ class ImageViewerAdapter(
 
                     override fun onImageLoadError(e: Exception) {
                         e.printStackTrace()
-                        showError(binding, e)
+                        // BitmapRegionDecoder supports fewer formats than Coil's decoder;
+                        // fall back to full-image decoding before giving up.
+                        binding.largeImage.isVisible = false
+                        binding.image.apply {
+                            isVisible = true
+                            load(path to imageInfo.attributes) {
+                                size(Size.ORIGINAL)
+                                listener(
+                                    onSuccess = { _, _ -> binding.progress.fadeOutUnsafe() },
+                                    onError = { _, result -> showError(binding, result.throwable) }
+                                )
+                            }
+                        }
                     }
                 })
                 setImageRestoringSavedState(ImageSource.uri(path.fileProviderUri))

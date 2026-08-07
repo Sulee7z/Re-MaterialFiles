@@ -38,7 +38,13 @@ object Client {
     @Volatile
     lateinit var authenticator: Authenticator
 
-    private val clientPool = mutableMapOf<Authority, MutableList<FTPClient>>()
+    private data class PooledClient(val client: FTPClient, val idleSinceMillis: Long)
+
+    private val clientPool = mutableMapOf<Authority, MutableList<PooledClient>>()
+
+    // FileZilla Server's default idle timeout is usually 120s; keep pooled connections well
+    // below it so a borrowed client never gets a 421 right after the liveness check.
+    private const val MAX_POOLED_IDLE_MILLIS = 60_000L
 
     private val directoryFilesCache = Collections.synchronizedMap(WeakHashMap<Path, FTPFile>())
 
@@ -68,11 +74,20 @@ object Client {
     private fun acquireClientUnchecked(authority: Authority): FTPClient? =
         synchronized(clientPool) {
             val pooledClients = clientPool[authority] ?: return null
-            pooledClients.removeLastOrNull().also {
+            while (pooledClients.isNotEmpty()) {
+                val pooled = pooledClients.removeAt(pooledClients.lastIndex)
                 if (pooledClients.isEmpty()) {
                     clientPool -= authority
                 }
+                val idleMillis = System.currentTimeMillis() - pooled.idleSinceMillis
+                if (idleMillis <= MAX_POOLED_IDLE_MILLIS) {
+                    return pooled.client
+                }
+                // Idled too long: the server may have already timed it out (421). Discard it
+                // instead of relying on the NOOP liveness check.
+                closeClient(pooled.client)
             }
+            return null
         }
 
     @Throws(IOException::class)
@@ -121,13 +136,9 @@ object Client {
             client.disconnect()
             return
         }
-        // FIXME: Disconnect clients based on time.
-        if (false) {
-            closeClient(client)
-            return
-        }
         synchronized(clientPool) {
-            clientPool.getOrPut(authority) { mutableListOf() } += client
+            clientPool.getOrPut(authority) { mutableListOf() } +=
+                PooledClient(client, System.currentTimeMillis())
         }
     }
 
