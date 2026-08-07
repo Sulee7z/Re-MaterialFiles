@@ -23,6 +23,9 @@ class FileByteChannel(
 ) : AbstractFileByteChannel(isAppend, joinCancelledRead = true) {
     private val clientLock = Any()
 
+    private var openInputStream: InputStream? = null
+    private var openStreamPosition = 0L
+
     init {
         if (truncate) {
             // FTP's REST+STOR does not truncate the tail of an existing file, so truncate it
@@ -41,27 +44,47 @@ class FileByteChannel(
     override fun onRead(position: Long, size: Int): ByteBuffer {
         val destination = ByteBuffer.allocate(size)
         synchronized(clientLock) {
-            client.restartOffset = position
-            val inputStream = client.retrieveFileStream(path)
-                ?: client.throwNegativeReplyCodeException()
+            // Sequential reads reuse the same RETR stream instead of issuing a REST+RETR
+            // per chunk. Some servers mishandle REST for RETR, which would corrupt reads of
+            // files larger than the read buffer. Random access (position moved) falls back
+            // to REST+RETR.
+            if (openInputStream == null || position != openStreamPosition) {
+                closeOpenStream()
+                client.restartOffset = position
+                openInputStream = client.retrieveFileStream(path)
+                    ?: client.throwNegativeReplyCodeException()
+                openStreamPosition = position
+            }
+            val inputStream = openInputStream!!
             try {
-                val limit = inputStream.use {
-                    it.readFully(destination.array(), destination.arrayOffset(), size)
-                }
+                val limit = inputStream.readFully(
+                    destination.array(), destination.arrayOffset(), size
+                )
                 destination.limit(limit)
-            } finally {
-                // We will likely close the input stream before the file is fully
-                // read and it will result in a false return value here, but that's
-                // totally fine.
-                client.completePendingCommand()
+                openStreamPosition += limit
+            } catch (e: IOException) {
+                // The stream may have been closed by the server; reopen on the next read.
+                closeOpenStream()
+                throw e
             }
         }
         return destination
     }
 
+    private fun closeOpenStream() {
+        val inputStream = openInputStream ?: return
+        openInputStream = null
+        try {
+            inputStream.close()
+        } finally {
+            client.completePendingCommand()
+        }
+    }
+
     @Throws(IOException::class)
     override fun onWrite(position: Long, source: ByteBuffer) {
         synchronized(clientLock) {
+            closeOpenStream()
             client.restartOffset = position
             ByteBufferInputStream(source).use {
                 if (!client.storeFile(path, it)) {
@@ -74,6 +97,7 @@ class FileByteChannel(
     @Throws(IOException::class)
     override fun onAppend(source: ByteBuffer) {
         synchronized(clientLock) {
+            closeOpenStream()
             ByteBufferInputStream(source).use {
                 if (!client.appendFile(path, it)) {
                     client.throwNegativeReplyCodeException()
@@ -85,6 +109,7 @@ class FileByteChannel(
     @Throws(IOException::class)
     override fun onTruncate(size: Long) {
         synchronized(clientLock) {
+            closeOpenStream()
             client.restartOffset = size
             InputStream::class.nullInputStream().use {
                 if (!client.storeFile(path, it)) {
@@ -104,6 +129,9 @@ class FileByteChannel(
 
     @Throws(IOException::class)
     override fun onClose() {
-        synchronized(clientLock) { releaseClient(client) }
+        synchronized(clientLock) {
+            closeOpenStream()
+            releaseClient(client)
+        }
     }
 }
