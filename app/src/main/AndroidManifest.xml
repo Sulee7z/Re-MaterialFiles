@@ -379,6 +379,12 @@
             android:theme="@style/Theme.MaterialFiles" />
 
         <activity
+            android:name="me.zhanghai.android.files.searchindex.SearchIndexActivity"
+            android:exported="true"
+            android:label="@string/search_index_title"
+            android:theme="@style/Theme.MaterialFiles" />
+
+        <activity
             android:name="me.zhanghai.android.files.viewer.image.ImageViewerActivity"
             android:exported="true"
             android:label="@string/image_viewer_title"

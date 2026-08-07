@@ -807,6 +807,13 @@
     <string name="hex_save_error">Failed to save</string>
 
     <string name="file_list_action_content_search">Search contents</string>
+    <string name="file_list_action_index_search">Indexed search</string>
+    <string name="search_index_title">Indexed search</string>
+    <string name="search_index_hint">Search file names</string>
+    <string name="search_index_rebuild">Rebuild index</string>
+    <string name="search_index_not_built">Index not built yet. Enter a query to start indexing…</string>
+    <string name="search_index_info_format">%1$d items indexed · built %2$s</string>
+    <string name="search_index_result_count_format">%1$d results</string>
     <string name="file_list_select_action_batch_rename">Batch rename</string>
 
     <string name="content_search_title">Search contents</string>

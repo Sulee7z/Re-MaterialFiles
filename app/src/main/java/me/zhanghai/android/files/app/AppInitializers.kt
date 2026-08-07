@@ -15,6 +15,7 @@ import me.zhanghai.android.files.filejob.fileJobNotificationTemplate
 import me.zhanghai.android.files.ftpserver.ftpServerServiceNotificationTemplate
 import me.zhanghai.android.files.hiddenapi.HiddenApi
 import me.zhanghai.android.files.provider.FileSystemProviders
+import me.zhanghai.android.files.searchindex.SearchIndexDb
 import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.storage.FtpServerAuthenticator
 import me.zhanghai.android.files.storage.SftpServerAuthenticator
@@ -35,6 +36,7 @@ val appInitializers = listOf(
     ::initializeWebViewDebugging,
     ::initializeCoil,
     ::initializeFileSystemProviders,
+    ::initializeSearchIndexDb,
     ::upgradeApp,
     ::initializeLiveDataObjects,
     ::initializeCustomTheme,
@@ -77,10 +79,13 @@ private fun initializeFileSystemProviders() {
 }
 
 private fun initializeLiveDataObjects() {
-    // Force initialization of LiveData objects so that it won't happen on a background thread.
-    StorageVolumeListLiveData.value
-    Settings.FILE_LIST_DEFAULT_DIRECTORY.value
+// Force initialization of LiveData objects so that it won't happen on a background thread.
+StorageVolumeListLiveData.value
+Settings.FILE_LIST_DEFAULT_DIRECTORY.value
+SearchIndexDb.initialize(application)
 }
+
+private fun initializeSearchIndexDb() = SearchIndexDb.initialize(application)
 
 private fun initializeCustomTheme() {
     CustomThemeHelper.initialize(application)

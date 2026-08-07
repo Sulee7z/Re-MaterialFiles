@@ -661,6 +661,13 @@
     <string name="hex_save_error">保存失败</string>
 
     <string name="file_list_action_content_search">内容搜索</string>
+    <string name="file_list_action_index_search">索引搜索</string>
+    <string name="search_index_title">索引搜索</string>
+    <string name="search_index_hint">搜索文件名</string>
+    <string name="search_index_rebuild">重建索引</string>
+    <string name="search_index_not_built">索引尚未建立,输入关键字后开始索引…</string>
+    <string name="search_index_info_format">已索引 %1$d 项 · 建立于 %2$s</string>
+    <string name="search_index_result_count_format">%1$d 个结果</string>
     <string name="file_list_select_action_batch_rename">批量重命名</string>
 
     <string name="content_search_title">内容搜索</string>
