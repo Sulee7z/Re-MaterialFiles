@@ -6,9 +6,9 @@
 package me.zhanghai.android.files.searchindex
 
 import me.zhanghai.android.files.provider.common.isDirectory
-import java8.nio.file.DirectoryStream
 import java8.nio.file.Files
 import java8.nio.file.Path
+import java.util.ArrayDeque
 import kotlin.concurrent.thread
 
 /**
@@ -16,9 +16,11 @@ import kotlin.concurrent.thread
  */
 object FileIndexer {
 
-    private val SKIP_DIRECTORIES = arrayOf(
+    private val SKIP_DIRECTORIES = setOf(
         "Android", "AppData", "System Volume Information", "\$RECYCLE.BIN", "LOST.DIR"
     )
+
+    private const val MAX_INDEX_ITEMS = 500_000L
 
     @Volatile
     private var indexing = false
@@ -46,11 +48,55 @@ object FileIndexer {
             try {
                 SearchIndexDb.clear()
                 var count = 0L
+                val visited = HashSet<String>()
+                val queue = ArrayDeque<Path>()
                 for (root in roots) {
-                    count = walk(root, count) { current ->
-                        count = current
+                    queue.addLast(root)
+                }
+                while (queue.isNotEmpty() && count < MAX_INDEX_ITEMS) {
+                    val current = queue.removeFirst()
+                    if (current.toString() in visited) {
+                        continue
+                    }
+                    visited += current.toString()
+                    val entries = try {
+                        Files.newDirectoryStream(current).use { it.toList() }
+                    } catch (e: Exception) {
+                        continue
+                    }
+                    for (entry in entries) {
+                        if (count >= MAX_INDEX_ITEMS) {
+                            break
+                        }
+                        if (entry.toString() in visited) {
+                            continue
+                        }
+                        val isDirectory = try {
+                            entry.isDirectory()
+                        } catch (e: Exception) {
+                            continue
+                        }
+                        val attributes = try {
+                            Files.readAttributes(
+                                entry, java8.nio.file.attribute.BasicFileAttributes::class.java
+                            )
+                        } catch (e: Exception) {
+                            continue
+                        }
+                        SearchIndexDb.insert(
+                            entry.toString(), entry.fileName.toString(),
+                            attributes.size(), attributes.lastModifiedTime().toMillis(), isDirectory
+                        )
+                        count++
                         if (count % 500 == 0L) {
                             onProgress(count)
+                        }
+                        if (isDirectory) {
+                            val name = entry.fileName?.toString() ?: continue
+                            if (name in SKIP_DIRECTORIES) {
+                                continue
+                            }
+                            queue.addLast(entry)
                         }
                     }
                 }
@@ -64,55 +110,5 @@ object FileIndexer {
                 indexing = false
             }
         }
-    }
-
-    private fun walk(root: Path, startCount: Long, onCount: (Long) -> Unit): Long {
-        var count = startCount
-        try {
-            Files.newDirectoryStream(root).use { stream ->
-                for (path in stream) {
-                    count = indexEntry(path, count, onCount)
-                }
-            }
-        } catch (e: Exception) {
-            // Unreadable directories are skipped.
-        }
-        return count
-    }
-
-    private fun indexEntry(path: Path, startCount: Long, onCount: (Long) -> Unit): Long {
-        var count = startCount
-        val isDirectory = try {
-            path.isDirectory()
-        } catch (e: Exception) {
-            return count
-        }
-        val attributes = try {
-            Files.readAttributes(path, java8.nio.file.attribute.BasicFileAttributes::class.java)
-        } catch (e: Exception) {
-            return count
-        }
-        SearchIndexDb.insert(
-            path.toString(), path.fileName.toString(),
-            attributes.size(), attributes.lastModifiedTime().toMillis(), isDirectory
-        )
-        count++
-        onCount(count)
-        if (isDirectory) {
-            val name = path.fileName?.toString() ?: return count
-            if (name in SKIP_DIRECTORIES) {
-                return count
-            }
-            try {
-                Files.newDirectoryStream(path).use { stream ->
-                    for (child in stream) {
-                        count = indexEntry(child, count, onCount)
-                    }
-                }
-            } catch (e: Exception) {
-                // Unreadable directories are skipped.
-            }
-        }
-        return count
     }
 }

@@ -9,10 +9,10 @@ import android.os.AsyncTask
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
-import java8.nio.file.DirectoryStream
 import java8.nio.file.Files
 import java8.nio.file.Path
 import me.zhanghai.android.files.util.DataState
+import java.util.ArrayDeque
 
 data class ContentSearchResult(
     val path: Path,
@@ -26,6 +26,7 @@ class ContentSearchViewModel(private val directory: Path) : ViewModel() {
     companion object {
         private const val MAX_FILE_SIZE = 2L * 1024 * 1024
         private const val MAX_RESULTS = 500
+        private const val MAX_SCAN_ITEMS = 50000
     }
 
     private val _resultsLiveData = MutableLiveData<DataState<List<ContentSearchResult>>>()
@@ -51,10 +52,7 @@ class ContentSearchViewModel(private val directory: Path) : ViewModel() {
             var scanned = 0
             try {
                 val searchBytes = query.toByteArray(Charsets.UTF_8)
-                fun searchFile(path: Path, relative: String) {
-                    if (cancelled) {
-                        return
-                    }
+                fun searchFile(path: Path, relative: String): Boolean {
                     scanned++
                     if (scanned % 25 == 0) {
                         _progressLiveData.postValue(scanned)
@@ -62,14 +60,14 @@ class ContentSearchViewModel(private val directory: Path) : ViewModel() {
                     try {
                         val size = Files.size(path)
                         if (size > MAX_FILE_SIZE) {
-                            return
+                            return false
                         }
                         val bytes = Files.newInputStream(path).use { it.readBytes() }
                         if (textOnly) {
                             val limit = minOf(bytes.size, 4096)
                             for (index in 0 until limit) {
                                 if (bytes[index].toInt() == 0) {
-                                    return
+                                    return false
                                 }
                             }
                         }
@@ -89,30 +87,44 @@ class ContentSearchViewModel(private val directory: Path) : ViewModel() {
                     } catch (e: Exception) {
                         // Skip unreadable files.
                     }
+                    return results.size >= MAX_RESULTS || scanned >= MAX_SCAN_ITEMS
                 }
-                fun walk(current: Path, relative: String) {
-                    if (cancelled || results.size >= MAX_RESULTS) {
-                        return
+                // Iterative walk with visited-set protection against symbolic link loops.
+                val visited = HashSet<String>()
+                val queue = ArrayDeque<Pair<Path, String>>()
+                queue.addLast(directory to "")
+                while (queue.isNotEmpty() && !cancelled && results.size < MAX_RESULTS &&
+                    scanned < MAX_SCAN_ITEMS
+                ) {
+                    val (current, relative) = queue.removeFirst()
+                    if (current.toString() in visited) {
+                        continue
                     }
-                    try {
-                        Files.newDirectoryStream(current).use { stream ->
-                            val entries = stream.toList().sortedBy { it.fileName.toString() }
-                            entries.forEach { entry ->
-                                if (cancelled || results.size >= MAX_RESULTS) {
-                                    return@forEach
-                                }
-                                if (Files.isDirectory(entry)) {
-                                    walk(entry, "$relative/${entry.fileName}")
-                                } else {
-                                    searchFile(entry, relative)
-                                }
-                            }
-                        }
+                    visited += current.toString()
+                    val entries = try {
+                        Files.newDirectoryStream(current).use { it.toList() }
                     } catch (e: Exception) {
-                        // Skip unreadable directories.
+                        continue
+                    }
+                    for (entry in entries.sortedBy { it.fileName.toString() }) {
+                        if (cancelled || results.size >= MAX_RESULTS || scanned >= MAX_SCAN_ITEMS) {
+                            break
+                        }
+                        if (entry.toString() in visited) {
+                            continue
+                        }
+                        val isDirectory = try {
+                            Files.isDirectory(entry)
+                        } catch (e: Exception) {
+                            false
+                        }
+                        if (isDirectory) {
+                            queue.addLast(entry to "$relative/${entry.fileName}")
+                        } else {
+                            searchFile(entry, relative)
+                        }
                     }
                 }
-                walk(directory, "")
             } catch (e: Throwable) {
                 if (!cancelled) {
                     _resultsLiveData.postValue(DataState.Error(null, e))
@@ -120,6 +132,7 @@ class ContentSearchViewModel(private val directory: Path) : ViewModel() {
                 return@execute
             }
             if (!cancelled) {
+                _progressLiveData.postValue(scanned)
                 _resultsLiveData.postValue(DataState.Success(results))
             }
         }
@@ -129,3 +142,4 @@ class ContentSearchViewModel(private val directory: Path) : ViewModel() {
         cancelled = true
     }
 }
+
