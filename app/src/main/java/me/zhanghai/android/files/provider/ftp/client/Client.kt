@@ -161,6 +161,73 @@ object Client {
     }
 
     @Throws(IOException::class)
+    fun supportsEverythingSearch(authority: Authority): Boolean =
+        useClient(authority) { client -> client.hasFeature("EVERYTHING") }
+
+    /**
+     * Searches the Everything ETP/FTP server index. Result lines are raw Windows paths
+     * (CSV-like formatting), delivered in batches to [listener].
+     */
+    @Throws(IOException::class)
+    fun searchEverything(
+        authority: Authority,
+        query: String,
+        intervalMillis: Long,
+        listener: (List<String>) -> Unit
+    ) {
+        useClient(authority) { client ->
+            require(client is EverythingQueryCapable) { "Server does not support EVERYTHING" }
+            val pageSize = 500
+            var offset = 0
+            val batch = mutableListOf<String>()
+            var lastProgressMillis = System.currentTimeMillis()
+            while (true) {
+                client.sendCommand("SITE", "EVERYTHING SEARCH $query")
+                client.sendCommand("SITE", "EVERYTHING PATH_COLUMN 1")
+                client.sendCommand("SITE", "EVERYTHING OFFSET $offset")
+                client.sendCommand("SITE", "EVERYTHING COUNT $pageSize")
+                val inputStream = client.openEverythingQueryStream()
+                    ?: client.throwNegativeReplyCodeException()
+                val lines = inputStream.bufferedReader(Charsets.UTF_8).use { it.readLines() }
+                client.completePendingCommand()
+                if (lines.isEmpty()) {
+                    break
+                }
+                for (line in lines) {
+                    val path = parseEverythingResultLine(line) ?: continue
+                    batch.add(path)
+                }
+                val currentTimeMillis = System.currentTimeMillis()
+                if (batch.isNotEmpty() &&
+                    currentTimeMillis >= lastProgressMillis + intervalMillis
+                ) {
+                    listener(batch.toList())
+                    batch.clear()
+                    lastProgressMillis = currentTimeMillis
+                }
+                if (lines.size < pageSize) {
+                    break // Last page.
+                }
+                offset += pageSize
+                if (Thread.interrupted()) {
+                    throw java.io.InterruptedIOException()
+                }
+            }
+            if (batch.isNotEmpty()) {
+                listener(batch)
+            }
+        }
+    }
+
+    private fun parseEverythingResultLine(line: String): String? {
+        if (line.isBlank()) {
+            return null
+        }
+        val parts = line.split('\t')
+        return if (parts.size >= 2) parts[1].trim() else line.trim()
+    }
+
+    @Throws(IOException::class)
     fun createDirectory(path: Path) {
         useClient(path.authority) { client ->
             if (!client.makeDirectory(path.remotePath)) {

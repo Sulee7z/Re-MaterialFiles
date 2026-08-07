@@ -223,6 +223,22 @@
                             android:layout_height="wrap_content"
                             android:inputType="none" />
                     </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/everythingRootLayout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="@string/storage_edit_ftp_server_everything_root"
+                        app:errorEnabled="true"
+                        app:expandedHintEnabled="false"
+                        style="?textInputOutlinedStyle">
+
+                        <EditText
+                            android:id="@+id/everythingRootEdit"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="text" />
+                    </com.google.android.material.textfield.TextInputLayout>
                 </LinearLayout>
             </androidx.core.widget.NestedScrollView>
         </FrameLayout>

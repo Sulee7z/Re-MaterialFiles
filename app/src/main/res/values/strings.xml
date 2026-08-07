@@ -591,6 +591,7 @@
         <item>Passive</item>
     </string-array>
     <string name="storage_edit_ftp_server_encoding">Encoding</string>
+    <string name="storage_edit_ftp_server_everything_root">Everything index root (e.g. C:\share, optional)</string>
     <string name="storage_edit_ftp_server_connect_and_add">Connect and add</string>
     <string name="storage_edit_ftp_server_add">Add</string>
     <string name="storage_edit_sftp_server_title_edit">Edit SFTP server</string>

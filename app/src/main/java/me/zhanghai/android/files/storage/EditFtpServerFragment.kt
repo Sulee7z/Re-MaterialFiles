@@ -169,6 +169,7 @@ class EditFtpServerFragment : Fragment() {
                 }
                 binding.pathEdit.setText(server.relativePath)
                 binding.nameEdit.setText(server.customName)
+                binding.everythingRootEdit.setText(authority.everythingWindowsRoot)
                 mode = authority.mode
                 encoding = authority.encoding
             } else {
@@ -190,7 +191,7 @@ class EditFtpServerFragment : Fragment() {
             AuthenticationType.ANONYMOUS -> Authority.ANONYMOUS_USERNAME
         }
         binding.nameLayout.placeholderText = if (host != null) {
-            val authority = Authority(protocol, host, port, username, mode, encoding)
+            val authority = Authority(protocol, host, port, username, mode, encoding, everythingRoot)
             if (path.isNotEmpty()) "$authority/$path" else authority.toString()
         } else {
             getString(R.string.storage_edit_ftp_server_name_placeholder)
@@ -263,6 +264,9 @@ class EditFtpServerFragment : Fragment() {
                 as CharSequence
             binding.encodingEdit.setText(item, false)
         }
+
+    private val everythingRoot: String
+        get() = binding.everythingRootEdit.text.toString().trim()
 
     private fun saveOrAdd() {
         val server = getServerOrSetError() ?: return
@@ -358,7 +362,7 @@ class EditFtpServerFragment : Fragment() {
             errorEdit.requestFocus()
             return null
         }
-        val authority = Authority(protocol, host!!, port!!, username!!, mode, encoding)
+        val authority = Authority(protocol, host!!, port!!, username!!, mode, encoding, everythingRoot)
         return FtpServer(args.server?.id, name, authority, password, path)
     }
 
@@ -373,3 +377,4 @@ class EditFtpServerFragment : Fragment() {
         ANONYMOUS
     }
 }
+

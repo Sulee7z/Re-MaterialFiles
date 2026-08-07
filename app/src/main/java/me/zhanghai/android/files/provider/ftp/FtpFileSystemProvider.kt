@@ -47,6 +47,7 @@ import me.zhanghai.android.files.provider.ftp.client.Authority
 import me.zhanghai.android.files.provider.ftp.client.Client
 import me.zhanghai.android.files.provider.ftp.client.Mode
 import me.zhanghai.android.files.provider.ftp.client.Protocol
+import me.zhanghai.android.files.provider.ftp.client.mapEverythingPathToRemotePath
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -452,6 +453,41 @@ object FtpFileSystemProvider : FileSystemProvider(), PathObservableProvider, Sea
         listener: (List<Path>) -> Unit
     ) {
         directory as? FtpPath ?: throw ProviderMismatchException(directory.toString())
+        val authority = directory.authority
+        val windowsRoot = authority.everythingWindowsRoot
+        val supportsEverything = try {
+            windowsRoot.isNotEmpty() && Client.supportsEverythingSearch(authority)
+        } catch (e: IOException) {
+            false
+        }
+        if (supportsEverything) {
+            try {
+                Client.searchEverything(authority, query, intervalMillis) { windowsPaths ->
+                    val paths = windowsPaths.mapNotNull { windowsPath ->
+                        val remotePath =
+                            mapEverythingPathToRemotePath(windowsPath, windowsRoot)
+                                ?: return@mapNotNull null
+                        if (!remotePath.startsWith(directory.remotePath)) {
+                            return@mapNotNull null
+                        }
+                        val relative = remotePath.removePrefix(directory.remotePath)
+                            .trimStart('/')
+                        if (relative.isEmpty()) {
+                            directory
+                        } else {
+                            directory.resolve(relative)
+                        }
+                    }
+                    if (paths.isNotEmpty()) {
+                        listener(paths)
+                    }
+                }
+                return
+            } catch (e: IOException) {
+                e.printStackTrace()
+                // Fall back to the recursive walk.
+            }
+        }
         WalkFileTreeSearchable.search(directory, query, intervalMillis, listener)
     }
 }

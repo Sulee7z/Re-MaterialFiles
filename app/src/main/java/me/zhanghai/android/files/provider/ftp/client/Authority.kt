@@ -18,7 +18,8 @@ data class Authority(
     val port: Int,
     val username: String,
     val mode: Mode,
-    val encoding: String
+    val encoding: String,
+    val everythingWindowsRoot: String = ""
 ) : Parcelable {
     fun toUriAuthority(): UriAuthority {
         val userInfo = username.takeIfNotEmpty()
