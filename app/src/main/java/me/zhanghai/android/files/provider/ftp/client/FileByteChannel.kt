@@ -42,7 +42,7 @@ class FileByteChannel(
     @Throws(IOException::class)
     override fun onRead(position: Long, size: Int): ByteBuffer {
         val destination = ByteBuffer.allocate(size)
-        ensureLocalCacheIfLarge()
+        ensureLocalCache()
         localCacheChannel?.let { channel ->
             // Read from the local cache: fully supports random access without any FTP
             // REST/RETR issues.
@@ -93,25 +93,16 @@ class FileByteChannel(
     private var localCacheChannel: java.nio.channels.FileChannel? = null
 
     /**
-     * Files larger than the read buffer are downloaded once into a local cache and then read
-     * from there. Some servers (FileZilla Server proxying SMB shares) corrupt chunked
-     * REST+RETR reads, so caching sidesteps the problem entirely for random access.
+     * Like AmazeFileManager, the whole file is downloaded once into a local cache and then
+     * read from there. This sidesteps servers that corrupt chunked REST+RETR reads
+     * (FileZilla Server proxying SMB shares) and fully supports random access.
      */
     @Throws(IOException::class)
-    private fun ensureLocalCacheIfLarge() {
+    private fun ensureLocalCache() {
         if (localCacheChecked || isAppendParam) {
             return
         }
         localCacheChecked = true
-        val size = try {
-            onSize()
-        } catch (e: IOException) {
-            // Fall back to streaming reads when the size cannot be determined.
-            return
-        }
-        if (size <= LOCAL_CACHE_THRESHOLD_BYTES) {
-            return
-        }
         val cacheDirectory = File(application.cacheDir, "ftp-cache")
         cacheDirectory.mkdirs()
         val cacheFile = File(
@@ -222,6 +213,7 @@ class FileByteChannel(
 
     @Throws(IOException::class)
     override fun onSize(): Long {
+        localCacheChannel?.let { return it.size() }
         val sizeString = synchronized(clientLock) {
             client.getSize(path) ?: client.throwNegativeReplyCodeException()
         }
@@ -262,10 +254,7 @@ class FileByteChannel(
             releaseClient(client)
         }
     }
-
-    companion object {
-        private const val LOCAL_CACHE_THRESHOLD_BYTES = 2L * 1024 * 1024
-    }
 }
+
 
 
