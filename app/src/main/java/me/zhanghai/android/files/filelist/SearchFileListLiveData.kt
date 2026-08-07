@@ -5,9 +5,15 @@
 
 package me.zhanghai.android.files.filelist
 
+import java8.nio.file.LinkOption
 import java8.nio.file.Path
+import java8.nio.file.attribute.BasicFileAttributes
 import me.zhanghai.android.files.file.FileItem
-import me.zhanghai.android.files.file.loadFileItem
+import me.zhanghai.android.files.file.MimeType
+import me.zhanghai.android.files.filelist.name
+import me.zhanghai.android.files.filelist.getCollationKeyForFileName
+import me.zhanghai.android.files.provider.common.isHidden
+import me.zhanghai.android.files.provider.common.readAttributes
 import me.zhanghai.android.files.provider.common.search
 import me.zhanghai.android.files.util.CloseableLiveData
 import me.zhanghai.android.files.util.Failure
@@ -16,6 +22,7 @@ import me.zhanghai.android.files.util.Stateful
 import me.zhanghai.android.files.util.Success
 import me.zhanghai.android.files.util.valueCompat
 import java.io.IOException
+import java.text.Collator
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -64,7 +71,8 @@ class SearchFileListLiveData(
 
     /**
      * Loads file items for a batch in parallel (each item may need a network round trip on
-     * remote file systems, e.g. FTP).
+     * remote file systems, e.g. FTP). Search results skip the expensive MIME detection
+     * (which reads the file header) and use a generic type instead.
      */
     private fun loadFileItems(paths: List<Path>): List<FileItem> {
         val executor = FILE_ITEM_LOADER_EXECUTOR
@@ -73,8 +81,7 @@ class SearchFileListLiveData(
         for (path in paths) {
             executor.execute {
                 try {
-                    val fileItem = path.loadFileItem()
-                    items.add(fileItem)
+                    items.add(path.loadFileItemLight())
                 } catch (e: IOException) {
                     e.printStackTrace()
                     // TODO: Support file without information.
@@ -91,6 +98,17 @@ class SearchFileListLiveData(
         return items.toList()
     }
 
+    private fun Path.loadFileItemLight(): FileItem {
+        val nameCollationKey = Collator.getInstance().getCollationKeyForFileName(name)
+        val attributes = readAttributes(
+            BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS
+        )
+        val isHidden = isHidden
+        return FileItem(
+            this, nameCollationKey, attributes, null, null, isHidden, MimeType.GENERIC
+        )
+    }
+
     override fun close() {
         searchThread?.interrupt()
     }
@@ -105,3 +123,4 @@ class SearchFileListLiveData(
 }
 
 private class InterruptedIOException : java.io.IOException("Search interrupted")
+

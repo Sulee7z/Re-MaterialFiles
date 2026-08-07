@@ -116,6 +116,7 @@ import me.zhanghai.android.files.navigation.NavigationRootMapLiveData
 import me.zhanghai.android.files.provider.archive.createArchiveRootPath
 import me.zhanghai.android.files.provider.archive.isArchivePath
 import me.zhanghai.android.files.provider.linux.isLinuxPath
+import me.zhanghai.android.files.settings.HiddenPaths
 import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.terminal.Terminal
 import me.zhanghai.android.files.ui.AppBarLayoutExpandHackListener
@@ -1404,9 +1405,9 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             .setTitle(R.string.file_item_action_hide)
             .setMessage(getString(R.string.file_item_action_hide_confirm_format, file.name))
             .setPositiveButton(R.string.file_item_action_hide) { _, _ ->
-                val hiddenPaths = Settings.FILE_LIST_HIDDEN_PATHS.valueCompat.toMutableSet()
+                val hiddenPaths = HiddenPaths.getAll().toMutableSet()
                 hiddenPaths += file.path.toString()
-                Settings.FILE_LIST_HIDDEN_PATHS.putValue(hiddenPaths)
+                HiddenPaths.set(hiddenPaths)
                 viewModel.reload()
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -1414,7 +1415,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     private fun showManageHiddenDialog() {
-        val hiddenPaths = Settings.FILE_LIST_HIDDEN_PATHS.valueCompat.toList()
+        val hiddenPaths = HiddenPaths.getAll().toList()
         if (hiddenPaths.isEmpty()) {
             showToast(getString(R.string.file_list_action_manage_hidden_empty))
             return
@@ -1427,11 +1428,11 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             }
             .setPositiveButton(R.string.unhide) { _, _ ->
                 val remaining = hiddenPaths.filterIndexed { index, _ -> !checked[index] }.toSet()
-                Settings.FILE_LIST_HIDDEN_PATHS.putValue(remaining)
+                HiddenPaths.set(remaining)
                 viewModel.reload()
             }
             .setNegativeButton(R.string.unhide_all) { _, _ ->
-                Settings.FILE_LIST_HIDDEN_PATHS.putValue(emptySet())
+                HiddenPaths.set(emptySet())
                 viewModel.reload()
             }
             .setNeutralButton(android.R.string.cancel, null)
@@ -2547,6 +2548,8 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         }
     }
 }
+
+
 
 
 
