@@ -25,6 +25,8 @@ class FileByteChannel(
 
     private var openInputStream: InputStream? = null
     private var openStreamPosition = 0L
+    private var openOutputStream: java.io.OutputStream? = null
+    private var openOutputPosition = 0L
 
     init {
         if (truncate) {
@@ -49,7 +51,7 @@ class FileByteChannel(
             // files larger than the read buffer. Random access (position moved) falls back
             // to REST+RETR.
             if (openInputStream == null || position != openStreamPosition) {
-                closeOpenStream()
+                closeOpenInputStream()
                 client.restartOffset = position
                 openInputStream = client.retrieveFileStream(path)
                     ?: client.throwNegativeReplyCodeException()
@@ -64,14 +66,14 @@ class FileByteChannel(
                 openStreamPosition += limit
             } catch (e: IOException) {
                 // The stream may have been closed by the server; reopen on the next read.
-                closeOpenStream()
+                closeOpenInputStream()
                 throw e
             }
         }
         return destination
     }
 
-    private fun closeOpenStream() {
+    private fun closeOpenInputStream() {
         val inputStream = openInputStream ?: return
         openInputStream = null
         try {
@@ -84,12 +86,27 @@ class FileByteChannel(
     @Throws(IOException::class)
     override fun onWrite(position: Long, source: ByteBuffer) {
         synchronized(clientLock) {
-            closeOpenStream()
-            client.restartOffset = position
-            ByteBufferInputStream(source).use {
-                if (!client.storeFile(path, it)) {
-                    client.throwNegativeReplyCodeException()
+            closeOpenInputStream()
+            // Sequential writes reuse the same STOR stream instead of issuing a REST+STOR
+            // per chunk, because some servers (e.g. FileZilla Server proxying SMB shares)
+            // mishandle REST and would restart each STOR at the beginning of the file.
+            if (openOutputStream == null || position != openOutputPosition) {
+                closeOpenOutputStream()
+                client.restartOffset = position
+                openOutputStream = client.storeFileStream(path)
+                    ?: client.throwNegativeReplyCodeException()
+                openOutputPosition = position
+            }
+            val outputStream = openOutputStream!!
+            try {
+                val remaining = source.remaining()
+                ByteBufferInputStream(source).use { input ->
+                    input.copyTo(outputStream)
                 }
+                openOutputPosition += remaining
+            } catch (e: IOException) {
+                closeOpenOutputStream()
+                throw e
             }
         }
     }
@@ -97,7 +114,8 @@ class FileByteChannel(
     @Throws(IOException::class)
     override fun onAppend(source: ByteBuffer) {
         synchronized(clientLock) {
-            closeOpenStream()
+            closeOpenInputStream()
+            closeOpenOutputStream()
             ByteBufferInputStream(source).use {
                 if (!client.appendFile(path, it)) {
                     client.throwNegativeReplyCodeException()
@@ -109,7 +127,8 @@ class FileByteChannel(
     @Throws(IOException::class)
     override fun onTruncate(size: Long) {
         synchronized(clientLock) {
-            closeOpenStream()
+            closeOpenInputStream()
+            closeOpenOutputStream()
             client.restartOffset = size
             InputStream::class.nullInputStream().use {
                 if (!client.storeFile(path, it)) {
@@ -128,10 +147,29 @@ class FileByteChannel(
     }
 
     @Throws(IOException::class)
+    override fun onForce(metaData: Boolean) {
+        synchronized(clientLock) {
+            closeOpenOutputStream()
+        }
+    }
+
+    private fun closeOpenOutputStream() {
+        val outputStream = openOutputStream ?: return
+        openOutputStream = null
+        try {
+            outputStream.close()
+        } finally {
+            client.completePendingCommand()
+        }
+    }
+
+    @Throws(IOException::class)
     override fun onClose() {
         synchronized(clientLock) {
-            closeOpenStream()
+            closeOpenInputStream()
+            closeOpenOutputStream()
             releaseClient(client)
         }
     }
 }
+
