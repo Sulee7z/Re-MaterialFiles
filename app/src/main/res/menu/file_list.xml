@@ -145,18 +145,6 @@
         app:showAsAction="never" />
 
     <item
-        android:id="@+id/action_content_search"
-        android:orderInCategory="100"
-        android:title="@string/file_list_action_content_search"
-        app:showAsAction="never" />
-
-    <item
-        android:id="@+id/action_index_search"
-        android:orderInCategory="100"
-        android:title="@string/file_list_action_index_search"
-        app:showAsAction="never" />
-
-    <item
         android:id="@+id/action_add_bookmark"
         android:orderInCategory="100"
         android:title="@string/file_list_action_add_bookmark"
@@ -168,3 +156,4 @@
         android:title="@string/file_list_action_create_shortcut"
         app:showAsAction="never" />
 </menu>
+

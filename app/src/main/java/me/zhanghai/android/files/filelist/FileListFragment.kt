@@ -108,8 +108,6 @@ import me.zhanghai.android.files.activitylauncher.ActivityLauncherActivity
 import me.zhanghai.android.files.apkmanifest.AndroidManifestDecoder
 import me.zhanghai.android.files.apksign.ApkSigner
 import me.zhanghai.android.files.apksign.AutoSigner
-import me.zhanghai.android.files.contentsearch.ContentSearchActivity
-import me.zhanghai.android.files.searchindex.SearchIndexActivity
 import me.zhanghai.android.files.fileproperties.FilePropertiesDialogFragment
 import me.zhanghai.android.files.navigation.BookmarkDirectories
 import me.zhanghai.android.files.navigation.BookmarkDirectory
@@ -581,18 +579,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             }
             R.id.action_show_activity_launcher -> {
                 startActivity(ActivityLauncherActivity::class.createIntent())
-                true
-            }
-            R.id.action_content_search -> {
-                startActivity(
-                    ContentSearchActivity::class.createIntent().apply {
-                        extraPath = viewModel.currentPath
-                    }
-                )
-                true
-            }
-            R.id.action_index_search -> {
-                startActivity(SearchIndexActivity::class.createIntent())
                 true
             }
             R.id.action_add_bookmark -> {
@@ -2561,3 +2547,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         }
     }
 }
+
+
+
+

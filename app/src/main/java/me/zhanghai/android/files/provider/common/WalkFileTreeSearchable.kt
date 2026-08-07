@@ -5,16 +5,18 @@
 
 package me.zhanghai.android.files.provider.common
 
-import java8.nio.file.DirectoryIteratorException
 import java8.nio.file.FileVisitOption
 import java8.nio.file.FileVisitResult
 import java8.nio.file.FileVisitor
 import java8.nio.file.Files
-import java8.nio.file.LinkOption
 import java8.nio.file.Path
 import java8.nio.file.attribute.BasicFileAttributes
 import java.io.IOException
 import java.io.InterruptedIOException
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 object WalkFileTreeSearchable {
     @Throws(IOException::class)
@@ -24,23 +26,51 @@ object WalkFileTreeSearchable {
         intervalMillis: Long,
         listener: (List<Path>) -> Unit
     ) {
-        val paths = mutableListOf<Path>()
-        // We cannot use Files.find() or Files.walk() because it cannot ignore exceptions.
-        walkFileTreeForSearch(directory, object : FileVisitor<Path> {
-            private var lastProgressMillis = System.currentTimeMillis()
+        val results = ConcurrentLinkedQueue<Path>()
+        val cancelled = AtomicBoolean()
+        // Shared batched delivery, thread-safe.
+        val batchLock = Any()
+        val pending = mutableListOf<Path>()
+        var lastProgressMillis = System.currentTimeMillis()
+        fun deliver(paths: List<Path>) {
+            synchronized(batchLock) {
+                if (paths.isEmpty()) {
+                    return
+                }
+                listener(paths)
+            }
+        }
+        fun addResult(path: Path) {
+            synchronized(batchLock) {
+                pending.add(path)
+                val currentTimeMillis = System.currentTimeMillis()
+                if (currentTimeMillis >= lastProgressMillis + intervalMillis) {
+                    val batch = pending.toList()
+                    pending.clear()
+                    lastProgressMillis = currentTimeMillis
+                    listener(batch)
+                }
+            }
+        }
 
+        val visitor = object : FileVisitor<Path> {
             @Throws(InterruptedIOException::class)
-            override fun preVisitDirectory(
-                directory: Path,
-                attributes: BasicFileAttributes
-            ): FileVisitResult {
-                visit(directory)
+            override fun preVisitDirectory(dir: Path, attributes: BasicFileAttributes): FileVisitResult {
+                if (cancelled.get()) {
+                    return FileVisitResult.TERMINATE
+                }
+                if (dir != directory) {
+                    visit(dir)
+                }
                 throwIfInterrupted()
                 return FileVisitResult.CONTINUE
             }
 
             @Throws(InterruptedIOException::class)
             override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
+                if (cancelled.get()) {
+                    return FileVisitResult.TERMINATE
+                }
                 visit(file)
                 throwIfInterrupted()
                 return FileVisitResult.CONTINUE
@@ -48,159 +78,111 @@ object WalkFileTreeSearchable {
 
             @Throws(InterruptedIOException::class)
             override fun visitFileFailed(file: Path, exception: IOException): FileVisitResult {
+                if (cancelled.get()) {
+                    return FileVisitResult.TERMINATE
+                }
                 if (exception is InterruptedIOException) {
                     throw exception
                 }
-                exception.printStackTrace()
-                visit(file)
+                if (file != directory) {
+                    visit(file)
+                }
                 throwIfInterrupted()
                 return FileVisitResult.CONTINUE
             }
 
             @Throws(InterruptedIOException::class)
-            override fun postVisitDirectory(
-                directory: Path,
-                exception: IOException?
-            ): FileVisitResult {
+            override fun postVisitDirectory(dir: Path, exception: IOException?): FileVisitResult {
                 if (exception is InterruptedIOException) {
                     throw exception
                 }
-                exception?.printStackTrace()
                 throwIfInterrupted()
-                return FileVisitResult.CONTINUE
+                return if (cancelled.get()) FileVisitResult.TERMINATE else FileVisitResult.CONTINUE
             }
 
             private fun visit(path: Path) {
-                // Exclude the directory being searched.
-                if (path == directory) {
-                    return
-                }
                 val fileName = path.fileName
-                if (fileName != null && fileName.toString().contains(query, true)) {
-                    paths.add(path)
-                }
-                if (paths.isNotEmpty()) {
-                    val currentTimeMillis = System.currentTimeMillis()
-                    if (currentTimeMillis >= lastProgressMillis + intervalMillis) {
-                        listener(paths)
-                        lastProgressMillis = currentTimeMillis
-                        paths.clear()
-                    }
+                if (fileName != null && containsIgnoreCase(fileName.toString(), query)) {
+                    results.add(path)
+                    addResult(path)
                 }
             }
-        })
-        if (paths.isNotEmpty()) {
-            listener(paths)
         }
-    }
 
-    // This method traverses the first level first, before diving into child directories.
-    // FileVisitResult returned from visitor may be ignored and always considered CONTINUE.
-    @Throws(IOException::class)
-    private fun walkFileTreeForSearch(start: Path, visitor: FileVisitor<in Path>): Path {
-        val attributes = try {
-            start.readAttributes(BasicFileAttributes::class.java)
-        } catch (ignored: IOException) {
-            try {
-                start.readAttributes(BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
-            } catch (e: IOException) {
-                visitor.visitFileFailed(start, e)
-                return start
-            }
-        }
-        if (!attributes.isDirectory) {
-            visitor.visitFile(start, attributes)
-            return start
-        }
-        val directoryStream = try {
-            start.newDirectoryStream()
+        // Read the top level first, then walk each child directory in parallel.
+        val rootEntries = try {
+            directory.newDirectoryStream().use { it.toList() }
         } catch (e: IOException) {
-            visitor.visitFileFailed(start, e)
-            return start
+            visitor.visitFileFailed(directory, e)
+            return
         }
         val directories = mutableListOf<Path>()
-        directoryStream.use {
-            visitor.preVisitDirectory(start, attributes)
-            try {
-                for (path in directoryStream) {
-                    val attributes = try {
-                        path.readAttributes(BasicFileAttributes::class.java)
-                    } catch (ignored: IOException) {
-                        try {
-                            path.readAttributes(
-                                BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS
-                            )
-                        } catch (e: IOException) {
-                            visitor.visitFileFailed(path, e)
-                            continue
-                        }
-                    }
-                    visitor.visitFile(path, attributes)
-                    if (attributes.isDirectory) {
-                        directories.add(path)
-                    }
-                }
-            } catch (e: DirectoryIteratorException) {
-                visitor.postVisitDirectory(start, e.cause)
-                return start
+        for (path in rootEntries) {
+            val attributes = try {
+                path.readAttributes(BasicFileAttributes::class.java)
+            } catch (e: IOException) {
+                continue
+            }
+            visitor.visitFile(path, attributes)
+            if (attributes.isDirectory) {
+                directories.add(path)
             }
         }
-        for (path in directories) {
-            Files.walkFileTree(
-                path, setOf(FileVisitOption.FOLLOW_LINKS), Int.MAX_VALUE,
-                object : FileVisitor<Path> {
-                    @Throws(InterruptedIOException::class)
-                    override fun preVisitDirectory(
-                        directory: Path,
-                        attributes: BasicFileAttributes
-                    ): FileVisitResult {
-                        if (directory == path) {
-                            return FileVisitResult.CONTINUE
-                        }
-                        return visitor.preVisitDirectory(directory, attributes)
-                    }
+        visitor.postVisitDirectory(directory, null)
 
-                    @Throws(InterruptedIOException::class)
-                    override fun visitFile(
-                        file: Path,
-                        attributes: BasicFileAttributes
-                    ): FileVisitResult {
-                        if (file == path) {
-                            return FileVisitResult.CONTINUE
-                        }
-                        return visitor.visitFile(file, attributes)
-                    }
-
-                    @Throws(InterruptedIOException::class)
-                    override fun visitFileFailed(
-                        file: Path,
-                        exception: IOException
-                    ): FileVisitResult {
-                        if (file == path) {
-                            // We are searching and ignoring errors, so just print it.
-                            exception.printStackTrace()
-                            return FileVisitResult.CONTINUE
-                        }
-                        return visitor.visitFileFailed(file, exception)
-                    }
-
-                    @Throws(InterruptedIOException::class)
-                    override fun postVisitDirectory(
-                        directory: Path,
-                        exception: IOException?
-                    ): FileVisitResult {
-                        if (directory == path) {
-                            // We are searching and ignoring errors, so just print it.
-                            exception?.printStackTrace()
-                            return FileVisitResult.CONTINUE
-                        }
-                        return visitor.postVisitDirectory(path, exception)
+        if (directories.isEmpty()) {
+            deliver(pending)
+            return
+        }
+        val parallelism = minOf(
+            Runtime.getRuntime().availableProcessors().coerceAtLeast(2), directories.size
+        )
+        val executor = Executors.newFixedThreadPool(parallelism)
+        val latch = CountDownLatch(directories.size)
+        try {
+            for (child in directories) {
+                executor.execute {
+                    try {
+                        Files.walkFileTree(
+                            child, setOf(FileVisitOption.FOLLOW_LINKS), Int.MAX_VALUE, visitor
+                        )
+                    } catch (e: Exception) {
+                        // Individual directory failures are ignored.
+                    } finally {
+                        latch.countDown()
                     }
                 }
-            )
+            }
+            // Wait for completion (interruptible so search cancellation works).
+            while (true) {
+                try {
+                    latch.await()
+                    break
+                } catch (e: InterruptedException) {
+                    cancelled.set(true)
+                    throw InterruptedIOException().apply { initCause(e) }
+                }
+            }
+        } finally {
+            executor.shutdown()
         }
-        visitor.postVisitDirectory(start, null)
-        return start
+        deliver(pending)
+    }
+
+    private fun containsIgnoreCase(value: String, query: String): Boolean {
+        if (query.isEmpty()) {
+            return true
+        }
+        if (query.length > value.length) {
+            return false
+        }
+        val limit = value.length - query.length
+        for (index in 0..limit) {
+            if (value.regionMatches(index, query, 0, query.length, ignoreCase = true)) {
+                return true
+            }
+        }
+        return false
     }
 
     @Throws(InterruptedIOException::class)
