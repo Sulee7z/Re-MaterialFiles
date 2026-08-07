@@ -28,19 +28,11 @@ class FileByteChannel(
     private var openOutputStream: java.io.OutputStream? = null
     private var openOutputPosition = 0L
 
-    init {
-        if (truncate) {
-            // FTP's REST+STOR does not truncate the tail of an existing file, so truncate it
-            // explicitly by storing empty data before any write happens.
-            synchronized(clientLock) {
-                InputStream::class.nullInputStream().use {
-                    if (!client.storeFile(path, it)) {
-                        client.throwNegativeReplyCodeException()
-                    }
-                }
-            }
-        }
-    }
+    // A STOR without REST starts at offset 0 and truncates the file anyway, so a separate
+    // empty STOR would only create a second transfer which some servers (FileZilla Server
+    // proxying SMB shares) answer with 421. Truncation is thus deferred: it happens when
+    // the first write opens the STOR stream, or at close() if nothing was written.
+    private var needsTruncate = truncate
 
     @Throws(IOException::class)
     override fun onRead(position: Long, size: Int): ByteBuffer {
@@ -96,6 +88,7 @@ class FileByteChannel(
                 openOutputStream = client.storeFileStream(path)
                     ?: client.throwNegativeReplyCodeException()
                 openOutputPosition = position
+                needsTruncate = false
             }
             val outputStream = openOutputStream!!
             try {
@@ -166,6 +159,14 @@ class FileByteChannel(
     @Throws(IOException::class)
     override fun onClose() {
         synchronized(clientLock) {
+            if (needsTruncate && openOutputStream == null) {
+                // Opened for truncation but nothing was written: truncate explicitly.
+                InputStream::class.nullInputStream().use {
+                    if (!client.storeFile(path, it)) {
+                        client.throwNegativeReplyCodeException()
+                    }
+                }
+            }
             closeOpenInputStream()
             closeOpenOutputStream()
             releaseClient(client)
