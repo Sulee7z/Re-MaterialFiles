@@ -638,6 +638,7 @@
     <string name="set_timestamp_creation">创建时间</string>
     <string name="set_timestamp_apply">应用</string>
     <string name="set_timestamp_failed">修改时间失败</string>
+    <string name="set_timestamp_ftp_unsupported">此 FTP 服务器不支持修改文件时间(MFMT)</string>
 
     <string name="search_regex">正则</string>
 

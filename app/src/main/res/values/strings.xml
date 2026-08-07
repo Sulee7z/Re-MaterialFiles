@@ -784,6 +784,7 @@
     <string name="set_timestamp_creation">Creation</string>
     <string name="set_timestamp_apply">Apply</string>
     <string name="set_timestamp_failed">Failed to change time</string>
+    <string name="set_timestamp_ftp_unsupported">This FTP server does not support changing file time (MFMT)</string>
 
     <string name="search_regex">Regex</string>
 

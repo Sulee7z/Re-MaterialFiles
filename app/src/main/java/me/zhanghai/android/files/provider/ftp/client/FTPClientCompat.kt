@@ -46,5 +46,5 @@ fun FTPClient.setModificationTimeCompat(pathname: String, timeval: String): Bool
     if (hasFeature(FTPCmd.MFMT)) {
         setModificationTime(pathname, timeval)
     } else {
-        throw IOException("Missing feature ${FTPCmd.MFMT.command}")
+        throw IOException("Server does not support MFMT, cannot set file modification time")
     }

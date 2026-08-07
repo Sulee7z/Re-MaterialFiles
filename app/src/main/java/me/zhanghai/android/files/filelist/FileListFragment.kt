@@ -1727,7 +1727,12 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                         viewModel.reload()
                     } catch (e: Throwable) {
                         withContext(Dispatchers.Main) {
-                            showToast(e.localizedMessage ?: getString(R.string.set_timestamp_failed))
+                            val message = if (e.localizedMessage?.contains("MFMT") == true) {
+                                getString(R.string.set_timestamp_ftp_unsupported)
+                            } else {
+                                e.localizedMessage ?: getString(R.string.set_timestamp_failed)
+                            }
+                            showToast(message)
                         }
                     }
                 }
