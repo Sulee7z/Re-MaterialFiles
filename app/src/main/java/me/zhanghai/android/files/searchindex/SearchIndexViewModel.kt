@@ -43,19 +43,21 @@ class SearchIndexViewModel : ViewModel() {
     }
 
     fun refreshIndexInfo() {
-        _indexInfoLiveData.value =
+        _indexInfoLiveData.postValue(
             FileIndexer.lastIndexedEntryCount to FileIndexer.lastIndexedTimeMillis
+        )
     }
 
     fun rebuildIndex(roots: List<Path>) {
-        _indexingLiveData.value = true
+        _indexingLiveData.postValue(true)
         FileIndexer.startIndex(
             roots,
             onProgress = { count ->
-                _indexInfoLiveData.value = count to System.currentTimeMillis()
+                // Called on the indexer thread; must use postValue.
+                _indexInfoLiveData.postValue(count to System.currentTimeMillis())
             },
             onDone = { throwable ->
-                _indexingLiveData.value = false
+                _indexingLiveData.postValue(false)
                 refreshIndexInfo()
             }
         )

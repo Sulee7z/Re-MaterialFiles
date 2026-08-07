@@ -13,10 +13,14 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SearchView
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import java8.nio.file.Path
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.parcelize.Parcelize
 import kotlinx.parcelize.WriteWith
 import me.zhanghai.android.files.R
@@ -41,6 +45,8 @@ class ContentSearchFragment : Fragment() {
     private val viewModel by viewModels { { ContentSearchViewModel(args.directory) } }
 
     private lateinit var resultsAdapter: ResultListAdapter
+
+    private var searchDebounce: Job? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -79,6 +85,12 @@ class ContentSearchFragment : Fragment() {
             }
 
             override fun onQueryTextChange(newText: String?): Boolean {
+                // Search as the user types, with a small debounce.
+                searchDebounce?.cancel()
+                searchDebounce = lifecycleScope.launch {
+                    delay(300)
+                    startSearch()
+                }
                 return false
             }
         })
