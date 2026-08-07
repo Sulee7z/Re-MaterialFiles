@@ -148,9 +148,9 @@ class FileByteChannel(
 
     @Throws(IOException::class)
     override fun onForce(metaData: Boolean) {
-        synchronized(clientLock) {
-            closeOpenOutputStream()
-        }
+        // Keep the single STOR stream open: closing it here would force a new REST+STOR on
+        // the next write, which some servers (FileZilla Server proxying SMB shares) mishandle
+        // and answer with 421. Data is already flowing to the server over the data socket.
     }
 
     private fun closeOpenOutputStream() {
