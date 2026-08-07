@@ -5,7 +5,6 @@
 
 package me.zhanghai.android.files.filelist
 
-import android.os.AsyncTask
 import java8.nio.file.Path
 import me.zhanghai.android.files.file.FileItem
 import me.zhanghai.android.files.file.loadFileItem
@@ -17,39 +16,45 @@ import me.zhanghai.android.files.util.Stateful
 import me.zhanghai.android.files.util.Success
 import me.zhanghai.android.files.util.valueCompat
 import java.io.IOException
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Future
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import kotlin.concurrent.thread
 
 class SearchFileListLiveData(
     private val path: Path,
     private val query: String
 ) : CloseableLiveData<Stateful<List<FileItem>>>() {
-    private var future: Future<Unit>? = null
+    private var searchThread: Thread? = null
 
     init {
         loadValue()
     }
 
     fun loadValue() {
-        future?.cancel(true)
+        // Interrupt the previous search instead of queueing in the shared AsyncTask pool,
+        // which used to fill up with uninterruptible searches and starve new ones.
+        searchThread?.interrupt()
         value = Loading(emptyList())
-        future = (AsyncTask.THREAD_POOL_EXECUTOR as ExecutorService).submit<Unit> {
+        searchThread = thread(name = "Search") {
             val fileList = mutableListOf<FileItem>()
             try {
                 path.search(query, INTERVAL_MILLIS) { paths: List<Path> ->
-                    for (path in paths) {
-                        val fileItem = try {
-                            path.loadFileItem()
-                        } catch (e: IOException) {
-                            e.printStackTrace()
-                            // TODO: Support file without information.
-                            continue
-                        }
-                        fileList.add(fileItem)
+                    if (Thread.interrupted()) {
+                        throw InterruptedIOException()
                     }
+                    val fileItems = loadFileItems(paths)
+                    if (Thread.interrupted()) {
+                        throw InterruptedIOException()
+                    }
+                    fileList += fileItems
                     postValue(Loading(fileList.toList()))
                 }
                 postValue(Success(fileList))
+            } catch (e: InterruptedException) {
+                // A newer search replaced this one.
+            } catch (e: InterruptedIOException) {
+                // A newer search replaced this one.
             } catch (e: Exception) {
                 // TODO: Retrieval of previous value is racy.
                 postValue(Failure(valueCompat.value, e))
@@ -57,11 +62,46 @@ class SearchFileListLiveData(
         }
     }
 
+    /**
+     * Loads file items for a batch in parallel (each item may need a network round trip on
+     * remote file systems, e.g. FTP).
+     */
+    private fun loadFileItems(paths: List<Path>): List<FileItem> {
+        val executor = FILE_ITEM_LOADER_EXECUTOR
+        val items = ConcurrentLinkedQueue<FileItem>()
+        val latch = CountDownLatch(paths.size)
+        for (path in paths) {
+            executor.execute {
+                try {
+                    val fileItem = path.loadFileItem()
+                    items.add(fileItem)
+                } catch (e: IOException) {
+                    e.printStackTrace()
+                    // TODO: Support file without information.
+                } finally {
+                    latch.countDown()
+                }
+            }
+        }
+        try {
+            latch.await()
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
+        return items.toList()
+    }
+
     override fun close() {
-        future?.cancel(true)
+        searchThread?.interrupt()
     }
 
     companion object {
         private const val INTERVAL_MILLIS = 500L
+
+        private val FILE_ITEM_LOADER_EXECUTOR = Executors.newFixedThreadPool(
+            Runtime.getRuntime().availableProcessors().coerceAtLeast(4).coerceAtMost(8)
+        ) { runnable -> Thread(runnable, "SearchItemLoader") }
     }
 }
+
+private class InterruptedIOException : java.io.IOException("Search interrupted")
