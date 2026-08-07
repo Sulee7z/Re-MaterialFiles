@@ -11,6 +11,7 @@ import java8.nio.file.Path
 import me.zhanghai.android.files.file.FileItem
 import me.zhanghai.android.files.file.loadFileItem
 import me.zhanghai.android.files.provider.common.newDirectoryStream
+import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.util.CloseableLiveData
 import me.zhanghai.android.files.util.Failure
 import me.zhanghai.android.files.util.Loading
@@ -39,9 +40,13 @@ class FileListLiveData(private val path: Path) : CloseableLiveData<Stateful<List
         value = Loading(value?.value)
         future = (AsyncTask.THREAD_POOL_EXECUTOR as ExecutorService).submit<Unit> {
             val value = try {
+                val hiddenPaths = Settings.FILE_LIST_HIDDEN_PATHS.valueCompat
                 path.newDirectoryStream().use { directoryStream ->
                     val fileList = mutableListOf<FileItem>()
                     for (path in directoryStream) {
+                        if (hiddenPaths.contains(path.toString())) {
+                            continue
+                        }
                         try {
                             fileList.add(path.loadFileItem())
                         } catch (e: DirectoryIteratorException) {

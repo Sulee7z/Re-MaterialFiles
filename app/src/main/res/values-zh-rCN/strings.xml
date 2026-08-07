@@ -268,6 +268,12 @@
     <string name="file_list_action_navigate_up">向上</string>
     <string name="file_list_action_navigate_to">转到</string>
     <string name="file_list_action_show_hidden_files">显示隐藏文件</string>
+    <string name="file_list_action_manage_hidden">管理隐藏项</string>
+    <string name="file_list_action_manage_hidden_empty">没有隐藏项</string>
+    <string name="file_item_action_hide">隐藏</string>
+    <string name="file_item_action_hide_confirm_format">隐藏 %1$s?隐藏后不会在文件列表中显示。</string>
+    <string name="unhide">取消隐藏</string>
+    <string name="unhide_all">全部取消隐藏</string>
     <string name="file_list_action_copy_path">复制路径</string>
     <string name="file_list_action_open_in_terminal">在终端中打开</string>
     <string name="file_list_action_add_bookmark">添加书签</string>

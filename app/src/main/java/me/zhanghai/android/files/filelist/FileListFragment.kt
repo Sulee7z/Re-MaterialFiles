@@ -558,6 +558,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 setShowHiddenFiles(!menuBinding.showHiddenFilesItem.isChecked)
                 true
             }
+            R.id.action_manage_hidden -> {
+                showManageHiddenDialog()
+                true
+            }
             R.id.action_share -> {
                 share()
                 true
@@ -1402,6 +1406,45 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     override fun showRenameFileDialog(file: FileItem) {
         RenameFileDialogFragment.show(file, this)
+    }
+
+    override fun hideFile(file: FileItem) {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.file_item_action_hide)
+            .setMessage(getString(R.string.file_item_action_hide_confirm_format, file.name))
+            .setPositiveButton(R.string.file_item_action_hide) { _, _ ->
+                val hiddenPaths = Settings.FILE_LIST_HIDDEN_PATHS.valueCompat.toMutableSet()
+                hiddenPaths += file.path.toString()
+                Settings.FILE_LIST_HIDDEN_PATHS.putValue(hiddenPaths)
+                viewModel.reload()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun showManageHiddenDialog() {
+        val hiddenPaths = Settings.FILE_LIST_HIDDEN_PATHS.valueCompat.toList()
+        if (hiddenPaths.isEmpty()) {
+            showToast(getString(R.string.file_list_action_manage_hidden_empty))
+            return
+        }
+        val checked = BooleanArray(hiddenPaths.size) { true }
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.file_list_action_manage_hidden)
+            .setMultiChoiceItems(hiddenPaths.toTypedArray(), checked) { _, which, isChecked ->
+                checked[which] = isChecked
+            }
+            .setPositiveButton(R.string.unhide) { _, _ ->
+                val remaining = hiddenPaths.filterIndexed { index, _ -> !checked[index] }.toSet()
+                Settings.FILE_LIST_HIDDEN_PATHS.putValue(remaining)
+                viewModel.reload()
+            }
+            .setNegativeButton(R.string.unhide_all) { _, _ ->
+                Settings.FILE_LIST_HIDDEN_PATHS.putValue(emptySet())
+                viewModel.reload()
+            }
+            .setNeutralButton(android.R.string.cancel, null)
+            .show()
     }
 
     override fun hasFileWithName(name: String): Boolean = getFileWithName(name) != null

@@ -14,6 +14,8 @@
     <string name="pref_key_file_list_persistent_drawer_open">key_file_list_persistent_drawer_open</string>
     <bool name="pref_default_value_file_list_persistent_drawer_open">true</bool>
     <string name="pref_key_file_list_show_hidden_files">key_file_list_show_hidden_files</string>
+    <string name="pref_key_file_list_hidden_paths">key_file_list_hidden_paths</string>
+    <string-array name="pref_default_value_file_list_hidden_paths" />
     <bool name="pref_default_value_file_list_show_hidden_files">false</bool>
     <string name="pref_key_file_list_view_type">key_file_list_view_type</string>
     <string name="pref_default_value_file_list_view_type">0</string>

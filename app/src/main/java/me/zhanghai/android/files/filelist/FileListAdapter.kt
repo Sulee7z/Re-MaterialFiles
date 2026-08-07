@@ -476,6 +476,7 @@ class FileListAdapter(
             .setTitle(if (isArchivePath) R.string.file_item_action_extract else R.string.copy)
         menu.findItem(R.id.action_delete).isVisible = !isReadOnly
         menu.findItem(R.id.action_rename).isVisible = !isReadOnly
+        menu.findItem(R.id.action_hide).isVisible = !isReadOnly
         menu.findItem(R.id.action_extract).isVisible = file.isArchiveFile
         menu.findItem(R.id.action_dex_analyze).isVisible =
             file.name.endsWith(".dex", ignoreCase = true)
@@ -514,6 +515,10 @@ class FileListAdapter(
                 }
                 R.id.action_rename -> {
                     listener.showRenameFileDialog(file)
+                    true
+                }
+                R.id.action_hide -> {
+                    listener.hideFile(file)
                     true
                 }
                 R.id.action_extract -> {
@@ -699,6 +704,7 @@ class FileListAdapter(
         fun copyFile(file: FileItem)
         fun confirmDeleteFile(file: FileItem)
         fun showRenameFileDialog(file: FileItem)
+        fun hideFile(file: FileItem)
         fun extractFile(file: FileItem)
         fun showDexAnalyzer(file: FileItem)
         fun installFile(file: FileItem)

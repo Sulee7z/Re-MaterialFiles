@@ -28,6 +28,10 @@
         android:title="@string/rename" />
 
     <item
+        android:id="@+id/action_hide"
+        android:title="@string/file_item_action_hide" />
+
+    <item
         android:id="@+id/action_extract"
         android:title="@string/file_item_action_extract" />
 
