@@ -28,6 +28,10 @@ object WalkFileTreeSearchable {
     ) {
         val results = ConcurrentLinkedQueue<Path>()
         val cancelled = AtomicBoolean()
+        val resultCount = java.util.concurrent.atomic.AtomicInteger()
+        // Cap the number of delivered results: searching huge trees can match hundreds of
+        // thousands of files and loading/rendering them all is the real bottleneck.
+        val maxResults = 1000
         // Shared batched delivery, thread-safe.
         val batchLock = Any()
         val pending = mutableListOf<Path>()
@@ -41,6 +45,11 @@ object WalkFileTreeSearchable {
             }
         }
         fun addResult(path: Path) {
+            if (resultCount.get() >= maxResults) {
+                cancelled.set(true)
+                return
+            }
+            resultCount.incrementAndGet()
             synchronized(batchLock) {
                 pending.add(path)
                 val currentTimeMillis = System.currentTimeMillis()

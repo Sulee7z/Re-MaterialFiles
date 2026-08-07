@@ -217,7 +217,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     private lateinit var adapter: FileListAdapter
 
-    private val debouncedSearchRunnable = DebouncedRunnable(Handler(Looper.getMainLooper()), 1000) {
+    private val debouncedSearchRunnable = DebouncedRunnable(Handler(Looper.getMainLooper()), 400) {
         if (!isResumed || !viewModel.isSearchViewExpanded) {
             return@DebouncedRunnable
         }
@@ -2547,6 +2547,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         }
     }
 }
+
 
 
 
