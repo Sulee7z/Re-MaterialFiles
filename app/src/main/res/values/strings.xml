@@ -551,6 +551,8 @@
     <string name="storage_edit_document_tree_name">Name</string>
     <string name="storage_edit_document_tree_uri">URI</string>
     <string name="storage_edit_document_tree_path">Path</string>
+    <string name="ftp_cache_downloading">Downloading to local cache…</string>
+    <string name="ftp_cache_done">Cached locally</string>
     <string name="storage_edit_ftp_server_title_edit">Edit FTP server</string>
     <string name="storage_edit_ftp_server_title_add">Add FTP server</string>
     <string name="storage_edit_ftp_server_host">Hostname</string>

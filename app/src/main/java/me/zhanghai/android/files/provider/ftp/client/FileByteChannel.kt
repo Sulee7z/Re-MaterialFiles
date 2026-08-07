@@ -5,11 +5,16 @@
 
 package me.zhanghai.android.files.provider.ftp.client
 
+import me.zhanghai.android.files.app.application
 import me.zhanghai.android.files.compat.nullInputStream
 import me.zhanghai.android.files.provider.common.AbstractFileByteChannel
 import me.zhanghai.android.files.provider.common.ByteBufferInputStream
 import me.zhanghai.android.files.provider.common.readFully
+import me.zhanghai.android.files.R
+import me.zhanghai.android.files.util.closeSafe
+import me.zhanghai.android.files.util.showToast
 import org.apache.commons.net.ftp.FTPClient
+import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.nio.ByteBuffer
@@ -18,9 +23,9 @@ class FileByteChannel(
     private val client: FTPClient,
     private val releaseClient: (FTPClient) -> Unit,
     private val path: String,
-    isAppend: Boolean,
+    private val isAppendParam: Boolean,
     truncate: Boolean
-) : AbstractFileByteChannel(isAppend, joinCancelledRead = true) {
+) : AbstractFileByteChannel(isAppendParam, joinCancelledRead = true) {
     private val clientLock = Any()
 
     private var openInputStream: InputStream? = null
@@ -37,6 +42,24 @@ class FileByteChannel(
     @Throws(IOException::class)
     override fun onRead(position: Long, size: Int): ByteBuffer {
         val destination = ByteBuffer.allocate(size)
+        ensureLocalCacheIfLarge()
+        localCacheChannel?.let { channel ->
+            // Read from the local cache: fully supports random access without any FTP
+            // REST/RETR issues.
+            synchronized(clientLock) {
+                channel.position(position)
+                var total = 0
+                while (total < size) {
+                    val count = channel.read(destination)
+                    if (count == -1) {
+                        break
+                    }
+                    total += count
+                }
+                destination.flip()
+            }
+            return destination
+        }
         synchronized(clientLock) {
             // Sequential reads reuse the same RETR stream instead of issuing a REST+RETR
             // per chunk. Some servers mishandle REST for RETR, which would corrupt reads of
@@ -65,6 +88,71 @@ class FileByteChannel(
         return destination
     }
 
+    private var localCacheChecked = false
+    private var localCacheFile: File? = null
+    private var localCacheChannel: java.nio.channels.FileChannel? = null
+
+    /**
+     * Files larger than the read buffer are downloaded once into a local cache and then read
+     * from there. Some servers (FileZilla Server proxying SMB shares) corrupt chunked
+     * REST+RETR reads, so caching sidesteps the problem entirely for random access.
+     */
+    @Throws(IOException::class)
+    private fun ensureLocalCacheIfLarge() {
+        if (localCacheChecked || isAppendParam) {
+            return
+        }
+        localCacheChecked = true
+        val size = try {
+            onSize()
+        } catch (e: IOException) {
+            // Fall back to streaming reads when the size cannot be determined.
+            return
+        }
+        if (size <= LOCAL_CACHE_THRESHOLD_BYTES) {
+            return
+        }
+        val cacheDirectory = File(application.cacheDir, "ftp-cache")
+        cacheDirectory.mkdirs()
+        val cacheFile = File(
+            cacheDirectory, "ftp-${path.hashCode()}-${System.currentTimeMillis()}.tmp"
+        )
+        application.showToast(
+            application.getString(R.string.ftp_cache_downloading)
+        )
+        try {
+            synchronized(clientLock) {
+                client.setRestartOffset(0)
+                val inputStream = client.retrieveFileStream(path)
+                    ?: client.throwNegativeReplyCodeException()
+                try {
+                    inputStream.use { input ->
+                        cacheFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                } finally {
+                    client.completePendingCommand()
+                }
+            }
+            localCacheFile = cacheFile
+            localCacheChannel = cacheFile.inputStream().channel
+            application.showToast(
+                application.getString(R.string.ftp_cache_done)
+            )
+        } catch (e: IOException) {
+            cacheFile.delete()
+            throw e
+        }
+    }
+
+    private fun clearLocalCache() {
+        localCacheChannel?.closeSafe()
+        localCacheChannel = null
+        localCacheFile?.delete()
+        localCacheFile = null
+    }
+
     private fun closeOpenInputStream() {
         val inputStream = openInputStream ?: return
         openInputStream = null
@@ -79,6 +167,7 @@ class FileByteChannel(
     override fun onWrite(position: Long, source: ByteBuffer) {
         synchronized(clientLock) {
             closeOpenInputStream()
+            clearLocalCache()
             // Sequential writes reuse the same STOR stream instead of issuing a REST+STOR
             // per chunk, because some servers (e.g. FileZilla Server proxying SMB shares)
             // mishandle REST and would restart each STOR at the beginning of the file.
@@ -169,8 +258,14 @@ class FileByteChannel(
             }
             closeOpenInputStream()
             closeOpenOutputStream()
+            clearLocalCache()
             releaseClient(client)
         }
     }
+
+    companion object {
+        private const val LOCAL_CACHE_THRESHOLD_BYTES = 2L * 1024 * 1024
+    }
 }
+
 
