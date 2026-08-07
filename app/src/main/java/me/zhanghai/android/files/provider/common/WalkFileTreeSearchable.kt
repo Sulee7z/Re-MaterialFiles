@@ -62,6 +62,24 @@ object WalkFileTreeSearchable {
             }
         }
 
+        // Top-level results are delivered immediately in small batches so the user sees
+        // results without waiting for the whole tree walk.
+        fun addResultImmediate(path: Path) {
+            if (resultCount.get() >= maxResults) {
+                cancelled.set(true)
+                return
+            }
+            resultCount.incrementAndGet()
+            synchronized(batchLock) {
+                pending.add(path)
+                if (pending.size >= 50) {
+                    val batch = pending.toList()
+                    pending.clear()
+                    listener(batch)
+                }
+            }
+        }
+
         val visitor = object : FileVisitor<Path> {
             @Throws(InterruptedIOException::class)
             override fun preVisitDirectory(dir: Path, attributes: BasicFileAttributes): FileVisitResult {
@@ -127,12 +145,20 @@ object WalkFileTreeSearchable {
         }
         val directories = mutableListOf<Path>()
         for (path in rootEntries) {
+            if (cancelled.get()) {
+                break
+            }
             val attributes = try {
                 path.readAttributes(BasicFileAttributes::class.java)
             } catch (e: IOException) {
                 continue
             }
-            visitor.visitFile(path, attributes)
+            // Top-level matches are delivered immediately (small batches) so results appear
+            // right away instead of after the whole tree has been walked.
+            val fileName = path.fileName
+            if (fileName != null && containsIgnoreCase(fileName.toString(), query)) {
+                addResultImmediate(path)
+            }
             if (attributes.isDirectory) {
                 directories.add(path)
             }
@@ -201,3 +227,4 @@ object WalkFileTreeSearchable {
         }
     }
 }
+
