@@ -5,23 +5,19 @@
 
 package me.zhanghai.android.files.provider.ftp.client
 
-import me.zhanghai.android.files.app.application
 import me.zhanghai.android.files.compat.nullInputStream
 import me.zhanghai.android.files.provider.common.AbstractFileByteChannel
 import me.zhanghai.android.files.provider.common.ByteBufferInputStream
 import me.zhanghai.android.files.provider.common.readFully
-import me.zhanghai.android.files.R
-import me.zhanghai.android.files.util.closeSafe
-import me.zhanghai.android.files.util.showToast
 import org.apache.commons.net.ftp.FTPClient
-import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.nio.ByteBuffer
 
 class FileByteChannel(
-    private val client: FTPClient,
+    private var client: FTPClient,
     private val releaseClient: (FTPClient) -> Unit,
+    private val reconnectClient: (FTPClient) -> FTPClient,
     private val path: String,
     private val isAppendParam: Boolean,
     truncate: Boolean
@@ -32,6 +28,7 @@ class FileByteChannel(
     private var openStreamPosition = 0L
     private var openOutputStream: java.io.OutputStream? = null
     private var openOutputPosition = 0L
+    private var hasUsedDataTransfer = false
 
     // A STOR without REST starts at offset 0 and truncates the file anyway, so a separate
     // empty STOR would only create a second transfer which some servers (FileZilla Server
@@ -39,34 +36,31 @@ class FileByteChannel(
     // the first write opens the STOR stream, or at close() if nothing was written.
     private var needsTruncate = truncate
 
+    /**
+     * Some servers (FileZilla Server proxying SMB shares) only honor the first REST command
+     * on a session and ignore later ones, which corrupts chunked REST+RETR reads/writes on a
+     * reused connection. Reopening a data stream therefore switches to a fresh connection,
+     * like AmazeFileManager does per operation.
+     */
+    @Throws(IOException::class)
+    private fun ensureFreshConnectionForNewTransfer() {
+        if (hasUsedDataTransfer) {
+            closeOpenInputStream()
+            closeOpenOutputStream()
+            client = reconnectClient(client)
+        }
+        hasUsedDataTransfer = true
+    }
+
     @Throws(IOException::class)
     override fun onRead(position: Long, size: Int): ByteBuffer {
         val destination = ByteBuffer.allocate(size)
-        ensureLocalCache()
-        localCacheChannel?.let { channel ->
-            // Read from the local cache: fully supports random access without any FTP
-            // REST/RETR issues.
-            synchronized(clientLock) {
-                channel.position(position)
-                var total = 0
-                while (total < size) {
-                    val count = channel.read(destination)
-                    if (count == -1) {
-                        break
-                    }
-                    total += count
-                }
-                destination.flip()
-            }
-            return destination
-        }
         synchronized(clientLock) {
-            // Sequential reads reuse the same RETR stream instead of issuing a REST+RETR
-            // per chunk. Some servers mishandle REST for RETR, which would corrupt reads of
-            // files larger than the read buffer. Random access (position moved) falls back
-            // to REST+RETR.
+            // Sequential reads reuse the same RETR stream. Random access (position moved)
+            // reopens with a fresh connection because some servers only honor the first REST.
             if (openInputStream == null || position != openStreamPosition) {
                 closeOpenInputStream()
+                ensureFreshConnectionForNewTransfer()
                 client.restartOffset = position
                 openInputStream = client.retrieveFileStream(path)
                     ?: client.throwNegativeReplyCodeException()
@@ -88,62 +82,6 @@ class FileByteChannel(
         return destination
     }
 
-    private var localCacheChecked = false
-    private var localCacheFile: File? = null
-    private var localCacheChannel: java.nio.channels.FileChannel? = null
-
-    /**
-     * Like AmazeFileManager, the whole file is downloaded once into a local cache and then
-     * read from there. This sidesteps servers that corrupt chunked REST+RETR reads
-     * (FileZilla Server proxying SMB shares) and fully supports random access.
-     */
-    @Throws(IOException::class)
-    private fun ensureLocalCache() {
-        if (localCacheChecked || isAppendParam) {
-            return
-        }
-        localCacheChecked = true
-        val cacheDirectory = File(application.cacheDir, "ftp-cache")
-        cacheDirectory.mkdirs()
-        val cacheFile = File(
-            cacheDirectory, "ftp-${path.hashCode()}-${System.currentTimeMillis()}.tmp"
-        )
-        application.showToast(
-            application.getString(R.string.ftp_cache_downloading)
-        )
-        try {
-            synchronized(clientLock) {
-                client.setRestartOffset(0)
-                val inputStream = client.retrieveFileStream(path)
-                    ?: client.throwNegativeReplyCodeException()
-                try {
-                    inputStream.use { input ->
-                        cacheFile.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                } finally {
-                    client.completePendingCommand()
-                }
-            }
-            localCacheFile = cacheFile
-            localCacheChannel = cacheFile.inputStream().channel
-            application.showToast(
-                application.getString(R.string.ftp_cache_done)
-            )
-        } catch (e: IOException) {
-            cacheFile.delete()
-            throw e
-        }
-    }
-
-    private fun clearLocalCache() {
-        localCacheChannel?.closeSafe()
-        localCacheChannel = null
-        localCacheFile?.delete()
-        localCacheFile = null
-    }
-
     private fun closeOpenInputStream() {
         val inputStream = openInputStream ?: return
         openInputStream = null
@@ -158,12 +96,11 @@ class FileByteChannel(
     override fun onWrite(position: Long, source: ByteBuffer) {
         synchronized(clientLock) {
             closeOpenInputStream()
-            clearLocalCache()
-            // Sequential writes reuse the same STOR stream instead of issuing a REST+STOR
-            // per chunk, because some servers (e.g. FileZilla Server proxying SMB shares)
-            // mishandle REST and would restart each STOR at the beginning of the file.
+            // Sequential writes reuse the same STOR stream. Reopening (random access)
+            // switches to a fresh connection like AmazeFileManager per operation.
             if (openOutputStream == null || position != openOutputPosition) {
                 closeOpenOutputStream()
+                ensureFreshConnectionForNewTransfer()
                 client.restartOffset = position
                 openOutputStream = client.storeFileStream(path)
                     ?: client.throwNegativeReplyCodeException()
@@ -189,6 +126,7 @@ class FileByteChannel(
         synchronized(clientLock) {
             closeOpenInputStream()
             closeOpenOutputStream()
+            ensureFreshConnectionForNewTransfer()
             ByteBufferInputStream(source).use {
                 if (!client.appendFile(path, it)) {
                     client.throwNegativeReplyCodeException()
@@ -202,6 +140,7 @@ class FileByteChannel(
         synchronized(clientLock) {
             closeOpenInputStream()
             closeOpenOutputStream()
+            ensureFreshConnectionForNewTransfer()
             client.restartOffset = size
             InputStream::class.nullInputStream().use {
                 if (!client.storeFile(path, it)) {
@@ -213,7 +152,6 @@ class FileByteChannel(
 
     @Throws(IOException::class)
     override fun onSize(): Long {
-        localCacheChannel?.let { return it.size() }
         val sizeString = synchronized(clientLock) {
             client.getSize(path) ?: client.throwNegativeReplyCodeException()
         }
@@ -242,6 +180,7 @@ class FileByteChannel(
         synchronized(clientLock) {
             if (needsTruncate && openOutputStream == null) {
                 // Opened for truncation but nothing was written: truncate explicitly.
+                ensureFreshConnectionForNewTransfer()
                 InputStream::class.nullInputStream().use {
                     if (!client.storeFile(path, it)) {
                         client.throwNegativeReplyCodeException()
@@ -250,11 +189,14 @@ class FileByteChannel(
             }
             closeOpenInputStream()
             closeOpenOutputStream()
-            clearLocalCache()
             releaseClient(client)
         }
     }
 }
+
+
+
+
 
 
 

@@ -289,9 +289,30 @@ object Client {
         }
         return NotifyEntryModifiedSeekableByteChannel(
             FileByteChannel(
-                client, { releaseClient(authority, client) }, path.remotePath, isAppend, truncate
+                client,
+                { releaseClient(authority, it) },
+                { reconnectClient(authority, it) },
+                path.remotePath, isAppend, truncate
             ), path as Java8Path
         )
+    }
+
+    /**
+     * Disconnects the given client (so the server closes the session, releasing any stale
+     * state/handles) and returns a fresh client. Some servers (FileZilla Server proxying SMB
+     * shares) only honor the first REST command on a session, so data transfers that reopen
+     * a stream must use a new connection.
+     */
+    @Throws(IOException::class)
+    private fun reconnectClient(authority: Authority, client: FTPClient): FTPClient {
+        if (client.isConnected) {
+            try {
+                client.disconnect()
+            } catch (e: IOException) {
+                e.printStackTrace()
+            }
+        }
+        return acquireClient(authority)
     }
 
     @Throws(IOException::class)
