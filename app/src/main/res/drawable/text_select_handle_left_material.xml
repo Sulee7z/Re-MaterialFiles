@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Copyright (c) 2026 Sulee7z <94352968+sulee7z@users.noreply.github.com>
+  ~ All Rights Reserved.
+  -->
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24.0"
+    android:viewportHeight="24.0">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M14.0,1.0L15.5,1.0C16.33,1.0 17.0,1.67 17.0,2.5L17.0,21.5C17.0,22.33 16.33,23.0 15.5,23.0L14.0,23.0C13.17,23.0 12.5,22.33 12.5,21.5L12.5,2.5C12.5,1.67 13.17,1.0 14.0,1.0Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M9.0,12.0L13.0,8.5L13.0,15.5Z" />
+</vector>
