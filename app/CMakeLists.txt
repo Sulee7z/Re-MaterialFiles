@@ -31,3 +31,14 @@ target_compile_options(syscall
 target_link_libraries(syscall
         PRIVATE
         ${LOG_LIBRARY})
+
+# Terminal pty support: com.termux.terminal.JNI -> System.loadLibrary("termux").
+# Vendored from https://github.com/termux/termux-app (terminal-emulator module).
+add_library(termux SHARED
+        src/main/jni/termux.c)
+target_compile_options(termux
+        PRIVATE
+        -Wall)
+target_link_libraries(termux
+        PRIVATE
+        ${LOG_LIBRARY})
