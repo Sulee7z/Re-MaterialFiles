@@ -48,6 +48,7 @@ import me.zhanghai.android.files.provider.ftp.client.Client
 import me.zhanghai.android.files.provider.ftp.client.Mode
 import me.zhanghai.android.files.provider.ftp.client.Protocol
 import me.zhanghai.android.files.provider.ftp.client.mapEverythingPathToRemotePath
+import me.zhanghai.android.files.provider.ftp.client.mapRemotePathToEverythingWindowsPath
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -462,15 +463,28 @@ object FtpFileSystemProvider : FileSystemProvider(), PathObservableProvider, Sea
         }
         if (supportsEverything) {
             try {
-                Client.searchEverything(authority, query, intervalMillis) { windowsPaths ->
+                val windowsScopePath =
+                    mapRemotePathToEverythingWindowsPath(directory.remotePath, windowsRoot)
+                Client.searchEverything(
+                    authority, query, windowsScopePath, intervalMillis
+                ) { windowsPaths ->
                     val paths = windowsPaths.mapNotNull { windowsPath ->
                         val remotePath =
                             mapEverythingPathToRemotePath(windowsPath, windowsRoot)
                                 ?: return@mapNotNull null
-                        if (!remotePath.startsWith(directory.remotePath)) {
+                        // Everything's `path:` is a substring match, so re-filter with a
+                        // boundary check: only this directory and its descendants count.
+                        val directoryRemotePath = directory.remotePath
+                        val inScope = if (directoryRemotePath == "/") {
+                            true
+                        } else {
+                            remotePath == directoryRemotePath ||
+                                remotePath.startsWith("$directoryRemotePath/")
+                        }
+                        if (!inScope) {
                             return@mapNotNull null
                         }
-                        val relative = remotePath.removePrefix(directory.remotePath)
+                        val relative = remotePath.removePrefix(directoryRemotePath)
                             .trimStart('/')
                         if (relative.isEmpty()) {
                             directory

@@ -6,6 +6,7 @@
 package me.zhanghai.android.files.filelist
 
 import android.os.AsyncTask
+import android.util.Log
 import java8.nio.file.DirectoryIteratorException
 import java8.nio.file.Path
 import me.zhanghai.android.files.file.FileItem
@@ -41,10 +42,12 @@ class FileListLiveData(private val path: Path) : CloseableLiveData<Stateful<List
         future = (AsyncTask.THREAD_POOL_EXECUTOR as ExecutorService).submit<Unit> {
             val value = try {
                 val hiddenPaths = HiddenPaths.getAll()
+                var filteredCount = 0
                 path.newDirectoryStream().use { directoryStream ->
                     val fileList = mutableListOf<FileItem>()
                     for (path in directoryStream) {
                         if (hiddenPaths.contains(path.toString())) {
+                            filteredCount++
                             continue
                         }
                         try {
@@ -58,6 +61,12 @@ class FileListLiveData(private val path: Path) : CloseableLiveData<Stateful<List
                         }
                     }
                     Success(fileList as List<FileItem>)
+                }.also {
+                    Log.i(
+                        "SoraEditor",
+                        "FileListLiveData.loadValue for $path: hiddenPaths=${hiddenPaths.size}, " +
+                            "filtered=$filteredCount, total=${it.value?.size}"
+                    )
                 }
             } catch (e: Exception) {
                 Failure(valueCompat.value, e)

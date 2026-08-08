@@ -58,6 +58,7 @@ import kotlinx.parcelize.Parcelize
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.pm.PackageInfo
+import android.util.Log
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -1401,6 +1402,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     override fun hideFile(file: FileItem) {
+        Log.i(TAG, "hideFile() called for ${file.path}")
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.file_item_action_hide)
             .setMessage(getString(R.string.file_item_action_hide_confirm_format, file.name))
@@ -1416,8 +1418,15 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     private fun showManageHiddenDialog() {
         val hiddenPaths = HiddenPaths.getAll().toList()
+        Log.i(TAG, "showManageHiddenDialog() with ${hiddenPaths.size} hidden paths: $hiddenPaths")
         if (hiddenPaths.isEmpty()) {
-            showToast(getString(R.string.file_list_action_manage_hidden_empty))
+            // A toast is too easy to miss; use a dialog so the user actually learns how to
+            // reach the Hide entry (the ⋮ menu on a file, not long-press which is multi-select).
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.file_list_action_manage_hidden)
+                .setMessage(R.string.file_list_action_manage_hidden_empty)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
             return
         }
         val checked = BooleanArray(hiddenPaths.size) { true }
@@ -2433,6 +2442,8 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     companion object {
+        private const val TAG = "SoraEditor"
+
         private const val ACTION_VIEW_DOWNLOADS =
             "me.zhanghai.android.files.intent.action.VIEW_DOWNLOADS"
 

@@ -269,7 +269,7 @@
     <string name="file_list_action_navigate_to">转到</string>
     <string name="file_list_action_show_hidden_files">显示隐藏文件</string>
     <string name="file_list_action_manage_hidden">管理隐藏项</string>
-    <string name="file_list_action_manage_hidden_empty">没有隐藏项</string>
+    <string name="file_list_action_manage_hidden_empty">还没有隐藏项。\n\n注意:Documents 里那些 . 开头的文件(如 .obb)由设置中的"显示隐藏文件"开关控制,和这里的隐藏列表是两回事——开关决定是否显示点号文件,此列表只记录你主动隐藏的项目。\n\n要隐藏某个文件:点击它右侧的 ⋮ 菜单,选择"隐藏"即可,它会从列表消失并出现在这里。</string>
     <string name="file_item_action_hide">隐藏</string>
     <string name="file_item_action_hide_confirm_format">隐藏 %1$s?隐藏后不会在文件列表中显示。</string>
     <string name="unhide">取消隐藏</string>

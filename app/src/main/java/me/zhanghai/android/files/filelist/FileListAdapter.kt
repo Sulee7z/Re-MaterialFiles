@@ -18,6 +18,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.view.isVisible
+import android.util.Log
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import coil.dispose
@@ -357,6 +358,12 @@ class FileListAdapter(
         val path = file.path
         val hasPickOptions = pickOptions != null
         val isReadOnly = path.fileSystem.isReadOnly
+        val hideItem = menu.findItem(R.id.action_hide)
+        Log.i(
+            "SoraEditor",
+            "FileListAdapter menu for ${path.fileName}: isReadOnly=$isReadOnly, " +
+                "hideItemExists=${hideItem != null}, hideVisible=${hideItem?.isVisible}"
+        )
         menu.findItem(R.id.action_cut).isVisible = !hasPickOptions && !isReadOnly
         menu.findItem(R.id.action_copy).isVisible = !hasPickOptions
         val checked = file in selectedFiles

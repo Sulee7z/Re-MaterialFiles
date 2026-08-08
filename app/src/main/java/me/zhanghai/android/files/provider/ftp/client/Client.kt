@@ -22,6 +22,8 @@ import me.zhanghai.android.files.provider.common.DelegateOutputStream
 import me.zhanghai.android.files.provider.common.LocalWatchService
 import me.zhanghai.android.files.provider.common.NotifyEntryModifiedOutputStream
 import me.zhanghai.android.files.provider.common.NotifyEntryModifiedSeekableByteChannel
+import me.zhanghai.android.files.settings.Settings
+import me.zhanghai.android.files.util.valueCompat
 import org.apache.commons.net.ftp.FTPClient
 import org.apache.commons.net.ftp.FTPClientConfig
 import org.apache.commons.net.ftp.FTPCmd
@@ -45,6 +47,10 @@ object Client {
     // FileZilla Server's default idle timeout is usually 120s; keep pooled connections well
     // below it so a borrowed client never gets a 421 right after the liveness check.
     private const val MAX_POOLED_IDLE_MILLIS = 60_000L
+
+    // Matches the cap used by the local walk search (WalkFileTreeSearchable): beyond this
+    // many matches the result loader becomes the bottleneck, so stop pulling more.
+    private const val MAX_EVERYTHING_RESULTS = 1000
 
     private val directoryFilesCache = Collections.synchronizedMap(WeakHashMap<Path, FTPFile>())
 
@@ -167,52 +173,69 @@ object Client {
     /**
      * Searches the Everything ETP/FTP server index. Result lines are raw Windows paths
      * (CSV-like formatting), delivered in batches to [listener].
+     *
+     * @param windowsScopePath the current directory's real Windows path on the Everything
+     *   server, used to scope the query with `path:` so the server only returns matches
+     *   under that directory instead of the whole index. When null/empty, the query is
+     *   sent as-is (full index search).
      */
     @Throws(IOException::class)
     fun searchEverything(
         authority: Authority,
         query: String,
+        windowsScopePath: String?,
         intervalMillis: Long,
         listener: (List<String>) -> Unit
     ) {
         useClient(authority) { client ->
             require(client is EverythingQueryCapable) { "Server does not support EVERYTHING" }
-            val pageSize = 500
-            var offset = 0
+            // Scoping the search server-side is the decisive performance win: without
+            // `path:`, Everything searches its whole index and the app would have to
+            // pull and discard thousands of unrelated matches. Everything's `path:`
+            // function is a substring match, so the client still re-filters below.
+            val scopedQuery = if (!windowsScopePath.isNullOrEmpty()) {
+                "path:\"$windowsScopePath\" $query"
+            } else {
+                query
+            }
+            // SEARCH / PATH_COLUMN / COUNT only need to be sent once: results stream
+            // back on the data connection and are delivered progressively, so there is
+            // no need for the old OFFSET-based pagination (which cost a control round
+            // trip plus a PASV negotiation per page).
+            client.sendCommand("SITE", "EVERYTHING SEARCH $scopedQuery")
+            client.sendCommand("SITE", "EVERYTHING PATH_COLUMN 1")
+            // Safety cap against pathological indexes, not a pagination scheme: with
+            // `path:` scoping this should rarely be reached.
+            client.sendCommand("SITE", "EVERYTHING COUNT 20000")
+
+            val inputStream = client.openEverythingQueryStream()
+                ?: client.throwNegativeReplyCodeException()
             val batch = mutableListOf<String>()
+            var resultCount = 0
             var lastProgressMillis = System.currentTimeMillis()
-            while (true) {
-                client.sendCommand("SITE", "EVERYTHING SEARCH $query")
-                client.sendCommand("SITE", "EVERYTHING PATH_COLUMN 1")
-                client.sendCommand("SITE", "EVERYTHING OFFSET $offset")
-                client.sendCommand("SITE", "EVERYTHING COUNT $pageSize")
-                val inputStream = client.openEverythingQueryStream()
-                    ?: client.throwNegativeReplyCodeException()
-                val lines = inputStream.bufferedReader(Charsets.UTF_8).use { it.readLines() }
-                client.completePendingCommand()
-                if (lines.isEmpty()) {
-                    break
-                }
+            inputStream.bufferedReader(Charsets.UTF_8).useLines { lines ->
                 for (line in lines) {
                     val path = parseEverythingResultLine(line) ?: continue
                     batch.add(path)
-                }
-                val currentTimeMillis = System.currentTimeMillis()
-                if (batch.isNotEmpty() &&
-                    currentTimeMillis >= lastProgressMillis + intervalMillis
-                ) {
-                    listener(batch.toList())
-                    batch.clear()
-                    lastProgressMillis = currentTimeMillis
-                }
-                if (lines.size < pageSize) {
-                    break // Last page.
-                }
-                offset += pageSize
-                if (Thread.interrupted()) {
-                    throw java.io.InterruptedIOException()
+                    resultCount++
+                    val currentTimeMillis = System.currentTimeMillis()
+                    if (currentTimeMillis >= lastProgressMillis + intervalMillis) {
+                        listener(batch.toList())
+                        batch.clear()
+                        lastProgressMillis = currentTimeMillis
+                    }
+                    // Cap client-side like the local walk search so a huge match set
+                    // can't flood the result loader; closing the stream mid-transfer is
+                    // fine for FTP.
+                    if (resultCount >= MAX_EVERYTHING_RESULTS) {
+                        break
+                    }
+                    if (Thread.interrupted()) {
+                        throw java.io.InterruptedIOException()
+                    }
                 }
             }
+            client.completePendingCommand()
             if (batch.isNotEmpty()) {
                 listener(batch)
             }
@@ -312,8 +335,15 @@ object Client {
     @Throws(IOException::class)
     fun listDirectory(path: Path): List<Path> {
         useClient(path.authority) { client ->
-            val files = client.mlistDirCompat(path.remotePath)
-                ?: client.throwNegativeReplyCodeException()
+            // Whether MLSD returns dot files is entirely up to the server; the app's
+            // "show hidden files" setting is only honored by the traditional LIST path
+            // (listHiddenFiles appends "-a"). So when the user enables the setting, fall
+            // back to LIST to make sure dot files actually appear.
+            val showHiddenFiles = Settings.FILE_LIST_SHOW_HIDDEN_FILES.valueCompat
+            val files = (
+                if (showHiddenFiles) client.listFiles(path.remotePath)
+                else client.mlistDirCompat(path.remotePath)
+                ) ?: client.throwNegativeReplyCodeException()
             return files.mapNotNull { file ->
                 if (file.name == "." || file.name == "..") {
                     return@mapNotNull null
