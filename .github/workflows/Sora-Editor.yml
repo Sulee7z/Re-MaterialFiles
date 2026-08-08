@@ -19,6 +19,13 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    # Expose signing credentials to every step (incl. Gradle build).
+    env:
+      STORE_FILE: key.jks
+      STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+
     steps:
     - name: Check out repository
       uses: actions/checkout@v7
@@ -55,11 +62,6 @@ jobs:
         find app/src -type f -exec sed -i '/\/\/#ifdef NONFREE/,/\/\/#endif/d' {} +
 
     - name: Write Signing Configuration
-      env:
-        STORE_FILE: key.jks
-        STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
-        KEY_ALIAS: ${{ secrets.ALIAS }}
-        KEY_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
       run: |
         if [ -n "${{ secrets.KEY_STORE }}" ]; then
           printf '%s' "${{ secrets.KEY_STORE }}" | tr -d '[:space:]' | base64 --decode > key.jks
