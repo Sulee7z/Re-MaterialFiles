@@ -367,6 +367,13 @@
             android:theme="@style/Theme.MaterialFiles" />
 
         <activity
+            android:name="me.zhanghai.android.files.terminal.TerminalActivity"
+            android:exported="true"
+            android:label="@string/terminal_title"
+            android:taskAffinity=""
+            android:theme="@style/Theme.MaterialFiles" />
+
+        <activity
             android:name="me.zhanghai.android.files.activitylauncher.ActivityLauncherActivity"
             android:exported="true"
             android:label="@string/activity_launcher_title"

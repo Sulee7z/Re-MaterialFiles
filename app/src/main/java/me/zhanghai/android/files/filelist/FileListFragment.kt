@@ -116,10 +116,12 @@ import me.zhanghai.android.files.navigation.NavigationFragment
 import me.zhanghai.android.files.navigation.NavigationRootMapLiveData
 import me.zhanghai.android.files.provider.archive.createArchiveRootPath
 import me.zhanghai.android.files.provider.archive.isArchivePath
+import com.topjohnwu.superuser.Shell
 import me.zhanghai.android.files.provider.linux.isLinuxPath
 import me.zhanghai.android.files.settings.HiddenPaths
 import me.zhanghai.android.files.settings.Settings
-import me.zhanghai.android.files.terminal.Terminal
+import me.zhanghai.android.files.terminal.TerminalActivity
+import me.zhanghai.android.files.terminal.TerminalArgs
 import me.zhanghai.android.files.ui.AppBarLayoutExpandHackListener
 import me.zhanghai.android.files.ui.CoordinatorAppBarLayout
 import me.zhanghai.android.files.ui.DrawerLayoutOnBackPressedCallback
@@ -809,9 +811,12 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     private fun openInTerminal() {
         val path = currentPath
         if (path.isLinuxPath) {
-            Terminal.open(path.toFile().path, requireContext())
+            startActivity(
+                TerminalActivity::class.createIntent()
+                    .putArgs(TerminalArgs(path.toFile().path, Shell.isAppGrantedRoot() == true))
+            )
         } else {
-            // TODO
+            showToast(R.string.terminal_not_supported_for_path)
         }
     }
 

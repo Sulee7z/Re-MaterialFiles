@@ -766,6 +766,25 @@
     <string name="logcat_count_format">%1$d lines</string>
     <string name="logcat_no_root_hint">Note: reading all logs may require root</string>
 
+    <string name="terminal_title">Terminal</string>
+    <string name="terminal_exit_status_failed">Terminal session exited with an error</string>
+    <string name="terminal_not_supported_for_path">Terminal is not supported for this path</string>
+    <string name="copy_text">Copy</string>
+    <string name="paste_text">Paste</string>
+    <string name="text_selection_more">More</string>
+    <string name="terminal_key_esc" translatable="false">ESC</string>
+    <string name="terminal_key_tab" translatable="false">TAB</string>
+    <string name="terminal_key_ctrl" translatable="false">CTRL</string>
+    <string name="terminal_key_alt" translatable="false">ALT</string>
+    <string name="terminal_key_shift" translatable="false">SHIFT</string>
+    <string name="terminal_key_minus" translatable="false">-</string>
+    <string name="terminal_key_slash" translatable="false">/</string>
+    <string name="terminal_key_pipe" translatable="false">|</string>
+    <string name="terminal_key_up" translatable="false">▲</string>
+    <string name="terminal_key_down" translatable="false">▼</string>
+    <string name="terminal_key_left" translatable="false">◀</string>
+    <string name="terminal_key_right" translatable="false">▶</string>
+
     <string name="activity_launcher_title">Activity launcher</string>
     <string name="activity_launcher_search_apps">Search apps</string>
     <string name="activity_launcher_apps_count_format">%1$d apps</string>
