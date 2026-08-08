@@ -55,14 +55,16 @@ jobs:
         find app/src -type f -exec sed -i '/\/\/#ifdef NONFREE/,/\/\/#endif/d' {} +
 
     - name: Write Signing Configuration
+      env:
+        STORE_FILE: key.jks
+        STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.ALIAS }}
+        KEY_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
       run: |
         if [ -n "${{ secrets.KEY_STORE }}" ]; then
-          echo "storePassword='${{ secrets.KEY_STORE_PASSWORD }}'" >> signing.properties
-          echo "keyAlias='${{ secrets.ALIAS }}'" >> signing.properties
-          echo "keyPassword='${{ secrets.KEY_STORE_PASSWORD }}'" >> signing.properties
-          echo "storeFile='key.jks'" >> signing.properties
           printf '%s' "${{ secrets.KEY_STORE }}" | tr -d '[:space:]' | base64 --decode > key.jks
           if [ ! -s key.jks ]; then echo "::error::Failed to decode KEY_STORE secret"; exit 1; fi
+          echo "Signing keystore written; credentials passed via environment"
         else
           echo "No signing secrets configured, falling back to debug signing"
           sed -i 's/signingConfig signingConfigs.release/signingConfig signingConfigs.debug/' app/build.gradle
