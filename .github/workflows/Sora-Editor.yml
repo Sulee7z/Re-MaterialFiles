@@ -2,8 +2,14 @@ name: MaterialFiles with Sora-Editor
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to upload to (e.g. v1.7.5, optional)'
+        required: false
+        type: string
   push:
     branches: [Sora-Editor_1.7, main]
+    tags: ['*']
 
 permissions:
   contents: write
@@ -29,6 +35,20 @@ jobs:
         echo "tag=$tag" >> $GITHUB_OUTPUT
         echo "Short_SHA=$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_OUTPUT
 
+    - name: Determine release tag
+      id: release_tag
+      run: |
+        if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+          # Pushed for an explicit tag (e.g. v1.7.5): upload to that tag.
+          echo "release=$GITHUB_REF_NAME" >> $GITHUB_OUTPUT
+        elif [ -n "${{ inputs.release_tag }}" ]; then
+          # Manual run with a chosen tag: upload to it.
+          echo "release=${{ inputs.release_tag }}" >> $GITHUB_OUTPUT
+        else
+          # Branch push: keep the previous auto-versioned build tag.
+          echo "release=${{ steps.get_tag.outputs.tag }}-build-${{ github.run_number }}" >> $GITHUB_OUTPUT
+        fi
+
     - name: Delete Non-Free Code
       run: |
         rm -rf app/src/main/java/me/zhanghai/android/files/nonfree
@@ -41,7 +61,8 @@ jobs:
           echo "keyAlias='${{ secrets.ALIAS }}'" >> signing.properties
           echo "keyPassword='${{ secrets.KEY_STORE_PASSWORD }}'" >> signing.properties
           echo "storeFile='key.jks'" >> signing.properties
-          echo "${{ secrets.KEY_STORE }}" | base64 --decode > key.jks
+          printf '%s' "${{ secrets.KEY_STORE }}" | tr -d '[:space:]' | base64 --decode > key.jks
+          if [ ! -s key.jks ]; then echo "::error::Failed to decode KEY_STORE secret"; exit 1; fi
         else
           echo "No signing secrets configured, falling back to debug signing"
           sed -i 's/signingConfig signingConfigs.release/signingConfig signingConfigs.debug/' app/build.gradle
@@ -60,10 +81,19 @@ jobs:
       run: ./gradlew assembleRelease --parallel --stacktrace
 
     - name: Rename artifact
+      id: rename
       working-directory: app/build/outputs/apk/release/
       run: |
         APK=$(ls app-release*.apk)
-        mv "$APK" "MaterialFiles.Sora-Editor-${{ steps.get_tag.outputs.tag }}@${{ steps.get_tag.outputs.Short_SHA }}.apk"
+        if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+          NAME="MaterialFiles.Sora-Editor-$GITHUB_REF_NAME.apk"
+        elif [ -n "${{ inputs.release_tag }}" ]; then
+          NAME="MaterialFiles.Sora-Editor-${{ inputs.release_tag }}.apk"
+        else
+          NAME="MaterialFiles.Sora-Editor-${{ steps.get_tag.outputs.tag }}@${{ steps.get_tag.outputs.Short_SHA }}.apk"
+        fi
+        mv "$APK" "$NAME"
+        echo "apk_name=$NAME" >> $GITHUB_OUTPUT
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
@@ -76,8 +106,15 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        gh release create \
-          "${{ steps.get_tag.outputs.tag }}-build-${{ github.run_number }}" \
-          "app/build/outputs/apk/release/MaterialFiles.Sora-Editor-${{ steps.get_tag.outputs.tag }}@${{ steps.get_tag.outputs.Short_SHA }}.apk" \
-          --title "MaterialFiles Sora-Editor ${{ steps.get_tag.outputs.tag }} build #${{ github.run_number }}" \
-          --notes "Automated build of commit ${{ github.sha }}"
+        RELEASE_TAG="${{ steps.release_tag.outputs.release }}"
+        APK="app/build/outputs/apk/release/${{ steps.rename.outputs.apk_name }}"
+        if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+          # Release (or its tag) already exists: attach the APK to it.
+          gh release upload "$RELEASE_TAG" "$APK" --clobber
+        else
+          gh release create \
+            "$RELEASE_TAG" \
+            "$APK" \
+            --title "MaterialFiles Sora-Editor $RELEASE_TAG" \
+            --notes "Automated build of commit ${{ github.sha }}"
+        fi

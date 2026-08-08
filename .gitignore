@@ -8,3 +8,7 @@
 /signing.properties
 .DS_Store
 *.iml
+
+# Local signing keystore / secrets
+/key.jks
+/AppData/
