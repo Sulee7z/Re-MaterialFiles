@@ -28,6 +28,10 @@ class FileListLiveData(private val path: Path) : CloseableLiveData<Stateful<List
 
     private val observer: PathObserver
 
+    private companion object {
+        const val LOG_TAG = "SoraEditor"
+    }
+
     @Volatile
     private var isChangedWhileInactive = false
 
@@ -55,15 +59,21 @@ class FileListLiveData(private val path: Path) : CloseableLiveData<Stateful<List
                         } catch (e: DirectoryIteratorException) {
                             // TODO: Ignoring such a file can be misleading and we need to support
                             //  files without information.
-                            e.printStackTrace()
+                            Log.w(
+                                LOG_TAG,
+                                "DirectoryIteratorException while loading item: $path",
+                                e
+                            )
                         } catch (e: IOException) {
-                            e.printStackTrace()
+                            // Ignore items whose attributes cannot be loaded, but make sure such
+                            // failures are visible in logcat so missing files can be diagnosed.
+                            Log.w(LOG_TAG, "IOException while loading item: $path", e)
                         }
                     }
                     Success(fileList as List<FileItem>)
                 }.also {
                     Log.i(
-                        "SoraEditor",
+                        LOG_TAG,
                         "FileListLiveData.loadValue for $path: hiddenPaths=${hiddenPaths.size}, " +
                             "filtered=$filteredCount, total=${it.value?.size}"
                     )

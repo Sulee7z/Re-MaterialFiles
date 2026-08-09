@@ -654,6 +654,7 @@
         <item>Aðeins venjulegur aðgangur</item>
         <item>Sjálfvirkt</item>
         <item>Aðeins kerfisstjóraaðgangur</item>
+        <item>Shizuku</item>
     </string-array>
     <string name="settings_archive_file_name_encoding_title">Kóðun skráaheita í geymslu</string>
     <string name="settings_open_apk_default_action_title">Opna Android-pakka</string>

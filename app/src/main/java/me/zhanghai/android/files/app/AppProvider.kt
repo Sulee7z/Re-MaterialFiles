@@ -13,6 +13,8 @@ import android.net.Uri
 
 lateinit var application: Application private set
 
+fun isApplicationInitialized(): Boolean = ::application.isInitialized
+
 class AppProvider : ContentProvider() {
     override fun onCreate(): Boolean {
         application = context as Application

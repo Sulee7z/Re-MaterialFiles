@@ -1,107 +1,130 @@
-# Material Files (Sora-Editor 增强分支)
-
-> **这是一个分支项目。** 本仓库基于 [zhanghai/MaterialFiles](https://github.com/zhanghai/MaterialFiles)（原作者：Hai Zhang）及其 [Citrinae-Lime/MaterialFiles.Sora-Editor](https://github.com/Citrinae-Lime/MaterialFiles.Sora-Editor)（Sora-Editor 版本）分支修改而来。
->
-> **特别鸣谢：**
-> - [Hai Zhang](https://github.com/zhanghai) —— 原版 Material Files 的作者，感谢他带来了如此优秀的开源文件管理器。
-> - [Citrinae-Lime](https://github.com/Citrinae-Lime) —— Sora-Editor 版本分支的作者，感谢他对原版的二次开发与维护。
-
-## 本分支新增功能
-
-本分支在 Sora-Editor 版基础上，添加了一系列高级工具（长按文件 → 菜单）：
-
-- **DEX 分析器**：解析 APK 内的 DEX 文件（类/方法/字段/指令级），支持导出 Smali 源码、正则搜索、**查找引用跳转**（类/方法/字段被谁引用，点击直达）。
-- **APK 字符串搜索**：在 DEX 与 .so 文件中批量搜索字符串。
-- **ELF 分析器**：查看 .so 文件的 ELF 头、程序头、节区与字符串表。
-- **十六进制查看器/编辑器**：任意文件的 Hex 查看与编辑。
-- **AndroidManifest 解码**：AXML 二进制 XML → 可读文本（版本号、minSdk、targetSdk、组件等）。
-- **APK 对比**：比较两个 APK 的签名信息是否一致。
-- **时间戳编辑**：修改文件的修改时间。
-- **Logcat 查看器**：Root 或非 Root 环境查看系统日志。
-- **Activity 启动器**：列出已安装应用，启动任意 Activity。
-- **内置终端**：基于 Termux 终端模拟器（PTY），文件列表菜单直接在当前目录打开终端，支持 Root 会话与 ESC/TAB/CTRL/ALT/方向键等附加按键行。
-- **Everything 索引搜索**：集成 Everything 的 ETP/FTP 协议（`SITE EVERYTHING QUERY`），配置 Windows 索引根目录后可在 FTP 服务器上即时搜索文件。
-- **文件名索引搜索**：为当前目录建立文件名索引（可重建），实现比实时扫描更快的海量目录搜索。
-- **文件内容搜索**：在当前目录递归搜索文本内容（区分大小写、仅文本过滤）。
-- **批量重命名**：多选文件后统一加前缀/后缀、查找替换、自动编号。
-- **文本编码转换**：UTF-8 / GBK / GB18030 / UTF-16 / BIG5 等编码互转。
-- **一键签名 APK**：使用内置自动生成的密钥一键签名（v1+v2+v3），无需配置。
-- **签名 APK**：使用 **APK Signature Scheme v1 + v2 + v3** 签名 APK（内置密钥库选择、密码输入，签名结果可正常安装于 Android 8.0+）。
-- **带版本号重命名**：自动读取 APK 版本名并重命名为 `名称_版本号.apk`。
-- **安装 APK**：直接通过系统安装器安装 APK 文件。
-
-> 签名功能基于 BouncyCastle 自研实现，v1（JAR 签名）/v2/v3 均通过 `apksigner verify` 验证。
-
----
-
-# Material Files
+# 📦 Material Files · Sora-Editor 增强版
 
 [![Android CI 状态](https://img.shields.io/github/actions/workflow/status/Sulee7z/MaterialFiles.Sora-Editor/android.yml?style=for-the-badge&label=%E5%8E%9F%E7%89%88%20%E7%8A%B6%E6%80%81)](https://github.com/Sulee7z/MaterialFiles.Sora-Editor/actions/workflows/android.yml)
 [![Sora-Editor版 状态](https://img.shields.io/github/actions/workflow/status/Sulee7z/MaterialFiles.Sora-Editor/Sora-Editor.yml?style=for-the-badge&label=Sora-Editor%E7%89%88%20%E7%8A%B6%E6%80%81)](https://github.com/Sulee7z/MaterialFiles.Sora-Editor/actions/workflows/Sora-Editor.yml)
 [![GitHub 发行版](https://img.shields.io/github/v/release/Sulee7z/MaterialFiles.Sora-Editor?include_prereleases&display_name=release&style=for-the-badge)](https://github.com/Sulee7z/MaterialFiles.Sora-Editor/releases)
 [![许可证](https://img.shields.io/github/license/zhanghai/MaterialFiles?color=blue&style=for-the-badge)](LICENSE)
+[![支持 Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-green?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com/studio)
 
-一个开源的 Material Design 文件管理器，适用于 Android 8.0+。
+> ### 🚀 文件管理器 × APK 逆向分析工具箱
+>
+> 在 [Material Files](https://github.com/zhanghai/MaterialFiles)（Hai Zhang）与
+> [Sora-Editor 分支](https://github.com/Citrinae-Lime/MaterialFiles.Sora-Editor)（Citrinae-Lime）的基础上，
+> 深度融合 **MT 管理器风格逆向工具、内置终端、Everything 索引搜索**，打造 Android 上的文件与逆向利器。
+
+---
+
+## ✨ 特性总览
+
+| 领域 | 能力 |
+| --- | --- |
+| 🕵️ **APK 逆向分析** | DEX 解析 / Smali 导出 / 引用跳转 / 字符串搜索 / ELF 分析 / Manifest 解码 / APK 对比 |
+| ✍️ **APK 签名** | 一键签名（v1+v2+v3）· 自定义密钥库 · 带版本号重命名 · 直接安装 |
+| 🖥️ **终端** | Termux 内核 · PTY 支持 · Root 会话 · 附加按键行 |
+| 🔍 **超级搜索** | Everything 索引搜索（本地 + FTP/ETP）· 文件名索引 · 内容正则搜索 |
+| 🧰 **文件增强** | 十六进制编辑 · 批量重命名 · 编码转换 · 时间戳编辑 · 隐藏文件管理 |
+
+---
+
+## 🛠️ 完整功能清单
+
+本分支在 Sora-Editor 版基础上，提供一系列高级工具（**长按文件 → 更多操作**）：
+
+### 🕵️ APK 逆向分析
+
+- **DEX 分析器**：解析 APK 内的 DEX 文件（类 / 方法 / 字段 / 指令级），支持 **导出 Smali 源码**、正则搜索、**查找引用跳转**——类/方法/字段被谁引用，点击直达。
+- **APK 字符串搜索**：在 DEX 与 .so 文件中批量搜索字符串。
+- **ELF 分析器**：查看 .so 文件的 ELF 头、程序头、节区与字符串表。
+- **十六进制查看器 / 编辑器**：任意文件的 Hex 查看与编辑。
+- **AndroidManifest 解码**：AXML 二进制 XML → 可读文本（版本号、minSdk、targetSdk、组件等）。
+- **APK 对比**：比较两个 APK 的签名信息是否一致。
+
+### ✍️ 签名与安装
+
+- **一键签名 APK**：使用内置自动生成的密钥一键签名（v1+v2+v3），无需任何配置。
+- **签名 APK**：使用 **APK Signature Scheme v1 + v2 + v3** 签名（支持密钥库选择、密码输入），签名结果可正常安装于 Android 8.0+。
+- **带版本号重命名**：自动读取 APK 版本名并重命名为 `名称_版本号.apk`。
+- **安装 APK**：直接通过系统安装器安装 APK 文件。
+
+### 🏖️ 终端与系统工具
+
+- **内置终端**：基于 Termux 终端模拟器（PTY），文件列表菜单直接在当前目录打开终端，支持 **Root 会话**与 ESC / TAB / CTRL / ALT / 方向键等附加按键行。
+- **Logcat 查看器**：Root 或非 Root 环境查看系统日志。
+- **Activity 启动器**：列出已安装应用，启动任意 Activity。
+- **显示 / 隐藏文件**：ES 文件管理器风格隐藏项管理。
+
+### 🔥 搜索与索引
+
+- **Everything 索引搜索**：集成 Everything 的 **ETP/FTP 协议**（`SITE EVERYTHING QUERY`），配置 Windows 索引根目录后即时搜索 FTP 服务器文件。
+- **文件名索引搜索**：为目录建立可重建的文件名索引，海量目录毫秒检索。
+- **文件内容搜索**：在当前目录递归搜索文本内容（区分大小写、仅文本过滤）。
+- **搜索性能**：独立搜索线程 + 并行结果加载，顶层结果即时返回，超大目录不卡顿。
+
+### 🧰 文件增强工具
+
+- **批量重命名**：多选文件后统一加前缀 / 后缀、查找替换、自动编号。
+- **文本编码转换**：UTF-8 / GBK / GB18030 / UTF-16 / BIG5 等编码互转。
+- **时间戳编辑**：修改文件的修改时间。
+
+> 📌 签名功能基于 BouncyCastle 自研实现，v1（JAR 签名）/ v2 / v3 均通过 `apksigner verify` 验证。
+
+---
+
+## 🏆 原版 Material Files 特性
+
+- 🌿 **开源**：轻量、简洁并且安全。
+- 🎨 **Material Design**：遵循 Material Design 规范，注重细节。
+- 🧭 **面包屑导航栏**：点击导航栏所显示路径中的任一文件夹即可快速访问。
+- 👑 **Root 支持**：使用 root 权限查看和管理文件。
+- 📦 **压缩文件支持**：查看、提取和创建常见的压缩文件。
+- 🗄️ **NAS 支持**：查看和管理 FTP、SFTP、SMB 和 WebDAV 服务器上的文件。
+- 🌗 **主题**：可定制的界面颜色，可选纯黑夜间模式。
+- 🐧 **Linux 友好**：类似 Nautilus，支持符号链接、文件权限和 SELinux 上下文。
+- 🛡️ **健壮性**：基于 Linux 系统调用实现，而不是另一个 `ls` 解析器。
+- ⚙️ **实现良好**：Java NIO2 文件 API 与 LiveData 架构。
+
+---
+
+## 📸 预览
+
+<p>
+<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" width="32%" />
+<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.png" width="32%" />
+<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.png" width="32%" /><br/>
+<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.png" width="32%" />
+<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.png" width="32%" />
+<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/6.png" width="32%" />
+</p>
+
+---
+
+## ⬇️ 下载安装
+
+**点击下图前往 Release 下载最新版 APK**（GitHub Actions 自动构建，已签名）：
 
 [<img alt="下载应用，请到 GitHub" src="https://raw.githubusercontent.com/Kunzisoft/Github-badge/main/get-it-on-github.png" width="240">](https://github.com/Sulee7z/MaterialFiles.Sora-Editor/releases/latest/)
 
-[在 Transifex 上帮助翻译](https://www.transifex.com/zhanghai/MaterialFiles/)（[搜索 Android 和 GNOME 的翻译](https://translations.zhanghai.me/)、[微软语言资源](https://learn.microsoft.com/en-us/globalization/reference/microsoft-language-resources)、[MIME 类型翻译](https://gitlab.freedesktop.org/xdg/shared-mime-info/-/tree/master/po)）
+---
 
-## 预览
+## 💖 鸣谢
 
-<p><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" width="32%" /> <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.png" width="32%" /> <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.png" width="32%" />
-<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.png" width="32%" /> <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.png" width="32%" /> <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/6.png" width="32%" /></p>
+- [Hai Zhang](https://github.com/zhanghai) —— 原版 **Material Files** 的作者，感谢他带来了如此优秀的开源文件管理器。
+- [Citrinae-Lime](https://github.com/Citrinae-Lime) —— **Sora-Editor 版本分支**的作者，感谢他对原版的二次开发与维护。
+- [Termux](https://github.com/termux) —— 终端模拟器内核与 Terminal View 组件。
 
-## 特性
+---
 
-- 开源：轻量、简洁并且安全。
-- Material Design：遵循 Material Design 规范，并且注重细节。
-- 面包屑导航栏：点击导航栏所显示路径中的任一文件夹即可快速访问。
-- Root 支持：使用 root 权限查看和管理文件。
-- 压缩文件支持：查看、提取和创建常见的压缩文件。
-- NAS 支持：查看和管理 FTP、SFTP、SMB 和 WebDAV 服务器上的文件。
-- 主题：可定制的界面颜色，以及可选纯黑的夜间模式。
-- Linux 友好：类似 [Nautilus](https://wiki.gnome.org/action/show/Apps/Files)，支持符号链接、文件权限和 SELinux 上下文。
-- 健壮性：使用 Linux 系统调用实现，而不是另一个 [`ls` 解析器](https://news.ycombinator.com/item?id=7994720)。
-- 实现良好：使用正确的方式打造，包括 [Java NIO2 文件 API](https://docs.oracle.com/javase/8/docs/api/java/nio/file/package-summary.html) 和 [LiveData](https://developer.android.com/topic/libraries/architecture/livedata)。
+## 🔧 在定制 ROM 中集成
 
-## 为什么要有 Material Files?
+如果您决定在您的定制 ROM 中集成这个应用，十分感谢！请遵循以下建议：
 
-因为喜爱 Material Design，并且是整洁、精致的 Material Design。
+- 请不要使用这个应用替换 AOSP 的 [DocumentsUI](https://android.googlesource.com/platform/packages/apps/DocumentsUI/) 应用——这个应用不是 DocumentsUI 的替代品，且依赖 DocumentsUI 授予外置 SD 卡访问权限。
+- 请确保应用可以被卸载或禁用。
+- 请避免与 Play/F-Droid 版本冲突，若修改并重新签名请复刻本项目并重命名软件包名。
 
-市面上已经有了许多强大的文件管理器，但它们中的大多数并非 Material Design。而即使在算是 Material Design 的应用之中，它们（或多或少）有着各种设计瑕疵（布局、对齐、留白、图标、字体等等）存在于应用的各个角落，让人难受；然而却又不是特别大的问题，以至于可能没人愿意特意改善。所以还是需要自己编写。
+---
 
-因为想要一个开源的文件管理器。
-
-大多数流行并且可靠的文件管理器都是闭源的，并且我有时会使用它们来查看或修改需要 root 权限的文件，但我心里对于授予 root 权限给闭源应用还是有些不安。毕竟 root 权限意味着对设备的完全访问权限，而这台设备每天跟随着我并且存储着我的个人信息；这样的话，闭源应用实际上做了哪些事情就完全仅仅取决于它们的良心了。
-
-因为想要一个正确实现的文件管理器。
-
-- 这个应用实现了 [Java NIO2 文件 API](https://docs.oracle.com/javase/8/docs/api/java/nio/file/package-summary.html) 作为后端，而不是发明一个自定义的机制来获取文件信息和进行文件操作。后者经常变得与前端逻辑耦合起来，最终成长为一个包含各种东西的混合物（[示例](https://github.com/TeamAmaze/AmazeFileManager/blob/master/app/src/main/java/com/amaze/filemanager/filesystem/HybridFile.java)）。相反地，一个解耦的后端可以使得代码更加干净（更少问题），并且可以更轻松地加入新文件系统的支持。
-
-- 这个应用没有使用 `java.io.File` 或者解析 `ls` 的输出，而是构建了 Linux 系统调用的绑定来正确地访问文件系统。`java.io.File` 是一个陈旧并且缺少许多功能的 API，并且无法正确处理符号链接，因此许多人宁愿解析 `ls` 的输出。然而解析 `ls` 的输出不仅缓慢，而且[不可靠](https://news.ycombinator.com/item?id=7994720)，同时也正是 [Cabinet](https://github.com/aminb/cabinet/blob/master/app/src/main/java/com/afollestad/cabinet/file/root/LsParser.java) 在新版本 Android 上无法正确运行的原因。而通过使用 Linux 系统调用，这个应用可以做到快速流畅，并且能够处理例如 Linux 权限、符号链接以至于 SELinux 上下文等等高级特性。应用也可以正确地处理含有无效 UTF-8 编码的文件名，因为应用中的路径没有简单地使用 Java 的 `String` 存储，而大多数其他文件管理器却并非如此，因此无法正确地进行文件操作。
-
-- 这个应用的前端是基于现代的 `ViewModel` 和 `LiveData` 实现的，使得代码结构更加清晰并且支持转屏。应用也可以正确地处理文件操作中的错误、文件冲突和前台/后台状态。
-
-总而言之，这个应用尽力遵守 Android 上的最佳实践并且做正确的事，同时保持源代码干净和可维护。
-
-因为事情可以被人做好。
-
-[Nautilus](https://wiki.gnome.org/Apps/Files) 是一个设计美观并且用户友好的 Linux 桌面上的文件管理器，并且同时做到了 Linux 友好。[Phonograph](https://github.com/kabouzeid/Phonograph) 是一个开源的 Material Design 音乐播放其应用（我自己已经使用多年），而它也有着绝佳的 Material Design 设计和实现。
-
-所以，是时候再编写一个 Android 文件管理器了。
-
-## 在定制 ROM 中集成
-
-如果您决定在您的定制 ROM 中集成这个应用，十分感谢！但是鉴于我曾收到过多起由不适当的集成导致的用户反馈，请允许我为了更好的用户体验提供一些关于正确集成这个应用的建议：
-
-- 请不要使用这个应用替换 AOSP 的 [DocumentsUI](https://android.googlesource.com/platform/packages/apps/DocumentsUI/) 应用。这个应用没有被设计成 DocumentsUI 的替代品并且缺少许多 DocumentsUI 中的功能——实际上，这个应用需要 DocumentsUI 来授予外置 SD 卡的访问权限。
-
-- 请确保这个应用可以被卸载或至少禁用。某些用户可能出于各种原因不想要这个应用，并且会在发现无法移除这个应用时十分恼火。
-
-- 请避免和这个应用的 Play/F-Droid 版本冲突。应用商店无法更新使用了不同证书进行签名的应用，所以您可以预置一个由我（或 F-Droid）签名的 APK 以使用户能够在 Play 或 F-Droid 上更新这个应用；或者如果您需要使用其他的证书进行签名（并进行其他更改），请复刻本项目并重命名它的软件包名。
-
-## 许可证
+## 📄 许可证
 
     Copyright (C) 2024 Hai Zhang
 

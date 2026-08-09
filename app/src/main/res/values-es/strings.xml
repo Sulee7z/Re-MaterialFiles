@@ -683,6 +683,7 @@
         <item>Sólo acceso normal</item>
         <item>Automático</item>
         <item>Sólo acceso administrativo</item>
+        <item>Shizuku</item>
     </string-array>
     <string name="settings_archive_file_name_encoding_title">Codificación del nombre de archivo</string>
     <string name="settings_open_apk_default_action_title">Al abrir un paquete de Android</string>

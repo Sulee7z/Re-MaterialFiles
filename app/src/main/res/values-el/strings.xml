@@ -652,6 +652,7 @@
         <item>Μόνο κανονική πρόσβαση</item>
         <item>Αυτόματη</item>
         <item>Μόνο πρόσβαση ρίζας</item>
+        <item>Shizuku</item>
     </string-array>
     <string name="settings_archive_file_name_encoding_title">Κωδικοποίηση ονόματος αρχείου αρχειοθήκης</string>
     <string name="settings_open_apk_default_action_title">Άνοιγμα πακέτου Android</string>

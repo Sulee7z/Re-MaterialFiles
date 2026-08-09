@@ -537,10 +537,12 @@
     <string name="storage_list_title">Storage</string>
     <string name="storage_list_empty">No storage</string>
     <string name="storage_add_storage_title">Add storage</string>
-    <string name="storage_add_storage_android_data" translatable="false">Android/data</string>
-    <string name="storage_add_storage_android_obb" translatable="false">Android/obb</string>
+<string name="storage_add_storage_android_data" translatable="false">Android/data</string>
+<string name="storage_add_storage_android_data_grant" translatable="false">Android/data (grant access)</string>
+<string name="storage_add_storage_android_obb" translatable="false">Android/obb</string>
     <string name="storage_add_storage_document_tree">External storage</string>
     <string name="storage_add_storage_ftp_server">FTP server</string>
+    <string name="storage_add_storage_everything_server">Everything server</string>
     <string name="storage_add_storage_sftp_server">SFTP server</string>
     <string name="storage_add_storage_smb_server">SMB server</string>
     <string name="storage_add_storage_webdav_server">WebDAV server</string>
@@ -561,6 +563,8 @@
     <string name="ftp_cache_done">Cached locally</string>
     <string name="storage_edit_ftp_server_title_edit">Edit FTP server</string>
     <string name="storage_edit_ftp_server_title_add">Add FTP server</string>
+    <string name="storage_edit_everything_server_title_edit">Edit Everything server</string>
+    <string name="storage_edit_everything_server_title_add">Add Everything server</string>
     <string name="storage_edit_ftp_server_host">Hostname</string>
     <string name="storage_edit_ftp_server_host_error_empty">Enter a hostname</string>
     <string name="storage_edit_ftp_server_host_error_invalid">Invalid hostname</string>
@@ -956,6 +960,7 @@
         <item>Normal access only</item>
         <item>Automatic</item>
         <item>Root access only</item>
+        <item>Shizuku</item>
     </string-array>
     <string name="settings_archive_file_name_encoding_title">Archive file name encoding</string>
     <string name="settings_open_apk_default_action_title">Open Android package</string>

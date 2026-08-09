@@ -9,6 +9,8 @@ import android.os.Bundle
 import android.view.View
 import androidx.fragment.app.commit
 import me.zhanghai.android.files.app.AppActivity
+import me.zhanghai.android.files.util.getArgsOrNull
+import me.zhanghai.android.files.util.putArgs
 
 class AddDocumentTreeActivity : AppActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -17,7 +19,9 @@ class AddDocumentTreeActivity : AppActivity() {
         // Calls ensureSubDecor().
         findViewById<View>(android.R.id.content)
         if (savedInstanceState == null) {
-            supportFragmentManager.commit { add(android.R.id.content, AddDocumentTreeFragment()) }
+            val initialUri = intent.extras?.getArgsOrNull<AddDocumentTreeFragment.Args>()?.initialUri
+            val fragment = AddDocumentTreeFragment().putArgs(AddDocumentTreeFragment.Args(initialUri))
+            supportFragmentManager.commit { add(fragment, AddDocumentTreeFragment::class.java.name) }
         }
     }
 }

@@ -46,12 +46,50 @@ object SuiFileServiceLauncher {
         }
     }
 
+    // Shizuku can be started with ADB or root. When it is started with ADB (without root/Sui),
+    // the user service will run as shell (uid 2000) which is allowed to access Android/data of
+    // other applications via the Linux file system, so the user can browse it without root.
+    // @see <a href="https://shizuku.rikka.app/introduction/">Shizuku</a>
+    // Only checks whether the Shizuku binder is reachable, regardless of whether our permission
+    // has been granted yet; the permission request is handled in launchService() so that it can
+    // be triggered from file access instead of being silently skipped.
+    @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.M)
+    fun isShizukuBinderAvailable(): Boolean {
+        synchronized(lock) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+                return false
+            }
+            return try {
+                Shizuku.pingBinder()
+            } catch (e: Throwable) {
+                // Shizuku isn't installed, or the binder isn't available yet.
+                false
+            }
+        }
+    }
+
+    @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.M)
+    fun isShizukuAvailable(): Boolean {
+        synchronized(lock) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+                return false
+            }
+            return try {
+                Shizuku.pingBinder()
+                    && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+            } catch (e: Throwable) {
+                // Shizuku isn't installed, or the binder isn't available yet.
+                false
+            }
+        }
+    }
+
     @RequiresApi(Build.VERSION_CODES.M)
     @Throws(RemoteFileSystemException::class)
     fun launchService(): IRemoteFileService {
         synchronized(lock) {
-            if (!isSuiAvailable()) {
-                throw RemoteFileSystemException("Sui isn't available")
+            if (!isSuiAvailable() && !isShizukuBinderAvailable()) {
+                throw RemoteFileSystemException("Shizuku isn't available")
             }
             if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
                 val granted = try {

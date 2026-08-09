@@ -652,6 +652,7 @@
         <item>Bare vanlig tilgang</item>
         <item>Automatisk</item>
         <item>Bare tilgang som rot</item>
+        <item>Shizuku</item>
     </string-array>
     <string name="settings_archive_file_name_encoding_title">Tegnkoding for filnavn i arkiv</string>
     <string name="settings_open_apk_default_action_title">Åpne Android-pakke</string>

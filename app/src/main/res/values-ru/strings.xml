@@ -716,6 +716,7 @@
         <item>Только обычный доступ</item>
         <item>Автоматически</item>
         <item>Только root-доступ</item>
+        <item>Shizuku</item>
     </string-array>
     <string name="settings_archive_file_name_encoding_title">Кодировка имени файла архива</string>
     <string name="settings_open_apk_default_action_title">Открытие Android-пакета</string>

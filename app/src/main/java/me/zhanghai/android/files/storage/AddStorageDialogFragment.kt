@@ -60,10 +60,18 @@ class AddStorageDialogFragment : AppCompatDialogFragment() {
                         )
                     )
             } else null,
+            R.string.storage_add_storage_android_data_grant to
+                AddDocumentTreeActivity::class.createIntent().putArgs(
+                    AddDocumentTreeFragment.Args(ExternalStorageProviderHacks.DOCUMENT_URI_ANDROID_DATA)
+                ),
             R.string.storage_add_storage_document_tree to
                 AddDocumentTreeActivity::class.createIntent(),
             R.string.storage_add_storage_ftp_server to
                 EditFtpServerActivity::class.createIntent().putArgs(EditFtpServerFragment.Args()),
+            R.string.storage_add_storage_everything_server to
+                EditFtpServerActivity::class.createIntent().putArgs(
+                    EditFtpServerFragment.Args(everything = true)
+                ),
             R.string.storage_add_storage_sftp_server to
                 EditSftpServerActivity::class.createIntent().putArgs(EditSftpServerFragment.Args()),
             R.string.storage_add_storage_smb_server to

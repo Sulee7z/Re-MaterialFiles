@@ -686,6 +686,7 @@
         <item>Pouze normální přístup</item>
         <item>Automatický</item>
         <item>Pouze přístup root</item>
+        <item>Shizuku</item>
     </string-array>
     <string name="settings_archive_file_name_encoding_title">Kódování názvu archivovaného souboru</string>
     <string name="settings_open_apk_default_action_title">Otevírání balíčku Android</string>

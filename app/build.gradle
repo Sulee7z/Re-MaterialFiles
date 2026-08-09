@@ -186,6 +186,10 @@ dependencies {
     implementation 'dev.chrisbanes:insetter-ktx:0.3.1'
     implementation 'dev.rikka.rikkax.preference:simplemenu-preference:1.0.3'
     implementation 'dev.rikka.shizuku:api:13.1.5'
+    // ShizukuProvider is required for the app to receive the Shizuku binder from the Shizuku app
+    // in ADB mode (without root), which is used by SuiFileServiceLauncher to run our file service
+    // with shell privileges so that Android/data can be accessed without root.
+    implementation 'dev.rikka.shizuku:provider:13.1.5'
     implementation ('eu.agno3.jcifs:jcifs-ng:2.1.10') {
         exclude group: 'org.bouncycastle', module: 'bcprov-jdk18on'
     }

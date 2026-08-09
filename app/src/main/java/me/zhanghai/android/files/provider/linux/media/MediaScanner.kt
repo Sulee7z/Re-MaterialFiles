@@ -15,6 +15,7 @@ import androidx.annotation.RequiresApi
 import java8.nio.channels.FileChannel
 import me.zhanghai.android.files.app.application
 import me.zhanghai.android.files.app.contentResolver
+import me.zhanghai.android.files.app.isApplicationInitialized
 import me.zhanghai.android.files.hiddenapi.RestrictedHiddenApi
 import me.zhanghai.android.files.provider.common.DelegateFileChannel
 import me.zhanghai.android.files.provider.root.isRunningAsRoot
@@ -29,6 +30,12 @@ import java.io.IOException
 object MediaScanner {
     fun scan(file: File, isDeleted: Boolean = false) {
         if (isRunningAsRoot) {
+            return
+        }
+        if (!isApplicationInitialized()) {
+            // We may be running inside a root user service process (e.g. via Shizuku with ADB)
+            // where the app's Application/AppProvider has never been initialized, so scanning
+            // through MediaScannerConnection is not possible (and not needed there).
             return
         }
         MediaScannerConnection.scanFile(application, arrayOf(file.path), null) { _, _ ->
@@ -87,7 +94,7 @@ object MediaScanner {
     }
 
     fun createScanOnCloseFileChannel(fileChannel: FileChannel, file: File): FileChannel =
-        if (isRunningAsRoot) {
+        if (isRunningAsRoot || !isApplicationInitialized()) {
             fileChannel
         } else {
             object : DelegateFileChannel(fileChannel) {

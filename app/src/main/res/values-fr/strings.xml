@@ -685,6 +685,7 @@
         <item>Accès normal uniquement</item>
         <item>Automatique</item>
         <item>Accès root uniquement</item>
+        <item>Shizuku</item>
     </string-array>
     <string name="settings_archive_file_name_encoding_title">Encodage du nom de l\'archive</string>
     <string name="settings_open_apk_default_action_title">Ouvrir le paquet Android</string>

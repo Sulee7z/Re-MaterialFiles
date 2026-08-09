@@ -593,6 +593,7 @@
         <item>Només amb accés normal</item>
         <item>Automàtic</item>
         <item>Només amb accés root</item>
+        <item>Shizuku</item>
     </string-array>
     <string name="settings_archive_file_name_encoding_title">Codificació dels noms dels fitxers als arxius</string>
     <string name="settings_open_apk_default_action_title">Obre els paquets d\'Android</string>

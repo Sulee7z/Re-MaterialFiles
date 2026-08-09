@@ -621,6 +621,7 @@
         <item>일반 액세스만</item>
         <item>자동</item>
         <item>루트 액세스만</item>
+        <item>Shizuku</item>
     </string-array>
     <string name="settings_archive_file_name_encoding_title">압축 파일 이름 인코딩</string>
     <string name="settings_open_apk_default_action_title">Android 패키지(APK)를 열 때 작업</string>

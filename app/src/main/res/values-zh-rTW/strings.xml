@@ -619,6 +619,7 @@
         <item>僅普通存取</item>
         <item>自動</item>
         <item>僅 root 存取</item>
+        <item>Shizuku</item>
     </string-array>
     <plurals name="settings_root_strategy_message_format">
         <item quantity="other">您有 %1$,d 個正在執行的檔案作業，因此現在變更 root 存取模式可能會導致未預期的錯誤。您確定要現在變更它嗎？</item>

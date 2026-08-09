@@ -70,11 +70,20 @@ class EditFtpServerFragment : Fragment() {
         activity.lifecycleScope.launchWhenCreated {
             activity.setSupportActionBar(binding.toolbar)
             activity.supportActionBar!!.setDisplayHomeAsUpEnabled(true)
+            val server = args.server
             activity.setTitle(
-                if (args.server != null) {
-                    R.string.storage_edit_ftp_server_title_edit
+                if (server != null) {
+                    if (args.everything || server.authority.everythingWindowsRoot.isNotEmpty()) {
+                        R.string.storage_edit_everything_server_title_edit
+                    } else {
+                        R.string.storage_edit_ftp_server_title_edit
+                    }
                 } else {
-                    R.string.storage_edit_ftp_server_title_add
+                    if (args.everything) {
+                        R.string.storage_edit_everything_server_title_add
+                    } else {
+                        R.string.storage_edit_ftp_server_title_add
+                    }
                 }
             )
         }
@@ -179,6 +188,11 @@ class EditFtpServerFragment : Fragment() {
                 }
             }
         }
+        // Show the Everything index root field only when adding/editing an
+        // Everything server (its FTP server page no longer exposes it).
+        val ftpServer = args.server
+        binding.everythingRootLayout.isVisible =
+            args.everything || ftpServer?.authority?.everythingWindowsRoot?.isNotEmpty() == true
     }
 
     private fun updateNamePlaceholder() {
@@ -369,7 +383,8 @@ class EditFtpServerFragment : Fragment() {
     @Parcelize
     class Args(
         val server: FtpServer? = null,
-        val host: String? = null
+        val host: String? = null,
+        val everything: Boolean = false
     ) : ParcelableArgs
 
     private enum class AuthenticationType {

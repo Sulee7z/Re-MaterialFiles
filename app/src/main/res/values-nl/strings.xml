@@ -652,6 +652,7 @@
         <item>Alleen reguliere toegang</item>
         <item>Automatisch</item>
         <item>Alleen roottoegang</item>
+        <item>Shizuku</item>
     </string-array>
     <string name="settings_archive_file_name_encoding_title">Tekenreeks van archiefbestandsnaam</string>
     <string name="settings_open_apk_default_action_title">Android-pakket openen</string>

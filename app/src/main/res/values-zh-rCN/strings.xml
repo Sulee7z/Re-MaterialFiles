@@ -413,6 +413,7 @@
     <string name="storage_add_storage_title">添加存储空间</string>
     <string name="storage_add_storage_document_tree">外部存储空间</string>
     <string name="storage_add_storage_ftp_server">FTP 服务器</string>
+    <string name="storage_add_storage_everything_server">Everything 服务器</string>
     <string name="storage_add_storage_sftp_server">SFTP 服务器</string>
     <string name="storage_add_storage_smb_server">SMB 服务器</string>
     <string name="storage_add_storage_webdav_server">WebDAV 服务器</string>
@@ -433,6 +434,8 @@
     <string name="ftp_cache_done">已缓存到本地</string>
     <string name="storage_edit_ftp_server_title_edit">编辑 FTP 服务器</string>
     <string name="storage_edit_ftp_server_title_add">添加 FTP 服务器</string>
+    <string name="storage_edit_everything_server_title_edit">编辑 Everything 服务器</string>
+    <string name="storage_edit_everything_server_title_add">连接 Everything 服务器</string>
     <string name="storage_edit_ftp_server_host">主机名</string>
     <string name="storage_edit_ftp_server_host_error_empty">输入主机名</string>
     <string name="storage_edit_ftp_server_host_error_invalid">无效主机名</string>
@@ -785,6 +788,7 @@
         <item>仅普通访问</item>
         <item>自动</item>
         <item>仅 root 访问</item>
+        <item>Shizuku</item>
     </string-array>
     <plurals name="settings_root_strategy_message_format">
         <item quantity="other">您有 %1$,d 个正在运行的文件操作，因此现在更改 root 访问模式可能会导致意外错误。您确定要现在更改它吗？</item>

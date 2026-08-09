@@ -592,6 +592,7 @@
         <item>Numai acces normal</item>
         <item>Automat</item>
         <item>Numai acces root</item>
+        <item>Shizuku</item>
     </string-array>
     <string name="settings_archive_file_name_encoding_title">Codificarea numelui fișierului arhivă</string>
     <string name="settings_open_apk_default_action_title">Deschide pachetul Android</string>

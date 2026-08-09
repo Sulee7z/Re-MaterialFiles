@@ -537,6 +537,7 @@
         <item>Hanya akses normal</item>
         <item>Otomatis</item>
         <item>Hanya akses root</item>
+        <item>Shizuku</item>
     </string-array>
     <string name="settings_archive_file_name_encoding_title">Enkode nama berkas arsip</string>
     <string name="settings_open_apk_default_action_title">Buka paket Android</string>

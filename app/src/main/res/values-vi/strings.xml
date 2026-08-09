@@ -516,6 +516,7 @@
         <item>Chỉ dùng quyền truy cập thông thường</item>
         <item>Tự động</item>
         <item>Chỉ dùng quyền truy cập root</item>
+        <item>Shizuku</item>
     </string-array>
     <string name="settings_archive_file_name_encoding_title">Bảng mã kí tự của tên tệp nén</string>
     <string name="settings_open_apk_default_action_title">Mở gói cài đặt Android</string>

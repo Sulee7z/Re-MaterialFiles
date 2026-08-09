@@ -537,6 +537,7 @@
         <item>Vain normaalikäyttö</item>
         <item>Automaattinen</item>
         <item>Vain root-käyttö</item>
+        <item>Shizuku</item>
     </string-array>
     <string name="settings_archive_file_name_encoding_title">Pakkausten tiedostonimen koodaus</string>
     <string name="settings_open_apk_default_action_title">Avaa Android-pakkaus</string>
