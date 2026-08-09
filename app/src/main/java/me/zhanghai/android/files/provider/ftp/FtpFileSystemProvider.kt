@@ -45,6 +45,7 @@ import me.zhanghai.android.files.provider.common.toLinkOptions
 import me.zhanghai.android.files.provider.common.toOpenOptions
 import me.zhanghai.android.files.provider.ftp.client.Authority
 import me.zhanghai.android.files.provider.ftp.client.Client
+import me.zhanghai.android.files.provider.ftp.client.EverythingHttpClient
 import me.zhanghai.android.files.provider.ftp.client.Mode
 import me.zhanghai.android.files.provider.ftp.client.Protocol
 import me.zhanghai.android.files.provider.ftp.client.mapEverythingPathToRemotePath
@@ -456,17 +457,20 @@ object FtpFileSystemProvider : FileSystemProvider(), PathObservableProvider, Sea
         directory as? FtpPath ?: throw ProviderMismatchException(directory.toString())
         val authority = directory.authority
         val windowsRoot = authority.everythingWindowsRoot
-        val supportsEverything = try {
-            windowsRoot.isNotEmpty() && Client.supportsEverythingSearch(authority)
-        } catch (e: IOException) {
-            false
-        }
-        if (supportsEverything) {
+        // The Everything HTTP server JSON API is used for search (the ETP/FTP QUERY flow
+        // turned out to be unreliable against real servers): it is the same API the web UI
+        // and the EverythingDroid client use, and is confirmed to work.
+        if (windowsRoot.isNotEmpty() && authority.everythingHttpPort != 0) {
             try {
                 val windowsScopePath =
                     mapRemotePathToEverythingWindowsPath(directory.remotePath, windowsRoot)
-                Client.searchEverything(
-                    authority, query, windowsScopePath, intervalMillis
+                val scopedQuery = if (!windowsScopePath.isNullOrEmpty()) {
+                    "path:\"$windowsScopePath\" $query"
+                } else {
+                    query
+                }
+                EverythingHttpClient.searchEverything(
+                    authority, scopedQuery, intervalMillis
                 ) { windowsPaths ->
                     val paths = windowsPaths.mapNotNull { windowsPath ->
                         val remotePath =

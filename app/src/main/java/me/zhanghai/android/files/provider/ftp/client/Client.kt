@@ -48,12 +48,7 @@ object Client {
     // below it so a borrowed client never gets a 421 right after the liveness check.
     private const val MAX_POOLED_IDLE_MILLIS = 60_000L
 
-    // Matches the cap used by the local walk search (WalkFileTreeSearchable): beyond this
-    // many matches the result loader becomes the bottleneck, so stop pulling more.
-    private const val MAX_EVERYTHING_RESULTS = 1000
-
     private val directoryFilesCache = Collections.synchronizedMap(WeakHashMap<Path, FTPFile>())
-
     @Throws(IOException::class)
     private fun acquireClient(authority: Authority): FTPClient {
         while (true) {
@@ -163,117 +158,6 @@ object Client {
             return block(client)
         } finally {
             releaseClient(authority, client)
-        }
-    }
-
-    @Throws(IOException::class)
-    fun supportsEverythingSearch(authority: Authority): Boolean =
-        useClient(authority) { client -> client.hasFeature("EVERYTHING") }
-
-    /**
-     * Searches the Everything ETP/FTP server index. Result lines are raw Windows paths
-     * delivered in batches to [listener].
-     *
-     * @param windowsScopePath the current directory's real Windows path on the Everything
-     *   server, used to scope the query with `path:` so the server only returns matches
-     *   under that directory instead of the whole index. When null/empty, the query is
-     *   sent as-is (full index search).
-     */
-    @Throws(IOException::class)
-    fun searchEverything(
-        authority: Authority,
-        query: String,
-        windowsScopePath: String?,
-        intervalMillis: Long,
-        listener: (List<String>) -> Unit
-    ) {
-        useClient(authority) { client ->
-            // Scoping the search server-side is the decisive performance win: without
-            // `path:`, Everything searches its whole index and the app would have to
-            // pull and discard thousands of unrelated matches. Everything's `path:`
-            // function is a substring match, so the client still re-filters below.
-            val scopedQuery = if (!windowsScopePath.isNullOrEmpty()) {
-                "path:\"$windowsScopePath\" $query"
-            } else {
-                query
-            }
-            // SEARCH / PATH_COLUMN / COUNT configure the query state on the server;
-            // each is acknowledged with a plain 200 consumed by sendCommand().
-            client.sendCommand("SITE", "EVERYTHING SEARCH $scopedQuery")
-            client.sendCommand("SITE", "EVERYTHING PATH_COLUMN 1")
-            // Safety cap against pathological indexes, not a pagination scheme: with
-            // `path:` scoping this should rarely be reached.
-            client.sendCommand("SITE", "EVERYTHING COUNT 20000")
-            // QUERY runs the search asynchronously server-side and sends the results
-            // back on the CONTROL connection as one multi-line reply once complete:
-            //   200-Query results
-            //    RESULT_COUNT <count>
-            //    PATH <dir>            (PATH_COLUMN 1)
-            //    ... (optional attribute lines)
-            //    FILE <name> / FOLDER <name>
-            //   ...
-            //   200 End.
-            // There is no data connection involved, so sendCommand() + replyStrings()
-            // is the whole protocol; the QUERY reply arrives after the server search
-            // finishes, which is why sendCommand() blocks until then.
-            val replyCode = client.sendCommand("SITE", "EVERYTHING QUERY")
-            if (!FTPReply.isPositiveCompletion(replyCode)) {
-                client.throwNegativeReplyCodeException()
-            }
-            val replyLines = client.replyStrings
-                ?: throw IOException("No reply lines from EVERYTHING QUERY")
-            val batch = mutableListOf<String>()
-            var resultCount = 0
-            var lastProgressMillis = System.currentTimeMillis()
-            var currentPath: String? = null
-            for (line in replyLines) {
-                // Continuation lines of a multi-line reply keep their leading space;
-                // strip exactly one so names that themselves start with a space (the
-                // server deliberately supports them) are preserved.
-                val trimmed = if (line.startsWith(" ")) line.substring(1) else line
-                when {
-                    trimmed.startsWith("PATH ") -> {
-                        currentPath = trimmed.removePrefix("PATH ")
-                    }
-                    trimmed.startsWith("FILE ") || trimmed.startsWith("FOLDER ") -> {
-                        val name = if (trimmed.startsWith("FOLDER ")) {
-                            trimmed.removePrefix("FOLDER ")
-                        } else {
-                            trimmed.removePrefix("FILE ")
-                        }
-                        // PATH is the result's directory; FILE/FOLDER is its name, so
-                        // the full Windows path is <dir>\<name>. The trailing
-                        // backslash of the directory is normalized away (drive roots
-                        // come as "C:\"), so a single separator is always used.
-                        val windowsPath = currentPath?.let { dir ->
-                            if (dir.isEmpty()) {
-                                name
-                            } else {
-                                "${dir.trimEnd('\\')}\\$name"
-                            }
-                        } ?: name
-                        batch.add(windowsPath)
-                        resultCount++
-                        val currentTimeMillis = System.currentTimeMillis()
-                        if (currentTimeMillis >= lastProgressMillis + intervalMillis) {
-                            listener(batch.toList())
-                            batch.clear()
-                            lastProgressMillis = currentTimeMillis
-                        }
-                        // Cap client-side like the local walk search so a huge match
-                        // set can't flood the result loader.
-                        if (resultCount >= MAX_EVERYTHING_RESULTS) {
-                            break
-                        }
-                        if (Thread.interrupted()) {
-                            throw java.io.InterruptedIOException()
-                        }
-                    }
-                }
-            }
-            if (batch.isNotEmpty()) {
-                listener(batch)
-            }
         }
     }
 

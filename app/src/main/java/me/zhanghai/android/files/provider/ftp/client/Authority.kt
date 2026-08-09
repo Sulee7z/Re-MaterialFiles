@@ -19,7 +19,10 @@ data class Authority(
     val username: String,
     val mode: Mode,
     val encoding: String,
-    val everythingWindowsRoot: String = ""
+    val everythingWindowsRoot: String = "",
+    // Port of the Everything HTTP server used for search (JSON API); 0 means
+    // unset, in which case the default of 80 is used.
+    val everythingHttpPort: Int = 0
 ) : Parcelable {
     fun toUriAuthority(): UriAuthority {
         val userInfo = username.takeIfNotEmpty()
