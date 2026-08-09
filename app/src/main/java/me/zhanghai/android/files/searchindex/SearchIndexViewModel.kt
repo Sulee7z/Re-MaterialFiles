@@ -63,11 +63,5 @@ class SearchIndexViewModel : ViewModel() {
         )
     }
 
-    fun getIndexRoots(): List<Path> =
-        me.zhanghai.android.files.storage.StorageVolumeListLiveData.value
-            ?.filter { it.state == "mounted" }
-            ?.mapNotNull { volume ->
-                val directory = volume.directory ?: return@mapNotNull null
-                Paths.get(directory.absolutePath)
-            } ?: emptyList()
+    fun getIndexRoots(): List<Path> = FileIndexer.getIndexRoots()
 }

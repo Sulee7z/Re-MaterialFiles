@@ -11,8 +11,10 @@ import java8.nio.file.Paths
 import java8.nio.file.attribute.BasicFileAttributes
 import me.zhanghai.android.files.file.FileItem
 import me.zhanghai.android.files.file.MimeType
+import me.zhanghai.android.files.file.asMimeType
 import me.zhanghai.android.files.filelist.name
 import me.zhanghai.android.files.filelist.getCollationKeyForFileName
+import me.zhanghai.android.files.provider.common.AndroidFileTypeDetector
 import me.zhanghai.android.files.provider.common.isHidden
 import me.zhanghai.android.files.provider.common.readAttributes
 import me.zhanghai.android.files.provider.common.search
@@ -46,8 +48,14 @@ class SearchFileListLiveData(
     private val scopedPath: Path
     private val searchQuery: SearchQuery
 
+    /** Whether the user explicitly scoped the query with a "/" prefix (e.g. "/ target" or
+     *  "/data/app apk"). Explicit scopes fall back to a full tree walk on empty index hits
+     *  so newly created files (not yet in the index) are still found. */
+    private val isExplicitPathScope: Boolean
+
     init {
         val parsed = SearchQueryParser.parse(query)
+        isExplicitPathScope = parsed.pathPrefix != null
         scopedPath = parsed.pathPrefix?.let { pathText ->
             try {
                 Paths.get(pathText)
@@ -144,6 +152,12 @@ class SearchFileListLiveData(
             e.printStackTrace()
             null
         } ?: return null
+        // An explicit "/path" or "/ keyword" scope must find files even if they were created
+        // after the index was built, so an empty index hit falls back to the tree walk. Plain
+        // (non-scoped) searches trust the index for speed.
+        if (results.isEmpty() && isExplicitPathScope) {
+            return null
+        }
         return results.mapNotNull { result ->
             try {
                 Paths.get(result.path)
@@ -189,8 +203,17 @@ class SearchFileListLiveData(
             BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS
         )
         val isHidden = isHidden
+        // Guess the MIME type from the extension (cheap, no file header reads) instead of
+        // using GENERIC, so the built-in openers (image viewer/editor/analyzers) work on
+        // search results exactly like they do on the file list.
+        val mimeType = try {
+            AndroidFileTypeDetector.getMimeType(this, attributes).asMimeType()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            MimeType.GENERIC
+        }
         return FileItem(
-            this, nameCollationKey, attributes, null, null, isHidden, MimeType.GENERIC
+            this, nameCollationKey, attributes, null, null, isHidden, mimeType
         )
     }
 

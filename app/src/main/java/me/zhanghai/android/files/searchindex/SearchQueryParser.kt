@@ -64,13 +64,21 @@ object SearchQueryParser {
             return SearchQuery()
         }
         var pathPrefix: String? = null
-        if (query.startsWith("/") && query != "/") {
-            // Everything-style path scope: "/path/to/folder keyword" (first space separates).
-            val spaceIndex = query.indexOf(' ')
-            val pathText = if (spaceIndex == -1) query else query.substring(0, spaceIndex)
-            if (isPathLike(pathText)) {
-                pathPrefix = normalizePathPrefix(pathText.trimEnd('/'))
-                query = if (spaceIndex == -1) "" else query.substring(spaceIndex + 1).trim()
+        if (query.startsWith("/")) {
+            if (query == "/" || query.startsWith("/ ")) {
+                // "/" or "/ keyword": search the root filesystem. Only useful when root/
+                // Shizuku access is available, since the /data trees are indexed then; the
+                // current directory scope is never widened by this form.
+                pathPrefix = "/"
+                query = if (query == "/") "" else query.substring(2).trim()
+            } else {
+                // Everything-style path scope: "/path/to/folder keyword" (first space separates).
+                val spaceIndex = query.indexOf(' ')
+                val pathText = if (spaceIndex == -1) query else query.substring(0, spaceIndex)
+                if (isPathLike(pathText)) {
+                    pathPrefix = normalizePathPrefix(pathText.trimEnd('/'))
+                    query = if (spaceIndex == -1) "" else query.substring(spaceIndex + 1).trim()
+                }
             }
         }
 

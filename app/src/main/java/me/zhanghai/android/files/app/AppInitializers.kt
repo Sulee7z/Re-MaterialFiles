@@ -112,13 +112,8 @@ private fun preloadSearchIndexIfNeeded() {
         } catch (e: InterruptedException) {
             return@Thread
         }
-        val roots = StorageVolumeListLiveData.value
-            ?.filter { it.state == "mounted" }
-            ?.mapNotNull { volume ->
-                val directory = volume.directory ?: return@mapNotNull null
-                java8.nio.file.Paths.get(directory.absolutePath)
-            }
-            ?: emptyList()
+        // Storage volumes, plus /data trees when root/Shizuku is available (see FileIndexer).
+        val roots = FileIndexer.getIndexRoots()
         if (roots.isEmpty()) {
             return@Thread
         }
