@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag to upload to (e.g. v1.7.5, optional)'
+        description: 'Release tag to upload to (e.g. v1.7.7, optional)'
         required: false
         type: string
   push:
@@ -32,12 +32,12 @@ jobs:
       with:
         show-progress: false
 
-    - name: Get "latest" tag and short SHA
+    - name: Get version and short SHA
       id: get_tag
       run: |
-        tag=$(curl -s 'https://api.github.com/repos/zhanghai/MaterialFiles/tags?per_page=1' | grep -Po '"name": "\K[^"]+' || true)
+        tag=$(grep -Po "versionName '\K[^']+" app/build.gradle)
         if [ -z "$tag" ]; then
-          tag='1.7.4'
+          tag='1.7.7'
         fi
         echo "tag=$tag" >> $GITHUB_OUTPUT
         echo "Short_SHA=$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_OUTPUT
@@ -46,7 +46,7 @@ jobs:
       id: release_tag
       run: |
         if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-          # Pushed for an explicit tag (e.g. v1.7.5): upload to that tag.
+          # Pushed for an explicit tag (e.g. v1.7.7): upload to that tag.
           echo "release=$GITHUB_REF_NAME" >> $GITHUB_OUTPUT
         elif [ -n "${{ inputs.release_tag }}" ]; then
           # Manual run with a chosen tag: upload to it.
