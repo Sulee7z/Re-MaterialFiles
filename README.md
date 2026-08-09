@@ -3,7 +3,7 @@
 [![Android CI 状态](https://img.shields.io/github/actions/workflow/status/Sulee7z/MaterialFiles.Sora-Editor/android.yml?style=for-the-badge&label=%E5%8E%9F%E7%89%88%20%E7%8A%B6%E6%80%81)](https://github.com/Sulee7z/MaterialFiles.Sora-Editor/actions/workflows/android.yml)
 [![Sora-Editor版 状态](https://img.shields.io/github/actions/workflow/status/Sulee7z/MaterialFiles.Sora-Editor/Sora-Editor.yml?style=for-the-badge&label=Sora-Editor%E7%89%88%20%E7%8A%B6%E6%80%81)](https://github.com/Sulee7z/MaterialFiles.Sora-Editor/actions/workflows/Sora-Editor.yml)
 [![GitHub 发行版](https://img.shields.io/github/v/release/Sulee7z/MaterialFiles.Sora-Editor?include_prereleases&display_name=release&style=for-the-badge)](https://github.com/Sulee7z/MaterialFiles.Sora-Editor/releases)
-[![许可证](https://img.shields.io/github/license/zhanghai/MaterialFiles?color=blue&style=for-the-badge)](LICENSE)
+[![许可证](https://img.shields.io/github/license/Sulee7z/Re-MaterialFiles?color=blue&style=for-the-badge)](LICENSE)
 [![支持 Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-green?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com/studio)
 
 > ### 🚀 文件管理器 × APK 逆向分析工具箱
