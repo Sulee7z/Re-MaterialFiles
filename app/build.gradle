@@ -23,6 +23,19 @@ apply plugin: 'com.google.gms.google-services'
 apply plugin: 'com.google.firebase.crashlytics'
 //#endif
 
+// Version is derived from version.properties (single source of truth), so bumping the
+// release only requires editing that one file: versionName, versionCode and the CI tag
+// all follow automatically.
+def versionProperties = new Properties()
+def versionPropertiesFile = rootProject.file('version.properties')
+if (versionPropertiesFile.exists()) {
+    versionPropertiesFile.withInputStream { versionProperties.load(it) }
+}
+def versionMajor = versionProperties.getProperty('versionMajor', '1').toInteger()
+def versionMinor = versionProperties.getProperty('versionMinor', '7').toInteger()
+def versionPatch = versionProperties.getProperty('versionPatch', '0').toInteger()
+def appVersionName = "${versionMajor}.${versionMinor}.${versionPatch}"
+
 android {
     namespace 'me.zhanghai.android.files'
     buildToolsVersion = '36.0.0'
@@ -34,8 +47,10 @@ android {
         // Not supporting foreground service timeout yet.
         //noinspection OldTargetApi
         targetSdk 34
-        versionCode 40
-        versionName '1.7.7'
+        // Auto-generated from the version: 1.7.8 -> 10708. Always increases as long as
+        // the version numbers never go backwards.
+        versionCode versionMajor * 10000 + versionMinor * 100 + versionPatch
+        versionName appVersionName
         resValue 'string', 'app_version', versionName + ' (' + versionCode + ')'
         buildConfigField 'String', 'FILE_PROVIDIER_AUTHORITY', 'APPLICATION_ID + ".file_provider"'
         resValue 'string', 'app_provider_authority', applicationId + '.app_provider'
