@@ -44,6 +44,10 @@ private val supportedArchiveMimeTypes = mutableListOf(
 val MimeType.isImage: Boolean
     get() = icon == MimeTypeIcon.IMAGE
 
+// Text and code files that the built-in editor can open (SoraEditorFragment).
+val MimeType.isTextOrCode: Boolean
+    get() = icon == MimeTypeIcon.TEXT || icon == MimeTypeIcon.CODE
+
 val MimeType.isAudio: Boolean
     get() = icon == MimeTypeIcon.AUDIO
 

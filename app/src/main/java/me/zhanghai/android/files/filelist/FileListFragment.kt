@@ -97,6 +97,7 @@ import me.zhanghai.android.files.file.extension
 import me.zhanghai.android.files.file.fileProviderUri
 import me.zhanghai.android.files.file.isApk
 import me.zhanghai.android.files.file.isImage
+import me.zhanghai.android.files.file.isTextOrCode
 import me.zhanghai.android.files.filejob.FileJobService
 import me.zhanghai.android.files.filelist.FileSortOptions.By
 import me.zhanghai.android.files.filelist.FileSortOptions.Order
@@ -1297,6 +1298,11 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             navigateTo(file.listablePath)
             return
         }
+        // Built-in default openers (MT Manager style): categories with a matching built-in
+        // opener are opened with it directly, without consulting the system default.
+        if (openWithBuiltInViewer(file)) {
+            return
+        }
         openFileWithIntent(file, false)
     }
 
@@ -1334,6 +1340,47 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     override fun openFileWith(file: FileItem) {
         openFileWithIntent(file, true)
     }
+
+    /**
+     * Opens the file with the built-in opener for its category (MT Manager style): images
+     * in the image viewer, text/code in the editor, DEX in the DEX analyzer and ELF in the
+     * ELF analyzer, without consulting the system's default open method. Returns false when
+     * there is no built-in opener for the file, so the caller falls back to ACTION_VIEW.
+     */
+    private fun openWithBuiltInViewer(file: FileItem): Boolean {
+        val path = file.path
+        val mimeType = file.mimeType
+        return when {
+            // Image: the built-in image viewer, with the same directory image list extras
+            // (swipe between images) as the normal flow.
+            mimeType.isImage -> {
+                val intent = path.fileProviderUri.createViewIntent(mimeType)
+                    .setClass(requireContext(), ImageViewerActivity::class.java)
+                    .apply { maybeAddImageViewerActivityExtras(this, path, mimeType) }
+                startActivitySafe(intent)
+                true
+            }
+            // Text/code: the built-in Sora editor.
+            mimeType.isTextOrCode -> {
+                startActivity(TextEditorActivity::class.createIntent().apply { extraPath = path })
+                true
+            }
+            // DEX: the built-in DEX analyzer.
+            file.extension in DEX_ANALYZER_EXTENSIONS -> {
+                startActivity(DexAnalyzerActivity::class.createIntent().apply { extraPath = path })
+                true
+            }
+            // ELF: the built-in ELF analyzer.
+            file.extension in ELF_ANALYZER_EXTENSIONS -> {
+                startActivity(ElfAnalyzerActivity::class.createIntent().apply { extraPath = path })
+                true
+            }
+            else -> false
+        }
+    }
+
+    private val FileItem.extension: String
+        get() = name.substringAfterLast('.', "").lowercase()
 
     private fun openFileWithIntent(file: FileItem, withChooser: Boolean) {
         val path = file.path
@@ -2453,6 +2500,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             "me.zhanghai.android.files.intent.action.VIEW_DOWNLOADS"
 
         private const val IMAGE_VIEWER_ACTIVITY_PATH_LIST_SIZE_MAX = 1000
+
+        private val DEX_ANALYZER_EXTENSIONS = setOf("dex", "odex")
+
+        private val ELF_ANALYZER_EXTENSIONS = setOf("so", "elf")
     }
 
     private class RequestAllFilesAccessContract : ActivityResultContract<Unit, Boolean>() {
