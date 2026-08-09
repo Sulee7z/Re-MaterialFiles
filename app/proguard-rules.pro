@@ -55,3 +55,13 @@
 
 # SMBJ-RPC
 -dontwarn java.rmi.UnmarshalException
+
+# Official APK signing library (com.android.tools.build:apksig): relies on reflection and
+# ASN.1 structures internally, so it must not be obfuscated or stripped in release builds.
+-keep class com.android.apksig.** { *; }
+
+# BouncyCastle classes used by apksig for CMS (v1) signing.
+-keep class org.bouncycastle.asn1.** { *; }
+-keep class org.bouncycastle.cert.** { *; }
+-keep class org.bouncycastle.cms.** { *; }
+-keep class org.bouncycastle.operator.** { *; }
