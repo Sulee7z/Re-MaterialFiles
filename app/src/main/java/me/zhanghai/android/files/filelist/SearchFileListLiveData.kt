@@ -18,6 +18,8 @@ import me.zhanghai.android.files.provider.common.readAttributes
 import me.zhanghai.android.files.provider.common.search
 import me.zhanghai.android.files.provider.linux.isLinuxPath
 import me.zhanghai.android.files.searchindex.SearchIndexDb
+import me.zhanghai.android.files.searchindex.SearchQuery
+import me.zhanghai.android.files.searchindex.SearchQueryParser
 import me.zhanghai.android.files.util.CloseableLiveData
 import me.zhanghai.android.files.util.Failure
 import me.zhanghai.android.files.util.Loading
@@ -33,11 +35,28 @@ import kotlin.concurrent.thread
 
 class SearchFileListLiveData(
     private val path: Path,
-    private val query: String
+    query: String
 ) : CloseableLiveData<Stateful<List<FileItem>>>() {
     private var searchThread: Thread? = null
 
+    // The query is parsed Everything-style: a leading "/folder" scopes the search to that
+    // directory (and its descendants), while space-separated terms AND together, "|" ORs
+    // alternatives, "!" excludes, "..." phrases match verbatim, and file:/folder:/doc:/pic:/
+    // video:/zip:/size:/dm: filters narrow the results.
+    private val scopedPath: Path
+    private val searchQuery: SearchQuery
+
     init {
+        val parsed = SearchQueryParser.parse(query)
+        scopedPath = parsed.pathPrefix?.let { pathText ->
+            try {
+                Paths.get(pathText)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
+        } ?: path
+        searchQuery = parsed.copy(pathPrefix = null)
         loadValue()
     }
 
@@ -52,9 +71,8 @@ class SearchFileListLiveData(
                 // High-speed indexed search (quick-search style): on a local Linux file system
                 // with the SQLite file name index available, query the index instead of walking
                 // the whole directory tree, so results appear instantly. Falls back to the tree
-                // walk when the index is missing or yields nothing (the directory may simply not
-                // have been indexed yet, or there really are no matches).
-                val indexedPaths = queryIndex(path, query)
+                // walk when the index is missing or the directory has never been indexed.
+                val indexedPaths = queryIndex(scopedPath, searchQuery)
                 if (indexedPaths != null) {
                     if (Thread.interrupted()) {
                         throw InterruptedIOException()
@@ -66,7 +84,7 @@ class SearchFileListLiveData(
                     fileList += fileItems
                     postValue(Success(fileList))
                 } else {
-                    path.search(query, INTERVAL_MILLIS) { paths: List<Path> ->
+                    scopedPath.search(searchQuery.simpleKeywords, INTERVAL_MILLIS) { paths: List<Path> ->
                         if (Thread.interrupted()) {
                             throw InterruptedIOException()
                         }
@@ -92,10 +110,12 @@ class SearchFileListLiveData(
 
     /**
      * Queries the SQLite file name index for [query] scoped to [path] and its descendants.
-     * Returns null when the index cannot be used (non-local path, no index, or no hits), in
-     * which case the caller falls back to the recursive tree walk.
+     * Returns null only when the index cannot serve this directory (non-local path, no index
+     * at all, or the directory has never been indexed), in which case the caller falls back
+     * to the recursive tree walk. When the index covers the directory the result is trusted
+     * even if empty: an empty list means no matches, keeping searches instant.
      */
-    private fun queryIndex(path: Path, query: String): List<Path>? {
+    private fun queryIndex(path: Path, query: SearchQuery): List<Path>? {
         if (!path.isLinuxPath) {
             return null
         }
@@ -108,15 +128,22 @@ class SearchFileListLiveData(
         if (count <= 0) {
             return null
         }
+        val pathString = path.toString()
+        val covered = try {
+            SearchIndexDb.hasEntriesUnder(pathString)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+        if (!covered) {
+            return null
+        }
         val results = try {
-            SearchIndexDb.search(query, pathPrefix = path.toString())
+            SearchIndexDb.search(query.copy(pathPrefix = pathString))
         } catch (e: Exception) {
             e.printStackTrace()
             null
         } ?: return null
-        if (results.isEmpty()) {
-            return null
-        }
         return results.mapNotNull { result ->
             try {
                 Paths.get(result.path)

@@ -15,6 +15,7 @@ import me.zhanghai.android.files.filejob.fileJobNotificationTemplate
 import me.zhanghai.android.files.ftpserver.ftpServerServiceNotificationTemplate
 import me.zhanghai.android.files.hiddenapi.HiddenApi
 import me.zhanghai.android.files.provider.FileSystemProviders
+import me.zhanghai.android.files.searchindex.FileIndexer
 import me.zhanghai.android.files.searchindex.SearchIndexDb
 import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.storage.FtpServerAuthenticator
@@ -41,7 +42,8 @@ val appInitializers = listOf(
     ::initializeLiveDataObjects,
     ::initializeCustomTheme,
     ::initializeNightMode,
-    ::createNotificationChannels
+    ::createNotificationChannels,
+    ::preloadSearchIndexIfNeeded
 )
 
 private fun initializeCrashlytics() {
@@ -86,6 +88,46 @@ SearchIndexDb.initialize(application)
 }
 
 private fun initializeSearchIndexDb() = SearchIndexDb.initialize(application)
+
+/**
+ * Builds the file name index in the background shortly after app start (first launch or
+ * after app data wipe only), so the in-file-list search can query the SQLite index instead
+ * of walking the whole directory tree. Skipped when an index already exists; rebuild it
+ * manually from the index search screen if it goes stale.
+ */
+private fun preloadSearchIndexIfNeeded() {
+    val hasIndex = try {
+        SearchIndexDb.count() > 0
+    } catch (e: Exception) {
+        e.printStackTrace()
+        true
+    }
+    if (hasIndex) {
+        return
+    }
+    Thread {
+        // Let the app finish launching before hammering the storage.
+        try {
+            Thread.sleep(3000)
+        } catch (e: InterruptedException) {
+            return@Thread
+        }
+        val roots = StorageVolumeListLiveData.value
+            ?.filter { it.state == "mounted" }
+            ?.mapNotNull { volume ->
+                val directory = volume.directory ?: return@mapNotNull null
+                java8.nio.file.Paths.get(directory.absolutePath)
+            }
+            ?: emptyList()
+        if (roots.isEmpty()) {
+            return@Thread
+        }
+        FileIndexer.startIndex(roots, onProgress = {}, onDone = {})
+    }.apply {
+        name = "SearchIndexPreloader"
+        priority = Thread.MIN_PRIORITY
+    }.start()
+}
 
 private fun initializeCustomTheme() {
     CustomThemeHelper.initialize(application)

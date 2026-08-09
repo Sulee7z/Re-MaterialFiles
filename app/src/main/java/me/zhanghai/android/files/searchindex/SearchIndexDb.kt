@@ -21,8 +21,6 @@ object SearchIndexDb {
     private const val DATABASE_VERSION = 1
     private const val TABLE = "files"
 
-    private val WHITESPACE_REGEX = Regex("\\s+")
-
     private const val COL_PATH = "path"
     private const val COL_NAME = "name"
     private const val COL_SIZE = "size"
@@ -42,6 +40,21 @@ object SearchIndexDb {
     fun count(): Long = helper.readableDatabase.rawQuery(
         "SELECT COUNT(*) FROM $TABLE", null
     ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
+
+    /**
+     * Whether any indexed file lives at or below [pathPrefix]. Used to decide whether the
+     * index covers a directory: if it does, search results can be trusted (an empty result
+     * really means no match) and the expensive recursive tree walk can be skipped.
+     */
+    @Synchronized
+    fun hasEntriesUnder(pathPrefix: String): Boolean {
+        val normalizedPrefix = pathPrefix.trimEnd('/')
+        val escapedPrefix = escapeLike(normalizedPrefix)
+        return helper.readableDatabase.rawQuery(
+            "SELECT 1 FROM $TABLE WHERE $COL_PATH = ? OR $COL_PATH LIKE ? ESCAPE '\\' LIMIT 1",
+            arrayOf(normalizedPrefix, "$escapedPrefix/%")
+        ).use { cursor -> cursor.moveToFirst() }
+    }
 
     @Synchronized
     fun insert(path: String, name: String, size: Long, mtime: Long, isDir: Boolean) {
@@ -69,35 +82,90 @@ object SearchIndexDb {
     }
 
     /**
-     * Searches the index in quick-search style: every whitespace-separated query token must
-     * match either the file name or its "compact" form (spaces/hyphens/underscores/dots
-     * removed), and results are ordered by modification time (newest first). When [pathPrefix]
-     * is given only files at or below that directory are returned.
+     * Searches the index with an Everything-style query: space-separated AND terms, `|` OR
+     * alternatives, `!` exclusions, `"..."` exact phrases, `file:`/`folder:`/`doc:`/`pic:`/
+     * `video:`/`zip:` category filters, `size:`/`dm:` numeric/date filters and an optional
+     * directory scope. Results are ordered by modification time (newest first).
      */
     @Synchronized
-    fun search(query: String, pathPrefix: String? = null, limit: Int = 200): List<IndexedFile> {
-        val tokens = query.trim().split(WHITESPACE_REGEX).filter { it.isNotEmpty() }
-        if (tokens.isEmpty()) {
+    fun search(query: SearchQuery, limit: Int = 200): List<IndexedFile> {
+        // Each OR subgroup contributes its own conjunction of AND terms; empty subgroups
+        // (pure-filter queries like "size:>10mb") are treated as matching everything.
+        val nonEmptySubgroups = query.subgroups.filter { it.isNotEmpty() }
+        val groupSql = nonEmptySubgroups.joinToString(" OR ") { groupTerms ->
+            val (conds, args) = nameConditions(groupTerms)
+            "(${conds.joinToString(" AND ")})"
+        }
+        val commonConditions = mutableListOf<String>()
+        val commonArgs = mutableListOf<Any>()
+
+        query.excludeTerms.forEach { term ->
+            val escaped = escapeLike(term)
+            commonConditions += "$COL_NAME NOT LIKE ? ESCAPE '\\'"
+            commonArgs += "%$escaped%"
+        }
+        query.exactPhrases.forEach { phrase ->
+            val escaped = escapeLike(phrase)
+            commonConditions += "$COL_NAME LIKE ? ESCAPE '\\'"
+            commonArgs += "%$escaped%"
+        }
+        when {
+            query.fileOnly -> commonConditions += "$COL_IS_DIR = 0"
+            query.folderOnly -> commonConditions += "$COL_IS_DIR = 1"
+        }
+        if (query.docOnly) {
+            commonConditions += extensionCondition("doc", "docx", "pdf", "txt", "rtf", "odt", "xls", "xlsx", "ppt", "pptx", "md")
+        }
+        if (query.picOnly) {
+            commonConditions += extensionCondition("jpg", "jpeg", "png", "gif", "bmp", "webp", "svg", "heic", "heif", "ico", "tif", "tiff")
+        }
+        if (query.videoOnly) {
+            commonConditions += extensionCondition("mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "mpg", "mpeg", "3gp", "ts")
+        }
+        if (query.zipOnly) {
+            commonConditions += extensionCondition("zip", "7z", "rar", "tar", "gz", "tgz", "bz2", "xz", "zst", "iso", "jar", "apk")
+        }
+        query.minSize?.let {
+            commonConditions += "$COL_SIZE >= ?"
+            commonArgs += it
+        }
+        query.maxSize?.let {
+            commonConditions += "$COL_SIZE <= ?"
+            commonArgs += it
+        }
+        query.minMtimeMillis?.let {
+            commonConditions += "$COL_MTIME >= ?"
+            commonArgs += it
+        }
+        query.maxMtimeMillis?.let {
+            commonConditions += "$COL_MTIME <= ?"
+            commonArgs += it
+        }
+        query.pathPrefix?.let { prefix ->
+            val normalizedPrefix = prefix.trimEnd('/')
+            // Exact match takes the raw prefix (LIKE escaping would corrupt names containing
+            // underscores/percent signs); only the LIKE variant needs escaping.
+            commonConditions += "($COL_PATH = ? OR $COL_PATH LIKE ? ESCAPE '\\')"
+            commonArgs += normalizedPrefix
+            commonArgs += "${escapeLike(normalizedPrefix)}/%"
+        }
+
+        val selectionParts = mutableListOf<String>()
+        val allArgs = mutableListOf<Any>()
+        if (groupSql.isNotEmpty()) {
+            selectionParts += "($groupSql)"
+            nonEmptySubgroups.forEach { groupTerms ->
+                allArgs.addAll(nameConditions(groupTerms).second)
+            }
+        }
+        selectionParts.addAll(commonConditions)
+        allArgs.addAll(commonArgs)
+        if (selectionParts.isEmpty()) {
             return emptyList()
         }
-        val conditions = mutableListOf<String>()
-        val args = mutableListOf<String>()
-        for (token in tokens) {
-            val escaped = escapeLike(token)
-            conditions +=
-                "($COL_NAME LIKE ? ESCAPE '\\' OR ${compactDisplayNameExpression()} LIKE ? ESCAPE '\\')"
-            args += "%$escaped%"
-            args += "%$escaped%"
-        }
-        if (pathPrefix != null) {
-            val escapedPrefix = escapeLike(pathPrefix.trimEnd('/'))
-            conditions += "($COL_PATH = ? OR $COL_PATH LIKE ? ESCAPE '\\')"
-            args += escapedPrefix
-            args += "$escapedPrefix/%"
-        }
-        val selection = conditions.joinToString(" AND ")
+        val selection = selectionParts.joinToString(" AND ")
         return helper.readableDatabase.query(
-            TABLE, null, selection, args.toTypedArray(), null, null,
+            TABLE, null, selection, allArgs.map { it.toString() }.toTypedArray(), null, null,
             "$COL_MTIME DESC, $COL_NAME COLLATE NOCASE", limit.toString()
         ).use { cursor ->
             buildList {
@@ -112,6 +180,32 @@ object SearchIndexDb {
             }
         }
     }
+
+    /** Backwards-compatible string query entry point (used by the index search screen). */
+    @Synchronized
+    fun search(query: String, pathPrefix: String? = null, limit: Int = 200): List<IndexedFile> {
+        val parsed = SearchQueryParser.parse(query)
+        return search(
+            parsed.copy(pathPrefix = parsed.pathPrefix ?: pathPrefix),
+            limit
+        )
+    }
+
+    private fun nameConditions(terms: List<String>): Pair<List<String>, List<Any>> {
+        val conditions = mutableListOf<String>()
+        val args = mutableListOf<Any>()
+        for (term in terms) {
+            val escaped = escapeLike(term)
+            conditions +=
+                "($COL_NAME LIKE ? ESCAPE '\\' OR ${compactDisplayNameExpression()} LIKE ? ESCAPE '\\')"
+            args += "%$escaped%"
+            args += "%$escaped%"
+        }
+        return conditions to args
+    }
+
+    private fun extensionCondition(vararg extensions: String): String =
+        extensions.joinToString(" OR ") { "LOWER($COL_NAME) GLOB '*.$it'" }
 
     /**
      * The display name with spaces, hyphens, underscores and dots removed, e.g.
