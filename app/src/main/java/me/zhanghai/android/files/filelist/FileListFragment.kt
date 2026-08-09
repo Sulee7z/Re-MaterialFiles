@@ -2200,6 +2200,29 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         }
     }
 
+    /**
+     * Loads a signing keystore, trying the common formats in order. The platform default
+     * (BKS on Android) cannot open the PKCS12/JKS files produced by keytool/Android Studio,
+     * which is why the type must be probed explicitly.
+     */
+    private fun loadKeystore(
+        path: java8.nio.file.Path,
+        password: CharArray
+    ): java.security.KeyStore {
+        val bytes = path.fileSystem.provider().newInputStream(path).use { it.readBytes() }
+        var lastError: Exception? = null
+        for (type in listOf("PKCS12", "JKS", "BKS")) {
+            try {
+                val keyStore = java.security.KeyStore.getInstance(type)
+                bytes.inputStream().use { keyStore.load(it, password) }
+                return keyStore
+            } catch (e: Exception) {
+                lastError = e
+            }
+        }
+        throw lastError ?: java.io.IOException("Unable to load keystore")
+    }
+
     private fun signApk(
         file: FileItem,
         keystorePath: Path,
@@ -2215,12 +2238,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 Files.newInputStream(file.path).use { input ->
                     inputFile.outputStream().use { output -> input.copyTo(output) }
                 }
-                val keyStore = java.security.KeyStore.getInstance(
-                    java.security.KeyStore.getDefaultType()
-                )
-                keystorePath.fileSystem.provider().newInputStream(keystorePath).use { stream ->
-                    keyStore.load(stream, storePassword.toCharArray())
-                }
+                val keyStore = loadKeystore(keystorePath, storePassword.toCharArray())
                 val privateKey = keyStore.getKey(
                     alias, keyPassword.toCharArray()
                 ) as java.security.PrivateKey

@@ -129,6 +129,13 @@ dependencies {
     }
     implementation 'com.github.chrisbanes:PhotoView:2.3.0'
     implementation 'com.github.topjohnwu.libsu:service:5.2.2'
+
+    // Official AOSP APK signing library (v1/v2/v3). Its BouncyCastle dependency is
+    // excluded because the project already ships bcprov/bcpkix jdk15to18 with a
+    // compatible API surface.
+    implementation('com.android.tools.build:apksig:8.7.3') {
+        exclude group: 'org.bouncycastle'
+    }
 }
 
 dependencies {
