@@ -179,6 +179,9 @@ class EditFtpServerFragment : Fragment() {
                 binding.pathEdit.setText(server.relativePath)
                 binding.nameEdit.setText(server.customName)
                 binding.everythingRootEdit.setText(authority.everythingWindowsRoot)
+                binding.everythingHttpPortEdit.setText(
+                    authority.everythingHttpPort.takeIf { it > 0 }?.toString()
+                )
                 mode = authority.mode
                 encoding = authority.encoding
             } else {
@@ -188,11 +191,13 @@ class EditFtpServerFragment : Fragment() {
                 }
             }
         }
-        // Show the Everything index root field only when adding/editing an
-        // Everything server (its FTP server page no longer exposes it).
+        // Show the Everything fields only when adding/editing an Everything server
+        // (its FTP server page no longer exposes them).
         val ftpServer = args.server
-        binding.everythingRootLayout.isVisible =
+        val isEverythingServer =
             args.everything || ftpServer?.authority?.everythingWindowsRoot?.isNotEmpty() == true
+        binding.everythingRootLayout.isVisible = isEverythingServer
+        binding.everythingHttpPortLayout.isVisible = isEverythingServer
     }
 
     private fun updateNamePlaceholder() {
@@ -205,7 +210,9 @@ class EditFtpServerFragment : Fragment() {
             AuthenticationType.ANONYMOUS -> Authority.ANONYMOUS_USERNAME
         }
         binding.nameLayout.placeholderText = if (host != null) {
-            val authority = Authority(protocol, host, port, username, mode, encoding, everythingRoot)
+            val authority = Authority(
+                protocol, host, port, username, mode, encoding, everythingRoot, everythingHttpPort
+            )
             if (path.isNotEmpty()) "$authority/$path" else authority.toString()
         } else {
             getString(R.string.storage_edit_ftp_server_name_placeholder)
@@ -281,6 +288,10 @@ class EditFtpServerFragment : Fragment() {
 
     private val everythingRoot: String
         get() = binding.everythingRootEdit.text.toString().trim()
+
+    private val everythingHttpPort: Int
+        get() = binding.everythingHttpPortEdit.text.toString().takeIfNotEmpty()
+            ?.toIntOrNull() ?: 80
 
     private fun saveOrAdd() {
         val server = getServerOrSetError() ?: return
@@ -376,7 +387,9 @@ class EditFtpServerFragment : Fragment() {
             errorEdit.requestFocus()
             return null
         }
-        val authority = Authority(protocol, host!!, port!!, username!!, mode, encoding, everythingRoot)
+        val authority = Authority(
+            protocol, host!!, port!!, username!!, mode, encoding, everythingRoot, everythingHttpPort
+        )
         return FtpServer(args.server?.id, name, authority, password, path)
     }
 

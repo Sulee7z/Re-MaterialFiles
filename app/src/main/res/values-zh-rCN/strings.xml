@@ -461,6 +461,8 @@
     </string-array>
     <string name="storage_edit_ftp_server_encoding">编码</string>
     <string name="storage_edit_ftp_server_everything_root">Everything 索引根路径(如 C:\share,可选)</string>
+    <string name="storage_edit_ftp_server_everything_http_port">Everything HTTP 端口(用于搜索)</string>
+    <string name="storage_edit_ftp_server_everything_http_port_placeholder">80</string>
     <string name="storage_edit_ftp_server_connect_and_add">连接并添加</string>
     <string name="storage_edit_ftp_server_add">添加</string>
     <string name="storage_edit_sftp_server_title_edit">编辑 SFTP 服务器</string>
