@@ -71,6 +71,45 @@ object SearchIndexDb {
         )
     }
 
+    /**
+     * Inserts many rows inside a single transaction, which is orders of magnitude faster
+     * than individual autocommit inserts (used by the indexer worker threads).
+     */
+    @Synchronized
+    fun insertBatch(items: List<IndexedFileInsert>) {
+        if (items.isEmpty()) {
+            return
+        }
+        val db = helper.writableDatabase
+        db.beginTransaction()
+        try {
+            for (item in items) {
+                db.insertWithOnConflict(
+                    TABLE, null,
+                    ContentValues().apply {
+                        put(COL_PATH, item.path)
+                        put(COL_NAME, item.name)
+                        put(COL_SIZE, item.size)
+                        put(COL_MTIME, item.mtime)
+                        put(COL_IS_DIR, if (item.isDir) 1 else 0)
+                    },
+                    SQLiteDatabase.CONFLICT_REPLACE
+                )
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    data class IndexedFileInsert(
+        val path: String,
+        val name: String,
+        val size: Long,
+        val mtime: Long,
+        val isDir: Boolean
+    )
+
     @Synchronized
     fun delete(path: String) {
         helper.writableDatabase.delete(TABLE, "$COL_PATH = ?", arrayOf(path))

@@ -15,10 +15,12 @@ import me.zhanghai.android.files.file.asMimeType
 import me.zhanghai.android.files.filelist.name
 import me.zhanghai.android.files.filelist.getCollationKeyForFileName
 import me.zhanghai.android.files.provider.common.AndroidFileTypeDetector
+import me.zhanghai.android.files.provider.common.WalkFileTreeSearchable
 import me.zhanghai.android.files.provider.common.isHidden
 import me.zhanghai.android.files.provider.common.readAttributes
 import me.zhanghai.android.files.provider.common.search
 import me.zhanghai.android.files.provider.linux.isLinuxPath
+import me.zhanghai.android.files.searchindex.FileIndexer
 import me.zhanghai.android.files.searchindex.SearchIndexDb
 import me.zhanghai.android.files.searchindex.SearchQuery
 import me.zhanghai.android.files.searchindex.SearchQueryParser
@@ -92,7 +94,25 @@ class SearchFileListLiveData(
                     fileList += fileItems
                     postValue(Success(fileList))
                 } else {
-                    scopedPath.search(searchQuery.simpleKeywords, INTERVAL_MILLIS) { paths: List<Path> ->
+                    // Search the scope with a tree walk. When the scope is the "/" root, skip
+                    // the huge system sub-trees (they are either not indexed or irrelevant) so
+                    // the fallback returns quickly; /data and /storage are still descended.
+                    val walk = { listener: (List<Path>) -> Unit ->
+                        if (scopedPath.toString() == "/") {
+                            WalkFileTreeSearchable.search(
+                                directory = scopedPath,
+                                query = searchQuery.simpleKeywords,
+                                intervalMillis = INTERVAL_MILLIS,
+                                listener = { paths -> listener(paths) },
+                                skipDirectories = FileIndexer.ROOT_SKIP_DIRECTORIES
+                            )
+                        } else {
+                            scopedPath.search(searchQuery.simpleKeywords, INTERVAL_MILLIS) { paths ->
+                                listener(paths)
+                            }
+                        }
+                    }
+                    walk { paths ->
                         if (Thread.interrupted()) {
                             throw InterruptedIOException()
                         }

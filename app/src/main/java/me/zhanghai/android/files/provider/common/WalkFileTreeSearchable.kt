@@ -24,7 +24,11 @@ object WalkFileTreeSearchable {
         directory: Path,
         query: String,
         intervalMillis: Long,
-        listener: (List<Path>) -> Unit
+        listener: (List<Path>) -> Unit,
+        // Sub-directories (matched by name) that must not be descended into. Used when
+        // searching the "/" root so huge system trees (which are separately indexed, if at
+        // all) don't make the fallback walk crawl.
+        skipDirectories: Set<String> = emptySet()
     ) {
         val results = ConcurrentLinkedQueue<Path>()
         val cancelled = AtomicBoolean()
@@ -160,6 +164,9 @@ object WalkFileTreeSearchable {
                 addResultImmediate(path)
             }
             if (attributes.isDirectory) {
+                if (fileName != null && fileName.toString() in skipDirectories) {
+                    continue
+                }
                 directories.add(path)
             }
         }

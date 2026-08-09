@@ -78,6 +78,12 @@ object SearchQueryParser {
                 if (isPathLike(pathText)) {
                     pathPrefix = normalizePathPrefix(pathText.trimEnd('/'))
                     query = if (spaceIndex == -1) "" else query.substring(spaceIndex + 1).trim()
+                } else {
+                    // "/keyword" without a space (and not a known root directory like
+                    // "/data"): a root-filesystem search for "keyword", so "/target" finds
+                    // /target.txt at the device root.
+                    pathPrefix = "/"
+                    query = query.substring(1).trim()
                 }
             }
         }
@@ -196,8 +202,29 @@ object SearchQueryParser {
         return tokens
     }
 
-    private fun isPathLike(text: String): Boolean =
-        text.startsWith("/") && text.length > 1
+    /**
+     * A token is treated as a path only when it is multi-segment ("/a/b") or names a real
+     * root-level directory ("/data", "/system", ...). A single unknown segment ("/target")
+     * is a root-filesystem search keyword instead.
+     */
+    private fun isPathLike(text: String): Boolean {
+        if (!text.startsWith("/") || text.length <= 1) {
+            return false
+        }
+        val segments = text.substring(1).split('/').filter { it.isNotEmpty() }
+        if (segments.size > 1) {
+            return true
+        }
+        return segments.firstOrNull() in ROOT_DIRECTORIES
+    }
+
+    private val ROOT_DIRECTORIES = setOf(
+        "acct", "apex", "bin", "bugreports", "cache", "charger", "config", "d", "data",
+        "data_mirror", "debug_ramdisk", "dev", "etc", "init", "linkerconfig", "lost+found",
+        "metadata", "mnt", "odm", "oem", "postinstall", "preload", "proc", "product",
+        "recovery", "root", "sbin", "sdcard", "storage", "sys", "system", "system_dlkm",
+        "system_ext", "tmp", "usr", "var", "vendor"
+    )
 
     /**
      * Maps the user-facing /sdcard alias to the real /storage/emulated/0 path that the index
