@@ -7,6 +7,7 @@ package me.zhanghai.android.files.filelist
 
 import java8.nio.file.LinkOption
 import java8.nio.file.Path
+import java8.nio.file.Paths
 import java8.nio.file.attribute.BasicFileAttributes
 import me.zhanghai.android.files.file.FileItem
 import me.zhanghai.android.files.file.MimeType
@@ -15,6 +16,8 @@ import me.zhanghai.android.files.filelist.getCollationKeyForFileName
 import me.zhanghai.android.files.provider.common.isHidden
 import me.zhanghai.android.files.provider.common.readAttributes
 import me.zhanghai.android.files.provider.common.search
+import me.zhanghai.android.files.provider.linux.isLinuxPath
+import me.zhanghai.android.files.searchindex.SearchIndexDb
 import me.zhanghai.android.files.util.CloseableLiveData
 import me.zhanghai.android.files.util.Failure
 import me.zhanghai.android.files.util.Loading
@@ -46,18 +49,36 @@ class SearchFileListLiveData(
         searchThread = thread(name = "Search") {
             val fileList = mutableListOf<FileItem>()
             try {
-                path.search(query, INTERVAL_MILLIS) { paths: List<Path> ->
+                // High-speed indexed search (quick-search style): on a local Linux file system
+                // with the SQLite file name index available, query the index instead of walking
+                // the whole directory tree, so results appear instantly. Falls back to the tree
+                // walk when the index is missing or yields nothing (the directory may simply not
+                // have been indexed yet, or there really are no matches).
+                val indexedPaths = queryIndex(path, query)
+                if (indexedPaths != null) {
                     if (Thread.interrupted()) {
                         throw InterruptedIOException()
                     }
-                    val fileItems = loadFileItems(paths)
+                    val fileItems = loadFileItems(indexedPaths)
                     if (Thread.interrupted()) {
                         throw InterruptedIOException()
                     }
                     fileList += fileItems
-                    postValue(Loading(fileList.toList()))
+                    postValue(Success(fileList))
+                } else {
+                    path.search(query, INTERVAL_MILLIS) { paths: List<Path> ->
+                        if (Thread.interrupted()) {
+                            throw InterruptedIOException()
+                        }
+                        val fileItems = loadFileItems(paths)
+                        if (Thread.interrupted()) {
+                            throw InterruptedIOException()
+                        }
+                        fileList += fileItems
+                        postValue(Loading(fileList.toList()))
+                    }
+                    postValue(Success(fileList))
                 }
-                postValue(Success(fileList))
             } catch (e: InterruptedException) {
                 // A newer search replaced this one.
             } catch (e: InterruptedIOException) {
@@ -65,6 +86,43 @@ class SearchFileListLiveData(
             } catch (e: Exception) {
                 // TODO: Retrieval of previous value is racy.
                 postValue(Failure(valueCompat.value, e))
+            }
+        }
+    }
+
+    /**
+     * Queries the SQLite file name index for [query] scoped to [path] and its descendants.
+     * Returns null when the index cannot be used (non-local path, no index, or no hits), in
+     * which case the caller falls back to the recursive tree walk.
+     */
+    private fun queryIndex(path: Path, query: String): List<Path>? {
+        if (!path.isLinuxPath) {
+            return null
+        }
+        val count = try {
+            SearchIndexDb.count()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            0L
+        }
+        if (count <= 0) {
+            return null
+        }
+        val results = try {
+            SearchIndexDb.search(query, pathPrefix = path.toString())
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        } ?: return null
+        if (results.isEmpty()) {
+            return null
+        }
+        return results.mapNotNull { result ->
+            try {
+                Paths.get(result.path)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
             }
         }
     }
