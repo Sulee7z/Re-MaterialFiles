@@ -115,6 +115,12 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/action_rebuild_index"
+        android:orderInCategory="100"
+        android:title="@string/file_list_action_rebuild_index"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_share"
         android:orderInCategory="100"
         android:title="@string/share"

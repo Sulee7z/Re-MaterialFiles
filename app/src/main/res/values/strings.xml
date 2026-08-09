@@ -301,8 +301,13 @@
     <string name="file_list_action_navigate_to">Go to</string>
     <string name="file_list_navigate_to_title" translatable="false">@string/file_list_action_navigate_to</string>
     <string name="file_list_action_show_hidden_files">Show hidden files</string>
-    <string name="file_list_action_manage_hidden">Manage hidden items</string>
-    <string name="file_list_action_manage_hidden_empty">No hidden items yet.\n\nNote: files starting with a dot (e.g. .obb) that appear when "Show hidden files" is on are a separate thing — they are controlled by that setting, not by this list.\n\nTo hide a file: tap its ⋮ menu and choose Hide. It will then stay hidden and appear here.</string>
+  <string name="file_list_action_manage_hidden">Manage hidden items</string>
+  <string name="file_list_action_manage_hidden_empty">No hidden items yet.\n\nNote: files starting with a dot (e.g. .obb) that appear when "Show hidden files" is on are a separate thing — they are controlled by that setting, not by this list.\n\nTo hide a file: tap its ⋮ menu and choose Hide. It will then stay hidden and appear here.</string>
+  <string name="file_list_action_rebuild_index">Rebuild search index</string>
+  <string name="file_list_action_rebuild_index_started">Rebuilding search index…</string>
+  <string name="file_list_action_rebuild_index_done">Search index rebuilt</string>
+  <string name="file_list_action_rebuild_index_error">No storage available to index</string>
+  <string name="file_list_action_rebuild_index_already">Index rebuild already in progress</string>
     <string name="file_item_action_hide">Hide</string>
     <string name="file_item_action_hide_confirm_format">Hide %1$s? It will not be shown in the file list.</string>
     <string name="unhide">Unhide</string>

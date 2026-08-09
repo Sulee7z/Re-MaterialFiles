@@ -119,6 +119,7 @@ import me.zhanghai.android.files.provider.archive.createArchiveRootPath
 import me.zhanghai.android.files.provider.archive.isArchivePath
 import com.topjohnwu.superuser.Shell
 import me.zhanghai.android.files.provider.linux.isLinuxPath
+import me.zhanghai.android.files.searchindex.FileIndexer
 import me.zhanghai.android.files.settings.HiddenPaths
 import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.terminal.TerminalActivity
@@ -564,6 +565,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             }
             R.id.action_manage_hidden -> {
                 showManageHiddenDialog()
+                true
+            }
+            R.id.action_rebuild_index -> {
+                rebuildSearchIndex()
                 true
             }
             R.id.action_share -> {
@@ -1350,37 +1355,15 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     private fun openWithBuiltInViewer(file: FileItem): Boolean {
         val path = file.path
         val mimeType = file.mimeType
-        return when {
-            // Image: the built-in image viewer, with the same directory image list extras
-            // (swipe between images) as the normal flow.
-            mimeType.isImage -> {
-                val intent = path.fileProviderUri.createViewIntent(mimeType)
-                    .setClass(requireContext(), ImageViewerActivity::class.java)
-                    .apply { maybeAddImageViewerActivityExtras(this, path, mimeType) }
-                startActivitySafe(intent)
-                true
-            }
-            // Text/code: the built-in Sora editor.
-            mimeType.isTextOrCode -> {
-                startActivity(TextEditorActivity::class.createIntent().apply { extraPath = path })
-                true
-            }
-            // DEX: the built-in DEX analyzer.
-            file.extension in DEX_ANALYZER_EXTENSIONS -> {
-                startActivity(DexAnalyzerActivity::class.createIntent().apply { extraPath = path })
-                true
-            }
-            // ELF: the built-in ELF analyzer.
-            file.extension in ELF_ANALYZER_EXTENSIONS -> {
-                startActivity(ElfAnalyzerActivity::class.createIntent().apply { extraPath = path })
-                true
-            }
-            else -> false
+        val intent = BuiltInFileOpeners.createOpenIntent(path, mimeType) ?: return false
+        if (mimeType.isImage) {
+            // Add the neighbouring images of this directory for swipe navigation, replacing
+            // the single-image extras.
+            maybeAddImageViewerActivityExtras(intent, path, mimeType)
         }
+        startActivitySafe(intent)
+        return true
     }
-
-    private val FileItem.extension: String
-        get() = name.substringAfterLast('.', "").lowercase()
 
     private fun openFileWithIntent(file: FileItem, withChooser: Boolean) {
         val path = file.path
@@ -1498,6 +1481,31 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             }
             .setNeutralButton(android.R.string.cancel, null)
             .show()
+    }
+
+    /**
+     * Rebuilds the SQLite file name index (storage volumes, plus /data trees when root/
+     * Shizuku is available) in the background, e.g. after installing new files.
+     */
+    private fun rebuildSearchIndex() {
+        if (FileIndexer.isIndexing) {
+            showToast(R.string.file_list_action_rebuild_index_already)
+            return
+        }
+        val roots = FileIndexer.getIndexRoots()
+        if (roots.isEmpty()) {
+            showToast(R.string.file_list_action_rebuild_index_error)
+            return
+        }
+        showToast(R.string.file_list_action_rebuild_index_started)
+        FileIndexer.startIndex(roots, onProgress = {}, onDone = { throwable ->
+            // showToast() posts to the main thread when called off it.
+            if (throwable == null) {
+                showToast(R.string.file_list_action_rebuild_index_done)
+            } else {
+                showToast(throwable.toString())
+            }
+        })
     }
 
     override fun hasFileWithName(name: String): Boolean = getFileWithName(name) != null
@@ -2500,10 +2508,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             "me.zhanghai.android.files.intent.action.VIEW_DOWNLOADS"
 
         private const val IMAGE_VIEWER_ACTIVITY_PATH_LIST_SIZE_MAX = 1000
-
-        private val DEX_ANALYZER_EXTENSIONS = setOf("dex", "odex")
-
-        private val ELF_ANALYZER_EXTENSIONS = setOf("so", "elf")
     }
 
     private class RequestAllFilesAccessContract : ActivityResultContract<Unit, Boolean>() {

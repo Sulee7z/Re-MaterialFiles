@@ -29,11 +29,16 @@ import me.zhanghai.android.files.ui.ListAdapter
 import me.zhanghai.android.files.util.viewModels
 import me.zhanghai.android.files.file.MimeType
 import me.zhanghai.android.files.file.asMimeType
+import me.zhanghai.android.files.file.fileProviderUri
+import me.zhanghai.android.files.file.isApk
+import me.zhanghai.android.files.filelist.BuiltInFileOpeners
 import me.zhanghai.android.files.filelist.OpenFileActivity
 import me.zhanghai.android.files.filelist.FileListActivity
 import me.zhanghai.android.files.provider.common.AndroidFileTypeDetector
+import me.zhanghai.android.files.util.createInstallPackageIntent
 import me.zhanghai.android.files.util.createIntent
 import me.zhanghai.android.files.util.extraPath
+import me.zhanghai.android.files.util.startActivitySafe
 import java8.nio.file.Files
 import java8.nio.file.attribute.BasicFileAttributes
 import kotlinx.coroutines.Dispatchers
@@ -142,8 +147,24 @@ class SearchIndexFragment : Fragment() {
                     startActivity(
                         FileListActivity::class.createIntent().apply { extraPath = path }
                     )
+                } else if (mimeType.isApk) {
+                    // Hand the APK to the installer like the file list does. A plain
+                    // ACTION_VIEW would land in third-party installers that fail to parse
+                    // system APK copies ("unsupported file format").
+                    startActivitySafe(path.fileProviderUri.createInstallPackageIntent())
                 } else {
-                    startActivity(OpenFileActivity.createIntent(path, mimeType))
+                    // Prefer the built-in opener (MT Manager style) like the file list does,
+                    // falling back to the system default only when no built-in opener applies.
+                    // DEX/ELF openers verify the file header first (we are on an IO thread),
+                    // so a misnamed file falls back instead of failing in the analyzer.
+                    val builtInIntent = BuiltInFileOpeners.createOpenIntent(
+                        path, mimeType, verifyBinaryMagic = true
+                    )
+                    if (builtInIntent != null) {
+                        startActivity(builtInIntent)
+                    } else {
+                        startActivity(OpenFileActivity.createIntent(path, mimeType))
+                    }
                 }
             }
         }
