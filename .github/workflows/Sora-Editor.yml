@@ -1,10 +1,10 @@
-name: MaterialFiles with Sora-Editor
+﻿name: MaterialFiles with Sora-Editor
 
 on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag to upload to (e.g. v1.7.8, optional)'
+        description: 'Release tag to upload to (e.g. v1.7.9, optional)'
         required: false
         type: string
   push:
@@ -36,13 +36,13 @@ jobs:
       id: get_tag
       run: |
         # The version comes from version.properties, the single source of truth shared
-        # with app/build.gradle (versionName/versionCode) — bump one file, everything
+        # with app/build.gradle (versionName/versionCode) 鈥?bump one file, everything
         # follows.
         major=$(grep -Po '^versionMajor=\K[0-9]+' version.properties)
         minor=$(grep -Po '^versionMinor=\K[0-9]+' version.properties)
         patch=$(grep -Po '^versionPatch=\K[0-9]+' version.properties)
         if [ -z "$major" ] || [ -z "$minor" ] || [ -z "$patch" ]; then
-          tag='1.7.8'
+          tag='1.7.9'
         else
           tag="$major.$minor.$patch"
         fi
@@ -53,7 +53,7 @@ jobs:
       id: release_tag
       run: |
         if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-          # Pushed for an explicit tag (e.g. v1.7.8): upload to that tag.
+          # Pushed for an explicit tag (e.g. v1.7.9): upload to that tag.
           echo "release=$GITHUB_REF_NAME" >> $GITHUB_OUTPUT
         elif [ -n "${{ inputs.release_tag }}" ]; then
           # Manual run with a chosen tag: upload to it.
@@ -129,3 +129,4 @@ jobs:
             --title "MaterialFiles Sora-Editor $RELEASE_TAG" \
             --notes "Automated build of commit ${{ github.sha }}"
         fi
+
