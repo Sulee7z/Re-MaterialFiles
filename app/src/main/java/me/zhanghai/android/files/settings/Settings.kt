@@ -143,6 +143,12 @@ object Settings {
             R.string.pref_key_two_pane_browsing, R.bool.pref_default_value_two_pane_browsing
         )
 
+    /** Compact (dense) file list rows in two-pane mode, so more files fit per pane. */
+    val FILE_LIST_TWO_PANE_DENSE: SettingLiveData<Boolean> =
+        BooleanSettingLiveData(
+            R.string.pref_key_two_pane_dense, R.bool.pref_default_value_two_pane_dense
+        )
+
     val FILE_NAME_ELLIPSIZE: SettingLiveData<TextUtils.TruncateAt> =
         EnumSettingLiveData(
             R.string.pref_key_file_name_ellipsize, R.string.pref_default_value_file_name_ellipsize,

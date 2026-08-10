@@ -5,8 +5,11 @@
 
 package me.zhanghai.android.files.searchindex
 
+import me.zhanghai.android.files.compat.directoryCompat
+import me.zhanghai.android.files.compat.stateCompat
 import me.zhanghai.android.files.provider.common.isDirectory
 import me.zhanghai.android.files.storage.StorageVolumeListLiveData
+import android.os.Environment
 import java8.nio.file.Files
 import java8.nio.file.Path
 import java8.nio.file.Paths
@@ -76,9 +79,9 @@ object FileIndexer {
      */
     fun getIndexRoots(): List<Path> {
         val roots = StorageVolumeListLiveData.value
-            ?.filter { it.state == "mounted" }
+            ?.filter { it.stateCompat == Environment.MEDIA_MOUNTED }
             ?.mapNotNull { volume ->
-                val directory = volume.directory ?: return@mapNotNull null
+                val directory = volume.directoryCompat ?: return@mapNotNull null
                 Paths.get(directory.absolutePath)
             }
             ?.toMutableList()

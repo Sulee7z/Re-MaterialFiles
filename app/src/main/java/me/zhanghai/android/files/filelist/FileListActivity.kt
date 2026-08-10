@@ -36,6 +36,18 @@ class FileListActivity : AppActivity() {
         // Calls ensureSubDecor().
         findViewById<View>(android.R.id.content)
         if (twoPaneAtCreation) {
+            showTwoPane(intent, savedInstanceState)
+        } else if (savedInstanceState == null) {
+            fragment = FileListFragment().putArgs(FileListFragment.Args(intent))
+            supportFragmentManager.commit { add(android.R.id.content, fragment) }
+        } else {
+            fragment = supportFragmentManager.findFragmentById(android.R.id.content)
+                as FileListFragment
+        }
+    }
+
+    private fun showTwoPane(intent: Intent, savedInstanceState: Bundle?) {
+        if (twoPaneAtCreation) {
             // MT Manager style two-pane browsing: two independent file lists side by side.
             // Copy/cut on one pane and paste on the other to move files across panes (the
             // paste state is shared). The right pane starts at the default directory.
@@ -107,12 +119,6 @@ class FileListActivity : AppActivity() {
                     .putArgs(FileListFragment.Args(rightIntent, secondaryPane = true))
                 supportFragmentManager.commit { add(R.id.rightPane, rightFragment) }
             }
-        } else if (savedInstanceState == null) {
-            fragment = FileListFragment().putArgs(FileListFragment.Args(intent))
-            supportFragmentManager.commit { add(android.R.id.content, fragment) }
-        } else {
-            fragment = supportFragmentManager.findFragmentById(android.R.id.content)
-                as FileListFragment
         }
     }
 

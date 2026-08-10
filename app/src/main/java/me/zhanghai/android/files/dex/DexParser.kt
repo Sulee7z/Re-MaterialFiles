@@ -67,9 +67,12 @@ object DexParser {
             val parametersOffset = buffer.getInt(protoOffset + 8)
             // A type_list: uint size followed by ushort type indices, padded to 4 bytes.
             val parameters = if (parametersOffset == 0) {
-                emptyList()
+                emptyList<String>()
             } else {
+                checkRange(bytes, parametersOffset, 4)
                 val parametersSize = readU32(bytes, parametersOffset)
+                // Guard against a crafted/corrupt size that would OOM the ArrayList.
+                checkRange(bytes, parametersOffset + 4, parametersSize.toLong() * 2)
                 val parameterTypeIndices = ArrayList<String>(parametersSize)
                 repeat(parametersSize) { parameterIndex ->
                     parameterTypeIndices.add(
@@ -117,13 +120,19 @@ object DexParser {
             val interfaces = if (interfacesOffset == 0) {
                 emptyList()
             } else {
-                val (interfacesSize, firstSizeEnd) = readUleb128(bytes, interfacesOffset)
+                // interfaces_off points to a type_list: uint size + ushort type_idx[].
+                // (Previously parsed as ULEB128 like class_data_item, which produced
+                // garbage indices and could throw ArrayIndexOutOfBoundsException.)
+                checkRange(bytes, interfacesOffset, 4)
+                val interfacesSize = buffer.getInt(interfacesOffset)
+                // Guard against a crafted/corrupt size: allocating ArrayList with it would
+                // OOM before the per-index reads fail.
+                checkRange(bytes, interfacesOffset + 4, interfacesSize.toLong() * 2)
                 val interfaceTypes = ArrayList<String>(interfacesSize)
-                var typeIndexOffset = firstSizeEnd
+                var typeIndexOffset = interfacesOffset + 4
                 repeat(interfacesSize) {
-                    val (typeIndex, end) = readUleb128(bytes, typeIndexOffset)
-                    interfaceTypes.add(types[typeIndex])
-                    typeIndexOffset = end
+                    interfaceTypes.add(types[buffer.getShort(typeIndexOffset).toInt() and 0xffff])
+                    typeIndexOffset += 2
                 }
                 interfaceTypes
             }
@@ -190,7 +199,9 @@ object DexParser {
                 0
             }
             when (op) {
-                in 0x1c..0x1c, in 0x1f..0x25 -> {
+                // 0x21 (array-length) has no type index; excluding it avoids treating the
+                // next instruction's opcode as a type reference.
+                in 0x1c..0x1c, in 0x1f..0x20, in 0x22..0x25 -> {
                     if (refIndex < types.size) {
                         result.add(codeOpName(op) to types[refIndex])
                     }
@@ -252,6 +263,7 @@ object DexParser {
         fieldRefs: List<DexFieldRef>,
         methodRefs: List<DexMethodRef>
     ): Pair<List<DexFieldDef>, List<DexMethodDef>> {
+        checkRange(bytes, offset, 1)
         val (staticFieldsSize, staticFieldsSizeEnd) = readUleb128(bytes, offset)
         val (instanceFieldsSize, instanceFieldsSizeEnd) = readUleb128(bytes, staticFieldsSizeEnd)
         val (directMethodsSize, directMethodsSizeEnd) = readUleb128(bytes, instanceFieldsSizeEnd)
@@ -310,6 +322,7 @@ object DexParser {
         // The code item header uses fixed-size fields: ushort registers_size, ushort ins_size,
         // ushort outs_size, ushort tries_size, uint debug_info_off, ushort insns_size, followed
         // by 2 bytes of padding so that insns start on a 4-byte boundary.
+        checkRange(bytes, offset, 16)
         var position = offset
         val registersSize = readU16(bytes, position)
         position += 2
@@ -319,8 +332,12 @@ object DexParser {
         position += 2
         position += 2 // tries_size
         position += 4 // debug_info_off
-        val insnsSize = readU16(bytes, position)
+        // insns_size is a full uint; methods with more than 65536 code units (e.g. from
+        // obfuscation or generated code) would be truncated if read as ushort.
+        val insnsSize = readU32(bytes, position)
         position += 4 // insns_size and padding
+        // Guard against a crafted/corrupt size that would OOM the ShortArray allocation.
+        checkRange(bytes, position, insnsSize.toLong() * 2)
         val insns = ShortArray(insnsSize)
         repeat(insnsSize) { index ->
             insns[index] = readU16(bytes, position + index * 2).toShort()
@@ -328,12 +345,14 @@ object DexParser {
         return DexCode(registersSize, insSize, outsSize, insns)
     }
 
+    private fun readU32(bytes: ByteArray, offset: Int): Int =
+        (bytes[offset].toInt() and 0xff) or
+            ((bytes[offset + 1].toInt() and 0xff) shl 8) or
+            ((bytes[offset + 2].toInt() and 0xff) shl 16) or
+            ((bytes[offset + 3].toInt() and 0xff) shl 24)
+
     private fun readU16(bytes: ByteArray, offset: Int): Int =
         (bytes[offset].toInt() and 0xff) or ((bytes[offset + 1].toInt() and 0xff) shl 8)
-
-    private fun readU32(bytes: ByteArray, offset: Int): Int =
-        (bytes[offset].toInt() and 0xff) or ((bytes[offset + 1].toInt() and 0xff) shl 8) or
-            ((bytes[offset + 2].toInt() and 0xff) shl 16) or ((bytes[offset + 3].toInt() and 0xff) shl 24)
 
     private fun readUleb128(bytes: ByteArray, offset: Int): Pair<Int, Int> {
         var result = 0
@@ -356,7 +375,8 @@ object DexParser {
     private fun readString(bytes: ByteArray, offset: Int): String {
         val (_, sizeEnd) = readUleb128(bytes, offset)
         var end = sizeEnd
-        while (bytes[end].toInt() != 0) {
+        // Guard against truncated/crafted dex without a NUL terminator.
+        while (end < bytes.size && bytes[end].toInt() != 0) {
             end++
         }
         return decodeModifiedUtf8(bytes, sizeEnd, end)

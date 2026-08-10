@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2026 Sulee7z <94352968+sulee7z@users.noreply.github.com>
  * All Rights Reserved.
  */
@@ -21,7 +21,7 @@ class HexViewerActivity : AppActivity() {
         // Calls ensureSubDecor().
         findViewById<View>(android.R.id.content)
         if (savedInstanceState == null) {
-            fragment = HexViewerFragment().putArgs(HexViewerFragment.Args(intent.extraPath!!))
+            fragment = HexViewerFragment().putArgs(HexViewerFragment.Args(intent.extraPath ?: run { finish(); return }))
             supportFragmentManager.commit { add(android.R.id.content, fragment) }
         } else {
             fragment = supportFragmentManager.findFragmentById(android.R.id.content)
@@ -29,3 +29,4 @@ class HexViewerActivity : AppActivity() {
         }
     }
 }
+

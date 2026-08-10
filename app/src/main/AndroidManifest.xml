@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 
 <!--
   ~ Copyright (c) 2018 Hai Zhang <dreaming.in.code.zh@gmail.com>
@@ -338,25 +338,25 @@
 
         <activity
             android:name="me.zhanghai.android.files.dex.DexAnalyzerActivity"
-            android:exported="true"
+            android:exported="false"
             android:label="@string/dex_analyze_title"
             android:theme="@style/Theme.MaterialFiles" />
 
         <activity
             android:name="me.zhanghai.android.files.apksearch.ApkStringSearchActivity"
-            android:exported="true"
+            android:exported="false"
             android:label="@string/apk_string_search_title"
             android:theme="@style/Theme.MaterialFiles" />
 
         <activity
             android:name="me.zhanghai.android.files.elf.ElfAnalyzerActivity"
-            android:exported="true"
+            android:exported="false"
             android:label="@string/elf_analyze_title"
             android:theme="@style/Theme.MaterialFiles" />
 
         <activity
             android:name="me.zhanghai.android.files.hex.HexViewerActivity"
-            android:exported="true"
+            android:exported="false"
             android:label="@string/hex_viewer_title"
             android:theme="@style/Theme.MaterialFiles" />
 
@@ -468,3 +468,4 @@
             android:value="false" />
     </application>
 </manifest>
+

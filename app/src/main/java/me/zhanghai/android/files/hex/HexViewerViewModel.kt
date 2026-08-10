@@ -42,7 +42,9 @@ class HexViewerViewModel(private val path: Path) : ViewModel() {
     }
 
     fun loadPage(offset: Long) {
-        if (offset < 0) {
+        // Clamp to the file bounds: no pages before the start or past the end.
+        val size = fileSize
+        if (offset < 0 || (size != null && size > 0 && offset >= size)) {
             return
         }
         _pageLiveData.value = HexPage(loading = true)
@@ -110,6 +112,13 @@ class HexViewerViewModel(private val path: Path) : ViewModel() {
         val bytes = ByteArray(hexChars.length / 2)
         for (index in bytes.indices) {
             bytes[index] = hexChars.substring(index * 2, index * 2 + 2).toInt(16).toByte()
+        }
+        // Overwrite-in-place only: a different length would shift every following byte.
+        if (bytes.size != lastPageBytes.size) {
+            throw IllegalArgumentException(
+                "Byte count changed (was ${lastPageBytes.size}, now ${bytes.size}); " +
+                    "only equal-length edits are supported"
+            )
         }
         val channel = Files.newByteChannel(path, java8.nio.file.StandardOpenOption.WRITE)
         channel.use {

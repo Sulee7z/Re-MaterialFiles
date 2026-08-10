@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2026 Sulee7z <94352968+sulee7z@users.noreply.github.com>
  * All Rights Reserved.
  */
@@ -22,7 +22,7 @@ class DexAnalyzerActivity : AppActivity() {
         findViewById<View>(android.R.id.content)
         if (savedInstanceState == null) {
             fragment = DexAnalyzerFragment().putArgs(
-                DexAnalyzerFragment.Args(intent.extraPath!!)
+                DexAnalyzerFragment.Args(intent.extraPath ?: run { finish(); return })
             )
             supportFragmentManager.commit { add(android.R.id.content, fragment) }
         } else {
@@ -31,3 +31,4 @@ class DexAnalyzerActivity : AppActivity() {
         }
     }
 }
+

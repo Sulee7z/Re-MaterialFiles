@@ -37,10 +37,13 @@ class ContentSearchViewModel(private val directory: Path) : ViewModel() {
     val progressLiveData: LiveData<Int>
         get() = _progressLiveData
 
-    private var cancelled = false
+    // Generation counter: each search() bumps it, invalidating any still-running previous
+    // scan. The loop checks the generation captured at start, so a new search cancels the
+    // old one without cancelling itself (a plain boolean would cancel both).
+    private var searchGeneration = 0
 
     fun search(query: String, caseSensitive: Boolean, textOnly: Boolean) {
-        cancelled = true
+        val generation = ++searchGeneration
         if (query.isEmpty()) {
             _resultsLiveData.value = DataState.Success(emptyList())
             return
@@ -93,8 +96,8 @@ class ContentSearchViewModel(private val directory: Path) : ViewModel() {
                 val visited = HashSet<String>()
                 val queue = ArrayDeque<Pair<Path, String>>()
                 queue.addLast(directory to "")
-                while (queue.isNotEmpty() && !cancelled && results.size < MAX_RESULTS &&
-                    scanned < MAX_SCAN_ITEMS
+                while (queue.isNotEmpty() && generation == searchGeneration &&
+                    results.size < MAX_RESULTS && scanned < MAX_SCAN_ITEMS
                 ) {
                     val (current, relative) = queue.removeFirst()
                     if (current.toString() in visited) {
@@ -107,7 +110,9 @@ class ContentSearchViewModel(private val directory: Path) : ViewModel() {
                         continue
                     }
                     for (entry in entries.sortedBy { it.fileName.toString() }) {
-                        if (cancelled || results.size >= MAX_RESULTS || scanned >= MAX_SCAN_ITEMS) {
+                        if (generation != searchGeneration || results.size >= MAX_RESULTS ||
+                            scanned >= MAX_SCAN_ITEMS
+                        ) {
                             break
                         }
                         if (entry.toString() in visited) {
@@ -126,12 +131,12 @@ class ContentSearchViewModel(private val directory: Path) : ViewModel() {
                     }
                 }
             } catch (e: Throwable) {
-                if (!cancelled) {
+                if (generation == searchGeneration) {
                     _resultsLiveData.postValue(DataState.Error(null, e))
                 }
                 return@execute
             }
-            if (!cancelled) {
+            if (generation == searchGeneration) {
                 _progressLiveData.postValue(scanned)
                 _resultsLiveData.postValue(DataState.Success(results))
             }
@@ -139,7 +144,7 @@ class ContentSearchViewModel(private val directory: Path) : ViewModel() {
     }
 
     override fun onCleared() {
-        cancelled = true
+        searchGeneration++
     }
 }
 

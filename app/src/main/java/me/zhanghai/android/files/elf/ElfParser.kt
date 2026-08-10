@@ -97,7 +97,11 @@ object ElfParser {
     }
 
     fun parse(bytes: ByteArray): ElfFile {
-        if (bytes.size < 52) {
+        val is64Bit = if (bytes.size >= 65) bytes[EI_CLASS] == 2.toByte() else false
+        // A 64-bit ELF header is at least 64 bytes; use that before reading any 64-bit
+        // fields past offset 52.
+        val minimumHeaderSize = if (is64Bit) 64 else 52
+        if (bytes.size < minimumHeaderSize) {
             throw ElfParseException("File too small to be an ELF file")
         }
         val reader = Reader(bytes, littleEndian = true)
@@ -107,7 +111,6 @@ object ElfParser {
             magic[2] != 'L'.code.toByte() || magic[3] != 'F'.code.toByte()) {
             throw ElfParseException("Not a valid ELF file")
         }
-        val is64Bit = reader.u8(EI_CLASS) == 2
         val isLittleEndian = reader.u8(EI_DATA) == 1
         val endianReader = Reader(bytes, isLittleEndian)
         val osAbi = osAbiNames[reader.u8(EI_OSABI)] ?: "0x%02x".format(reader.u8(EI_OSABI))
@@ -123,26 +126,36 @@ object ElfParser {
         val sectionHeaderCount = if (is64Bit) endianReader.u16(60) else endianReader.u16(48)
         val sectionNameStringIndex = if (is64Bit) endianReader.u16(62) else endianReader.u16(50)
 
-        // Section name string table.
-        val sectionNames = if (sectionNameStringIndex in 0 until sectionHeaderCount) {
-            val entryOffset = (sectionHeaderOffset + sectionNameStringIndex.toLong() *
-                sectionHeaderEntrySize).toInt()
-            val stringTableOffset = if (is64Bit) {
-                endianReader.u64(entryOffset + 24)
+        // Section name string table: sh_name is a byte offset into this table, so keep the
+        // table offset and read each name at tableOffset + sh_name (not as a list index).
+        val sectionNameTableOffset = if (sectionNameStringIndex in 0 until sectionHeaderCount) {
+            val entryOffsetLong = sectionHeaderOffset + sectionNameStringIndex.toLong() *
+                sectionHeaderEntrySize
+            if (entryOffsetLong >= 0 && entryOffsetLong + sectionHeaderEntrySize <= bytes.size) {
+                val entryOffset = entryOffsetLong.toInt()
+                if (is64Bit) {
+                    endianReader.u64(entryOffset + 24)
+                } else {
+                    endianReader.u32(entryOffset + 16)
+                }
             } else {
-                endianReader.u32(entryOffset + 16)
+                -1L
             }
-            readCStrings(bytes, stringTableOffset)
         } else {
-            emptyList()
+            -1L
         }
 
-        val sections = ArrayList<ElfSection>(sectionHeaderCount)
+        val sections = ArrayList<ElfSection>(
+            minOf(sectionHeaderCount, bytes.size / sectionHeaderEntrySize.coerceAtLeast(1))
+        )
         repeat(sectionHeaderCount) { index ->
-            val entryOffset = (sectionHeaderOffset + index.toLong() * sectionHeaderEntrySize).toInt()
-            if (entryOffset + sectionHeaderEntrySize > bytes.size) {
+            // Compute in Long: a 64-bit ELF may place the table past 2 GiB, where toInt()
+            // would overflow negative and then index into the byte array out of bounds.
+            val entryOffsetLong = sectionHeaderOffset + index.toLong() * sectionHeaderEntrySize
+            if (entryOffsetLong < 0 || entryOffsetLong + sectionHeaderEntrySize > bytes.size) {
                 return@repeat
             }
+            val entryOffset = entryOffsetLong.toInt()
             val nameIndex = endianReader.u32(entryOffset)
             val sectionType = sectionTypeNames[endianReader.u32(entryOffset + 4).toInt()]
                 ?: "0x%x".format(endianReader.u32(entryOffset + 4))
@@ -161,16 +174,24 @@ object ElfParser {
             } else {
                 endianReader.u32(entryOffset + 20)
             }
-            val name = if (nameIndex < sectionNames.size) sectionNames[nameIndex.toInt()] else ""
+            val name = if (sectionNameTableOffset >= 0) {
+                readCStringAt(bytes, sectionNameTableOffset + nameIndex)
+            } else {
+                ""
+            }
             sections.add(ElfSection(name, sectionType, address, offset, size))
         }
 
-        val programHeaders = ArrayList<ElfProgramHeader>(programHeaderCount)
+        val programHeaders = ArrayList<ElfProgramHeader>(
+            minOf(programHeaderCount, bytes.size / programHeaderEntrySize.coerceAtLeast(1))
+        )
         repeat(programHeaderCount) { index ->
-            val entryOffset = (programHeaderOffset + index.toLong() * programHeaderEntrySize).toInt()
-            if (entryOffset + programHeaderEntrySize > bytes.size) {
+            // Long arithmetic, see the section loop above.
+            val entryOffsetLong = programHeaderOffset + index.toLong() * programHeaderEntrySize
+            if (entryOffsetLong < 0 || entryOffsetLong + programHeaderEntrySize > bytes.size) {
                 return@repeat
             }
+            val entryOffset = entryOffsetLong.toInt()
             val programType = programTypeNames[endianReader.u32(entryOffset).toInt()]
                 ?: "0x%x".format(endianReader.u32(entryOffset))
             val offset = if (is64Bit) {
@@ -220,28 +241,21 @@ object ElfParser {
         )
     }
 
-    private fun readCStrings(bytes: ByteArray, offset: Long): List<String> {
+    private fun readCStringAt(bytes: ByteArray, offset: Long): String {
         if (offset < 0 || offset >= bytes.size) {
-            return emptyList()
+            return ""
         }
-        val strings = ArrayList<String>()
+        val builder = StringBuilder()
         var position = offset
-        while (position < bytes.size) {
-            val builder = StringBuilder()
-            while (position < bytes.size && bytes[position.toInt()].toInt() != 0) {
-                builder.append(bytes[position.toInt()].toInt().toChar())
-                position++
-            }
-            if (builder.isNotEmpty()) {
-                strings.add(builder.toString())
-            }
+        while (position < bytes.size && bytes[position.toInt()].toInt() != 0) {
+            builder.append(bytes[position.toInt()].toInt().toChar())
             position++
         }
-        return strings
+        return builder.toString()
     }
 
     private fun extractStrings(bytes: ByteArray): List<String> {
-        val strings = ArrayList<String>()
+        val strings = LinkedHashSet<String>()
         val builder = StringBuilder()
         var index = 0
         while (index < bytes.size) {
@@ -259,6 +273,6 @@ object ElfParser {
         if (builder.length >= 4) {
             strings.add(builder.toString())
         }
-        return strings
+        return strings.toList()
     }
 }

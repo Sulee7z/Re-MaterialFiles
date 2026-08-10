@@ -24,7 +24,9 @@ import me.zhanghai.android.files.viewer.text.TextEditorActivity
  */
 object BuiltInFileOpeners {
 
-    val DEX_ANALYZER_EXTENSIONS = setOf("dex", "odex")
+    // Real .odex files are OAT/ELF containers, not DEX; the parser only understands plain
+    // DEX, so do not claim odex support.
+    val DEX_ANALYZER_EXTENSIONS = setOf("dex")
 
     val ELF_ANALYZER_EXTENSIONS = setOf("so", "elf")
 

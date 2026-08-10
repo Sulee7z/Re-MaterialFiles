@@ -237,16 +237,35 @@ class DexAnalyzerFragment : Fragment() {
         lifecycleScope.launch(Dispatchers.IO) {
             val result = try {
                 var count = 0
+                var skipped = 0
+                // Case-insensitive file systems (Windows/Android FAT) collide class names
+                // that differ only in case ("La/b/C;" vs "La/B/c;"); track lowercase paths
+                // so the second class is skipped instead of silently overwriting the first.
+                val writtenLowercasePaths = HashSet<String>()
                 for (cls in dexFile.classes) {
                     val smali = buildSmaliFile(cls)
                     val relativePath = cls.className.removePrefix("L").removeSuffix(";")
                         .replace('.', '/')
-                    val filePath = directory.resolve("$relativePath.smali")
+                    val filePath = directory.resolve("$relativePath.smali").normalize()
+                    // Path-traversal guard: a crafted DEX can embed ".." segments or an
+                    // absolute path in the class name; never write outside the export dir.
+                    if (!filePath.startsWith(directory)) {
+                        skipped++
+                        continue
+                    }
+                    if (!writtenLowercasePaths.add(filePath.toString().lowercase())) {
+                        skipped++
+                        continue
+                    }
                     Files.createDirectories(filePath.parent!!)
                     Files.write(filePath, smali.toByteArray())
                     count++
                 }
-                count
+                if (skipped > 0) {
+                    "${count}\n(${getString(R.string.dex_export_smali_skipped_format, skipped)})"
+                } else {
+                    count.toString()
+                }
             } catch (e: IOException) {
                 withContext(Dispatchers.Main) {
                     showToast(e.localizedMessage ?: getString(R.string.dex_export_smali_error))
@@ -294,9 +313,23 @@ class DexAnalyzerFragment : Fragment() {
         } ?: getString(R.string.dex_class_superclass_none)
         val members = dexClass.fields.map { MemberItem(dexClass, it, null) } +
             dexClass.methods.map { MemberItem(dexClass, null, it) }
+        var dialog: androidx.appcompat.app.AlertDialog? = null
         val membersAdapter = MemberListAdapter(
             onMemberClick = { member ->
-                member.methodDef?.let { openMethodSmali(member.dexClass, it) }
+                val methodDef = member.methodDef
+                if (methodDef != null) {
+                    openMethodSmali(member.dexClass, methodDef)
+                    return@MemberListAdapter
+                }
+                // A field click jumps to its type when the type is a class descriptor.
+                val fieldType = member.fieldDef?.field?.type
+                if (fieldType != null && fieldType.startsWith("L") && fieldType.endsWith(";")) {
+                    val owner = viewModel.classByName(fieldType)
+                    if (owner != null) {
+                        dialog?.dismiss()
+                        showClassDetail(owner)
+                    }
+                }
             },
             onMemberLongClick = { member ->
                 showMemberReferences(member)
@@ -305,12 +338,10 @@ class DexAnalyzerFragment : Fragment() {
         dialogBinding.membersRecyclerView.layoutManager = LinearLayoutManager(context)
         dialogBinding.membersRecyclerView.adapter = membersAdapter
         membersAdapter.replace(members, true)
-        val dialog = MaterialAlertDialogBuilder(requireContext())
+        dialog = MaterialAlertDialogBuilder(requireContext())
             .setView(dialogBinding.root)
             .setPositiveButton(R.string.dex_find_references) { _, _ ->
-                showFindReferencesDialog(
-                    dexClass.className, viewModel.findClassReferences(dexClass.className)
-                )
+                findReferencesAsync(dexClass.className) { viewModel.findClassReferences(it) }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
@@ -318,7 +349,7 @@ class DexAnalyzerFragment : Fragment() {
             val superclassName = dexClass.superclassName ?: return@setOnClickListener
             val owner = viewModel.classByName(superclassName)
             if (owner != null) {
-                dialog.dismiss()
+                dialog?.dismiss()
                 showClassDetail(owner)
             }
         }
@@ -327,15 +358,22 @@ class DexAnalyzerFragment : Fragment() {
     private fun showMemberReferences(member: MemberItem) {
         if (member.methodDef != null) {
             val key = member.methodDef.method.toString()
-            showFindReferencesDialog(
-                key, viewModel.findMethodReferences(key)
-            )
+            findReferencesAsync(key) { viewModel.findMethodReferences(it) }
         } else if (member.fieldDef != null) {
             val field = member.fieldDef.field
             val key = "${field.className}->${field.name}:${field.type}"
-            showFindReferencesDialog(
-                key, viewModel.findFieldReferences(key)
-            )
+            findReferencesAsync(key) { viewModel.findFieldReferences(it) }
+        }
+    }
+
+    /** Runs the (potentially expensive) reference scan off the main thread. */
+    private fun findReferencesAsync(
+        target: String,
+        find: (String) -> List<Pair<String, String>>
+    ) {
+        lifecycleScope.launch {
+            val references = withContext(Dispatchers.Default) { find(target) }
+            showFindReferencesDialog(target, references)
         }
     }
 
@@ -479,13 +517,9 @@ private data class MemberItem(
             val f = fieldDef.field
             "${DexAccessFlags.forField(fieldDef.accessFlags)} ${f.type} ${f.name}"
         } else {
+            // Standard smali names <init>/<clinit> carry no class-name prefix.
             val m = methodDef!!.method
-            val prefix = if (m.name == "<init>" || m.name == "<clinit>") {
-                "${m.className}->"
-            } else {
-                ""
-            }
-            "${DexAccessFlags.forMethod(methodDef!!.accessFlags)} $prefix${m.name}${m.shortDescriptor}"
+            "${DexAccessFlags.forMethod(methodDef!!.accessFlags)} ${m.name}${m.shortDescriptor}"
         }
 }
 

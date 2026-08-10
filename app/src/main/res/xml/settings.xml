@@ -107,6 +107,12 @@
             android:summary="@string/settings_two_pane_browsing_summary" />
 
         <SwitchPreferenceCompat
+            android:key="@string/pref_key_two_pane_dense"
+            android:title="@string/settings_two_pane_dense_title"
+            android:summary="@string/settings_two_pane_dense_summary"
+            android:dependency="@string/pref_key_two_pane_browsing" />
+
+        <SwitchPreferenceCompat
             android:key="@string/pref_key_show_pdf_thumbnail_pre_28"
             android:title="@string/settings_show_pdf_thumbnail_pre_28_title"
             android:defaultValue="@bool/pref_default_value_show_pdf_thumbnail_pre_28"

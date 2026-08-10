@@ -660,7 +660,8 @@
     <string name="search_regex">正则</string>
 
     <string name="dex_export_smali">导出 smali</string>
-    <string name="dex_export_smali_done_format">已导出 %1$d 个类</string>
+    <string name="dex_export_smali_done_format">已导出 %1$s 个类</string>
+    <string name="dex_export_smali_skipped_format">%1$d 个已跳过(类名不安全)</string>
     <string name="dex_export_smali_error">导出 smali 失败</string>
 
     <string name="file_item_action_view_manifest">查看清单</string>
@@ -670,6 +671,9 @@
     <string name="hex_save">保存</string>
     <string name="hex_save_success">已保存</string>
     <string name="hex_save_error">保存失败</string>
+    <string name="hex_discard_title">放弃修改？</string>
+    <string name="hex_discard_message">您有未保存的修改，放弃并继续吗？</string>
+    <string name="hex_discard_confirm">放弃</string>
 
     <string name="file_list_action_content_search">内容搜索</string>
     <string name="file_list_action_index_search">索引搜索</string>
@@ -778,6 +782,8 @@
     <string name="settings_file_list_dense_layout_title">紧凑文件列表</string>
     <string name="settings_two_pane_browsing_title">双行浏览</string>
     <string name="settings_two_pane_browsing_summary">并排显示两个独立文件列表;一侧复制/剪切后到另一侧粘贴即可跨面板移动文件</string>
+    <string name="settings_two_pane_dense_title">双行模式紧凑列表</string>
+    <string name="settings_two_pane_dense_summary">双行模式下使用更紧凑的文件行高,每栏显示更多文件</string>
     <string name="file_item_action_copy_to_right">复制到右栏</string>
     <string name="file_item_action_cut_to_right">剪切到右栏</string>
     <string name="file_item_action_copy_to_left">复制到左栏</string>

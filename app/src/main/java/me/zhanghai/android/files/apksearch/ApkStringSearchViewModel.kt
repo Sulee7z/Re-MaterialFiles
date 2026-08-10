@@ -38,7 +38,11 @@ class ApkStringSearchViewModel(
             val value: DataState<List<ApkString>> = try {
                 val strings = ArrayList<ApkString>()
                 cacheDirectory.mkdirs()
-                val cacheFile = File(cacheDirectory, "apk-string-search.apk")
+                // Unique cache name per input path: two searches running concurrently on
+                // different APKs must not overwrite each other's cache file.
+                val cacheFile = File(
+                    cacheDirectory, "apk-string-search-${path.toString().hashCode()}.apk"
+                )
                 Files.newInputStream(path).use { input ->
                     cacheFile.outputStream().use { output -> input.copyTo(output) }
                 }
@@ -53,15 +57,32 @@ class ApkStringSearchViewModel(
                         if (entry.size > MAX_ENTRY_SIZE) {
                             continue
                         }
-                        val bytes = zipFile.getInputStream(entry).use { it.readBytes() }
+                        // Read at most MAX_ENTRY_SIZE + 1 bytes: a zip bomb can fake the
+                        // entry size field, and readBytes() would then OOM the process.
+                        val bytes = zipFile.getInputStream(entry).use { input ->
+                            val buffer = ByteArray((MAX_ENTRY_SIZE + 1).toInt())
+                            var offset = 0
+                            while (offset < buffer.size) {
+                                val read = input.read(buffer, offset, buffer.size - offset)
+                                if (read == -1) {
+                                    break
+                                }
+                                offset += read
+                            }
+                            buffer.copyOf(offset)
+                        }
+                        if (bytes.size > MAX_ENTRY_SIZE) {
+                            continue
+                        }
                         if (name.startsWith("classes") && name.endsWith(".dex")) {
                             try {
                                 val dexFile = DexParser.parse(bytes)
                                 dexFile.strings.forEach { string ->
                                     strings.add(ApkString(name, string))
                                 }
-                            } catch (e: DexParseException) {
-                                // Skip unparsable dex files.
+                            } catch (e: Exception) {
+                                // Skip unparsable dex entries; one bad dex must not fail the
+                                // whole APK (the parser can throw more than DexParseException).
                             }
                         } else if (name.endsWith(".so")) {
                             extractAsciiStrings(bytes).forEach { string ->

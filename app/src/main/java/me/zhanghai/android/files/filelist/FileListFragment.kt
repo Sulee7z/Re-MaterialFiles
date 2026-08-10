@@ -420,7 +420,8 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         }
         viewModel.pickOptionsLiveData.observe(viewLifecycleOwner) { onPickOptionsChanged(it) }
         viewModel.selectedFilesLiveData.observe(viewLifecycleOwner) { onSelectedFilesChanged(it) }
-        Settings.FILE_LIST_DENSE_LAYOUT.observe(viewLifecycleOwner) { onDenseLayoutChanged(it) }
+        Settings.FILE_LIST_DENSE_LAYOUT.observe(viewLifecycleOwner) { updateDenseLayout() }
+        Settings.FILE_LIST_TWO_PANE_DENSE.observe(viewLifecycleOwner) { updateDenseLayout() }
         viewModel.pasteStateLiveData.observe(viewLifecycleOwner) { onPasteStateChanged(it) }
         Settings.FILE_NAME_ELLIPSIZE.observe(viewLifecycleOwner) { onFileNameEllipsizeChanged(it) }
         viewModel.fileListLiveData.observe(viewLifecycleOwner) { onFileListChanged(it) }
@@ -956,6 +957,20 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     private fun onSelectedFilesChanged(files: FileItemSet) {
         updateOverlayToolbar()
         adapter.replaceSelectedFiles(files)
+    }
+
+    /**
+     * Applies the dense-layout setting. In two-pane mode the dedicated two-pane dense
+     * switch takes precedence over the global one.
+     */
+    private fun updateDenseLayout() {
+        onDenseLayoutChanged(
+            if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+                me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE_DENSE.valueCompat
+            } else {
+                me.zhanghai.android.files.settings.Settings.FILE_LIST_DENSE_LAYOUT.valueCompat
+            }
+        )
     }
 
     private fun onDenseLayoutChanged(denseLayout: Boolean) {
@@ -1816,7 +1831,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     private fun decodeAndCacheManifest(file: FileItem): Path {
         val cacheDirectory = File(requireContext().cacheDir, "manifest-cache")
         cacheDirectory.mkdirs()
-        val cacheFile = File(cacheDirectory, "AndroidManifest.xml")
+        // Unique cache name per input path: two concurrent manifest views of different APKs
+        // must not overwrite each other's cache file.
+        val cacheKey = file.path.toString().hashCode()
+        val cacheFile = File(cacheDirectory, "AndroidManifest-$cacheKey.xml")
         Files.newInputStream(file.path).use { input ->
             cacheFile.outputStream().use { output -> input.copyTo(output) }
         }
@@ -1826,7 +1844,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             zipFile.getInputStream(entry).use { it.readBytes() }
         }
         val decoded = AndroidManifestDecoder.decode(manifestBytes)
-        val outputFile = File(cacheDirectory, "AndroidManifest-decoded.xml")
+        val outputFile = File(cacheDirectory, "AndroidManifest-decoded-$cacheKey.xml")
         Files.write(Paths.get(outputFile.absolutePath), decoded.toByteArray())
         return Paths.get(outputFile.absolutePath)
     }

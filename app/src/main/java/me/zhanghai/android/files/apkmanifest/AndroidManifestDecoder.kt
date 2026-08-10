@@ -24,7 +24,6 @@ object AndroidManifestDecoder {
     private const val RES_XML_RESOURCE_MAP_TYPE = 0x0180
 
     private const val UTF8_FLAG = 0x100
-    private const val ANDROID_NAMESPACE_URI = "http://schemas.android.com/apk/res/android"
 
     private const val TYPE_REFERENCE = 1
     private const val TYPE_STRING = 3
@@ -58,6 +57,15 @@ object AndroidManifestDecoder {
             (bytes[offset].toInt() and 0xff) or ((bytes[offset + 1].toInt() and 0xff) shl 8)
     }
 
+    private fun u16At(bytes: ByteArray, offset: Int): Int =
+        (bytes[offset].toInt() and 0xff) or ((bytes[offset + 1].toInt() and 0xff) shl 8)
+
+    private fun u32At(bytes: ByteArray, offset: Int): Long =
+        (bytes[offset].toLong() and 0xff) or
+            (bytes[offset + 1].toLong() and 0xff shl 8) or
+            (bytes[offset + 2].toLong() and 0xff shl 16) or
+            (bytes[offset + 3].toLong() and 0xff shl 24)
+
     fun decode(bytes: ByteArray): String {
         if (bytes.size < 16) {
             throw ManifestDecodeException("File too small")
@@ -83,12 +91,36 @@ object AndroidManifestDecoder {
         }
         val stringPool = StringPool(bytes, poolStart, poolHeaderSize)
         reader.position = poolStart + poolChunkSize
+
+        // Pass 1: collect every namespace declaration (prefix index -> uri index), so the
+        // root element can declare them all as xmlns attributes. Most APKs declare all
+        // namespaces once at the root anyway.
+        val declaredNamespaces = LinkedHashMap<Long, Long>()
+        var scanPosition = reader.position
+        while (scanPosition + 8 <= bytes.size) {
+            val scanType = u16At(bytes, scanPosition)
+            val scanSize = u32At(bytes, scanPosition + 4).toInt()
+            if (scanSize < 8 || scanPosition + scanSize > bytes.size) {
+                break
+            }
+            if (scanType == RES_XML_START_NAMESPACE_TYPE) {
+                val (prefixIndex, uriIndex) = readNamespace(bytes, scanPosition, stringPool)
+                declaredNamespaces.putIfAbsent(uriIndex, prefixIndex)
+            }
+            scanPosition += scanSize
+        }
+
+        // Pass 2: build the XML text with a pending-open-tag model so every start tag is
+        // properly closed (self-closing when empty, otherwise as a real end tag).
         val namespaces = ArrayDeque<Pair<Long, Long>>()
         val builder = StringBuilder()
         builder.append("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n")
         var indent = 0
-        var lastStartElementName = -1L
-        var lastStartElementNs = -1L
+        var pendingOpenIndent = -1
+        var pendingOpenName = -1L
+        var pendingOpenNs = -1L
+        var rootNamespaceWritten = false
+
         while (reader.position + 8 <= bytes.size) {
             val start = reader.position
             val type = reader.u16()
@@ -99,7 +131,7 @@ object AndroidManifestDecoder {
             }
             when (type) {
                 RES_XML_START_NAMESPACE_TYPE -> {
-                    val (prefix, uri) = readNamespace(reader, start, stringPool)
+                    val (prefix, uri) = readNamespace(bytes, start, stringPool)
                     namespaces.addLast(prefix to uri)
                 }
                 RES_XML_END_NAMESPACE_TYPE -> {
@@ -108,6 +140,7 @@ object AndroidManifestDecoder {
                     }
                 }
                 RES_XML_START_ELEMENT_TYPE -> {
+                    pendingOpenIndent = flushPendingOpenTag(builder, false, pendingOpenIndent)
                     reader.position = start + 8
                     val lineNumber = reader.u32()
                     val comment = reader.u32()
@@ -122,40 +155,38 @@ object AndroidManifestDecoder {
                     val attributesStart = start + 16 + attributeStart
                     appendIndent(builder, indent)
                     builder.append('<')
-                    if (ns.toInt() != -1) {
-                        val prefix = namespacePrefix(stringPool, namespaces, ns)
-                        if (prefix != null) {
-                            builder.append(prefix).append(':')
+                    builder.append(qualifiedName(stringPool, namespaces, ns, name))
+                    if (!rootNamespaceWritten) {
+                        rootNamespaceWritten = true
+                        declaredNamespaces.forEach { (uriIndex, prefixIndex) ->
+                            builder.append('\n')
+                            appendIndent(builder, indent + 1)
+                            builder.append("xmlns:")
+                                .append(escape(stringPool.string(prefixIndex.toInt())))
+                                .append("=\"")
+                                .append(escape(stringPool.string(uriIndex.toInt())))
+                                .append('"')
                         }
                     }
-                    builder.append(escape(stringPool.string(name.toInt())))
                     repeat(attributeCount) { index ->
                         val attributeOffset = attributesStart + index * 20
-                        val attrNs = u32At(reader, attributeOffset)
-                        val attrName = u32At(reader, attributeOffset + 4)
-                        val rawValue = u32At(reader, attributeOffset + 8)
+                        val attrNs = reader.u32At(attributeOffset)
+                        val attrName = reader.u32At(attributeOffset + 4)
+                        val rawValue = reader.u32At(attributeOffset + 8)
                         val dataType = reader.bytes[attributeOffset + 15].toInt() and 0xff
-                        val data = u32At(reader, attributeOffset + 16)
-                        builder.append(' ')
-                        if (attrNs.toInt() != -1) {
-                            val prefix = namespacePrefix(stringPool, namespaces, attrNs)
-                            if (prefix != null) {
-                                builder.append(prefix).append(':')
-                            }
-                        }
-                        builder.append(escape(stringPool.string(attrName.toInt())))
+                        val data = reader.u32At(attributeOffset + 16)
+                        builder.append('\n')
+                        appendIndent(builder, indent + 1)
+                        builder.append(qualifiedName(stringPool, namespaces, attrNs, attrName))
                         builder.append("=\"")
                         builder.append(
-                            escape(
-                                formatValue(
-                                    stringPool, rawValue, dataType, data
-                                )
-                            )
+                            escape(formatValue(stringPool, rawValue, dataType, data))
                         )
                         builder.append('"')
                     }
-                    lastStartElementName = name
-                    lastStartElementNs = ns
+                    pendingOpenIndent = indent
+                    pendingOpenName = name
+                    pendingOpenNs = ns
                     indent++
                 }
                 RES_XML_END_ELEMENT_TYPE -> {
@@ -163,22 +194,21 @@ object AndroidManifestDecoder {
                     reader.position = start + 8
                     val ns = reader.u32()
                     val name = reader.u32()
-                    if (lastStartElementName == name && lastStartElementNs == ns) {
-                        builder.append("/>\n")
+                    if (pendingOpenIndent == indent && pendingOpenName == name &&
+                        pendingOpenNs == ns) {
+                        // Empty element: close the pending start tag as self-closing.
+                        pendingOpenIndent = flushPendingOpenTag(builder, true, pendingOpenIndent)
                     } else {
+                        pendingOpenIndent = flushPendingOpenTag(builder, false, pendingOpenIndent)
                         appendIndent(builder, indent)
                         builder.append("</")
-                        if (ns.toInt() != -1) {
-                            val prefix = namespacePrefix(stringPool, namespaces, ns)
-                            if (prefix != null) {
-                                builder.append(prefix).append(':')
-                            }
-                        }
-                        builder.append(escape(stringPool.string(name.toInt()))).append(">\n")
+                            .append(qualifiedName(stringPool, namespaces, ns, name))
+                            .append(">\n")
                     }
-                    lastStartElementName = -1
+                    pendingOpenIndent = -1
                 }
                 RES_XML_CDATA_TYPE -> {
+                    pendingOpenIndent = flushPendingOpenTag(builder, false, pendingOpenIndent)
                     reader.position = start + 8
                     val data = reader.u32()
                     appendIndent(builder, indent)
@@ -193,15 +223,40 @@ object AndroidManifestDecoder {
         return builder.toString()
     }
 
-    private fun u32At(reader: Reader, offset: Int): Long = reader.u32At(offset)
+    private fun flushPendingOpenTag(
+        builder: StringBuilder, selfClose: Boolean, pendingOpenIndent: Int
+    ): Int {
+        if (pendingOpenIndent >= 0) {
+            builder.append(if (selfClose) "/>" else ">").append('\n')
+            return -1
+        }
+        return pendingOpenIndent
+    }
+
+    private fun qualifiedName(
+        stringPool: StringPool,
+        namespaces: ArrayDeque<Pair<Long, Long>>,
+        nsIndex: Long,
+        nameIndex: Long
+    ): String {
+        val builder = StringBuilder()
+        if (nsIndex.toInt() != -1) {
+            val prefix = namespacePrefix(stringPool, namespaces, nsIndex)
+            if (prefix != null) {
+                builder.append(prefix).append(':')
+            }
+        }
+        builder.append(escape(stringPool.string(nameIndex.toInt())))
+        return builder.toString()
+    }
 
     private fun readNamespace(
-        reader: Reader, start: Int, stringPool: StringPool
+        bytes: ByteArray, start: Int, stringPool: StringPool
     ): Pair<Long, Long> {
         // The namespace fields are at +8/+12 in the classic layout, but aapt2 places them at
         // +16/+20, so prefer the pair where both indices are valid string indices.
-        val classic = reader.u32At(start + 8) to reader.u32At(start + 12)
-        val aapt2 = reader.u32At(start + 16) to reader.u32At(start + 20)
+        val classic = u32At(bytes, start + 8) to u32At(bytes, start + 12)
+        val aapt2 = u32At(bytes, start + 16) to u32At(bytes, start + 20)
         return if (stringPool.isValidIndex(classic.first) && stringPool.isValidIndex(classic.second)) {
             classic
         } else {
@@ -234,12 +289,13 @@ object AndroidManifestDecoder {
             TYPE_STRING -> stringPool.string(data.toInt())
             TYPE_INT_DEC -> data.toString()
             TYPE_INT_BOOLEAN -> if (data != 0L) "true" else "false"
-            TYPE_REFERENCE -> "@0x" + data.toString(16)
+            TYPE_REFERENCE -> if (data == 0L) "@null" else "@0x" + data.toString(16)
             TYPE_INT_HEX -> "0x" + data.toString(16)
             else -> "0x" + data.toString(16)
         }
     }
 
+    /** XML escaping; control characters use character references so content stays faithful. */
     private fun escape(string: String): String {
         val builder = StringBuilder(string.length)
         string.forEach { char ->
@@ -249,9 +305,9 @@ object AndroidManifestDecoder {
                 '&' -> builder.append("&amp;")
                 '"' -> builder.append("&quot;")
                 '\'' -> builder.append("&apos;")
-                '\n' -> builder.append("\\n")
-                '\t' -> builder.append("\\t")
-                '\r' -> builder.append("\\r")
+                '\n' -> builder.append("&#10;")
+                '\t' -> builder.append("&#9;")
+                '\r' -> builder.append("&#13;")
                 else -> builder.append(char)
             }
         }
@@ -267,6 +323,11 @@ object AndroidManifestDecoder {
             // stringsStart is relative to the start of the string pool chunk.
             val stringsStart = u32At(bytes, poolStart + 20).toInt()
             val isUtf8 = flags and UTF8_FLAG.toLong() != 0L
+            // Guard against a crafted count: the offset table must fit inside the file, and
+            // the preallocation must not OOM before the per-entry reads fail.
+            if (stringCount < 0 || stringCount > (bytes.size - poolStart - 28) / 4) {
+                throw ManifestDecodeException("Invalid string pool count")
+            }
             val list = ArrayList<String>(stringCount)
             for (index in 0 until stringCount) {
                 val stringOffset = u32At(bytes, poolStart + 28 + index * 4).toInt()
@@ -286,6 +347,9 @@ object AndroidManifestDecoder {
             index in strings.indices
 
         private fun readUtf8String(bytes: ByteArray, offset: Int): String {
+            if (offset < 0 || offset >= bytes.size) {
+                return ""
+            }
             var position = offset
             // UTF-16 length (in characters).
             var length = bytes[position].toInt() and 0xff
@@ -306,6 +370,9 @@ object AndroidManifestDecoder {
         }
 
         private fun readUtf16String(bytes: ByteArray, offset: Int): String {
+            if (offset < 0 || offset + 1 >= bytes.size) {
+                return ""
+            }
             var position = offset
             val length = (bytes[position].toInt() and 0xff) or
                 ((bytes[position + 1].toInt() and 0xff) shl 8)

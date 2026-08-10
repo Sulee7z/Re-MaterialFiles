@@ -250,9 +250,16 @@ class DexDisassembler(private val dex: DexFile) {
                     "v${(unit shr 8) and 0xff}, ${signExtend16(insns, position + 1).toHex()}", 2
                 )
                 "21h" -> {
-                    val literal = (insns[position + 1].toInt() and 0xffff) shl
-                        (if (op == 0x15) 16 else 48)
-                    Decoded(opcode.name, "v${(unit shr 8) and 0xff}, ${literal.toHex()}", 2)
+                    // const/high16 (0x15): 16-bit literal shifted left by 16 (Int).
+                    // const-wide/high16 (0x19): 16-bit literal shifted left by 48 — must be
+                    // computed in Long, as Int.shl(48) wraps to shl(16).
+                    val raw = insns[position + 1].toInt() and 0xffff
+                    val text = if (op == 0x15) {
+                        (raw shl 16).toHex()
+                    } else {
+                        (raw.toLong() shl 48).toHex()
+                    }
+                    Decoded(opcode.name, "v${(unit shr 8) and 0xff}, $text", 2)
                 }
                 "21c" -> Decoded(
                     opcode.name,
@@ -266,8 +273,9 @@ class DexDisassembler(private val dex: DexFile) {
                 )
                 "22b" -> Decoded(
                     opcode.name,
-                    "v${(unit shr 8) and 0xff}, v${(insns[position + 1].toInt() shr 8) and 0xff}, " +
-                        "${signExtend(insns[position + 1].toInt() and 0xff, 8).toHex()}", 2
+                    // Format: vAA, vBB (low byte), #+CC (high byte, signed literal).
+                    "v${(unit shr 8) and 0xff}, v${insns[position + 1].toInt() and 0xff}, " +
+                        "${signExtend((insns[position + 1].toInt() shr 8) and 0xff, 8).toHex()}", 2
                 )
                 "22t" -> {
                     val target = position + signExtend16(insns, position + 1)
