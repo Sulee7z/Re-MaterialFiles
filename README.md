@@ -1,4 +1,4 @@
-# 📦 Material Files · Sora-Editor 增强版
+# 📦 Re-Material File
 
 [![Android CI 状态](https://img.shields.io/github/actions/workflow/status/Sulee7z/MaterialFiles.Sora-Editor/android.yml?style=for-the-badge&label=%E5%8E%9F%E7%89%88%20%E7%8A%B6%E6%80%81)](https://github.com/Sulee7z/MaterialFiles.Sora-Editor/actions/workflows/android.yml)
 [![Sora-Editor版 状态](https://img.shields.io/github/actions/workflow/status/Sulee7z/MaterialFiles.Sora-Editor/Sora-Editor.yml?style=for-the-badge&label=Sora-Editor%E7%89%88%20%E7%8A%B6%E6%80%81)](https://github.com/Sulee7z/MaterialFiles.Sora-Editor/actions/workflows/Sora-Editor.yml)
