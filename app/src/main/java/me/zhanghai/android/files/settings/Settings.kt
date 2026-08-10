@@ -137,6 +137,12 @@ object Settings {
             R.string.pref_key_file_list_dense_layout, R.bool.pref_default_value_file_list_dense_layout
         )
 
+    /** MT Manager style dual-pane browsing: two independent file lists side by side. */
+    val FILE_LIST_TWO_PANE: SettingLiveData<Boolean> =
+        BooleanSettingLiveData(
+            R.string.pref_key_two_pane_browsing, R.bool.pref_default_value_two_pane_browsing
+        )
+
     val FILE_NAME_ELLIPSIZE: SettingLiveData<TextUtils.TruncateAt> =
         EnumSettingLiveData(
             R.string.pref_key_file_name_ellipsize, R.string.pref_default_value_file_name_ellipsize,

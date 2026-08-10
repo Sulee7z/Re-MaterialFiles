@@ -14,4 +14,8 @@
     <item
         android:id="@+id/action_open_in_new_task"
         android:title="@string/file_list_breadcrumb_action_open_in_new_task" />
+
+    <item
+        android:id="@+id/action_navigate_to_path"
+        android:title="@string/file_list_navigate_to_title" />
 </menu>

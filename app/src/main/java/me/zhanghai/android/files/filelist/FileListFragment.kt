@@ -23,6 +23,7 @@ import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuInflater
 import android.view.MenuItem
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.CheckBox
@@ -261,8 +262,17 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         }
         navigationFragment.listener = this
         val activity = requireActivity() as AppCompatActivity
-        activity.setTitle(R.string.file_list_title)
-        activity.setSupportActionBar(binding.toolbar)
+        val isSecondaryPane = args.secondaryPane
+        if (!isSecondaryPane) {
+            activity.setTitle(R.string.file_list_title)
+            activity.setSupportActionBar(binding.toolbar)
+        } else {
+            // The secondary (right) pane has no drawer: keep the DrawerLayout (it is the
+            // fragment root and must stay visible), hide the navigation panel and lock the
+            // drawer closed.
+            binding.root.findViewById<View>(R.id.navigationFragment)?.isVisible = false
+            binding.drawerLayout?.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED)
+        }
         overlayActionMode = OverlayToolbarActionMode(binding.overlayToolbar)
         bottomActionMode = PersistentBarLayoutToolbarActionMode(
             binding.persistentBarLayout, binding.bottomBarLayout, binding.bottomToolbar
@@ -284,7 +294,9 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         binding.swipeRefreshLayout.setOnRefreshListener { this.refresh() }
         layoutManager = GridLayoutManager(activity, 1)
         binding.recyclerView.layoutManager = layoutManager
-        adapter = FileListAdapter(this)
+        adapter = FileListAdapter(this).apply {
+            this.isSecondaryPane = args.secondaryPane
+        }
         binding.recyclerView.adapter = adapter
         val fastScroller = ThemedFastScroller.create(binding.recyclerView)
         binding.recyclerView.setOnApplyWindowInsetsListener(
@@ -303,18 +315,22 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         }
 
         val viewLifecycleOwner = viewLifecycleOwner
-        addOnBackPressedCallback(
-            object : OnBackPressedCallback(false) {
-                override fun handleOnBackPressed() {
-                    viewModel.navigateUp()
-                }
-            }
-                .also { callback ->
-                    viewModel.breadcrumbLiveData.observe(viewLifecycleOwner) {
-                        callback.isEnabled = viewModel.canNavigateUpBreadcrumb
+        if (!me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+            addOnBackPressedCallback(
+                object : OnBackPressedCallback(false) {
+                    override fun handleOnBackPressed() {
+                        viewModel.navigateUp()
                     }
                 }
-        )
+                    .also { callback ->
+                        viewModel.breadcrumbLiveData.observe(viewLifecycleOwner) {
+                            callback.isEnabled = viewModel.canNavigateUpBreadcrumb
+                        }
+                    }
+            )
+        }
+        // In two-pane mode neither pane registers its own back callback: the Activity tracks
+        // the active pane via its container touch listeners and routes the back key to it.
         addOnBackPressedCallback(overlayActionMode.onBackPressedCallback)
         addOnBackPressedCallback(SpeedDialViewOnBackPressedCallback(binding.speedDialView))
         binding.drawerLayout?.let {
@@ -426,6 +442,11 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
         super.onCreateOptionsMenu(menu, inflater)
+        if (args.secondaryPane) {
+            // The secondary (right) pane shares the activity toolbar with the primary pane,
+            // so it does not contribute any menu items.
+            return
+        }
 
         menuBinding = MenuBinding.inflate(menu, inflater)
         menuBinding.viewSortItem.subMenu!!.setGroupDividerEnabledCompat(true)
@@ -637,6 +658,18 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     private fun onCurrentPathChanged(path: Path) {
+        Log.i(
+            "TwoPaneDebug",
+            "currentPath: secondary=${args.secondaryPane} " +
+                "frag=${System.identityHashCode(this)} vm=${System.identityHashCode(viewModel)} " +
+                "path=$path"
+        )
+        // Keep the two-pane state in sync so the other pane knows where to copy/cut to.
+        if (args.secondaryPane) {
+            TwoPaneState.secondaryPanePath = path
+        } else {
+            TwoPaneState.primaryPanePath = path
+        }
         updateOverlayToolbar()
         updateBottomToolbar()
     }
@@ -769,6 +802,18 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         viewModel.navigateUp()
     }
 
+    /**
+     * Handles the back key on behalf of the Activity in two-pane mode (the back key is
+     * routed to the pane the user last touched). Returns true when consumed.
+     */
+    fun performBack(): Boolean {
+        if (viewModel.canNavigateUpBreadcrumb) {
+            navigateUp()
+            return true
+        }
+        return false
+    }
+
     private fun showNavigateToPathDialog() {
         NavigateToPathDialogFragment.show(currentPath, this)
     }
@@ -830,6 +875,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         collapseSearchView()
         val state = layoutManager.onSaveInstanceState()
         viewModel.navigateTo(state!!, path)
+    }
+
+    override fun navigateToPath() {
+        showNavigateToPathDialog()
     }
 
     override fun copyPath(path: Path) {
@@ -1427,6 +1476,28 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     override fun copyFile(file: FileItem) {
         copyFiles(fileItemSetOf(file))
     }
+
+    override fun copyToOtherPane(file: FileItem) {
+        val target = otherPaneCurrentPath() ?: return
+        FileJobService.copy(
+            makePathListForJob(fileItemSetOf(file)), target, requireContext()
+        )
+    }
+
+    override fun cutToOtherPane(file: FileItem) {
+        val target = otherPaneCurrentPath() ?: return
+        FileJobService.move(
+            makePathListForJob(fileItemSetOf(file)), target, requireContext()
+        )
+    }
+
+    /** The current directory of the other pane in two-pane mode, or null. */
+    private fun otherPaneCurrentPath(): Path? =
+        if (args.secondaryPane) {
+            TwoPaneState.primaryPanePath
+        } else {
+            TwoPaneState.secondaryPanePath
+        }
 
     override fun confirmDeleteFile(file: FileItem) {
         confirmDeleteFiles(fileItemSetOf(file))
@@ -2552,7 +2623,11 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     @Parcelize
-    class Args(val intent: Intent) : ParcelableArgs
+    class Args(val intent: Intent, val secondaryPane: Boolean) : ParcelableArgs {
+        // @Parcelize does not allow default parameter values, so provide a secondary
+        // constructor for the common single-pane case.
+        constructor(intent: Intent) : this(intent, false)
+    }
 
     private class Binding private constructor(
         val root: View,
@@ -2644,3 +2719,19 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
 
 
+
+/**
+ * Shared current directories of the two panes in two-pane browsing, so cross-pane
+ * copy/cut can target the other pane's location.
+ */
+object TwoPaneState {
+    @Volatile
+    var primaryPanePath: java8.nio.file.Path? = null
+
+    @Volatile
+    var secondaryPanePath: java8.nio.file.Path? = null
+
+    /** The pane the user last touched; the back key navigates it. */
+    @Volatile
+    var activePaneSecondary: Boolean = false
+}

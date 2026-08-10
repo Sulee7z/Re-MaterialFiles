@@ -72,6 +72,11 @@ class BreadcrumbLayout : HorizontalScrollView {
         itemsLayout.setPaddingRelative(paddingStart, paddingTop, paddingEnd, paddingBottom)
         setPaddingRelative(0, 0, 0, 0)
         addView(itemsLayout, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
+        // Long-pressing the breadcrumb bar (outside an item) opens the jump-to-path dialog.
+        setOnLongClickListener {
+            listener.navigateToPath()
+            true
+        }
     }
 
     override fun jumpDrawablesToCurrentState() {
@@ -198,6 +203,10 @@ class BreadcrumbLayout : HorizontalScrollView {
                         listener.openInNewTask(path)
                         true
                     }
+                    R.id.action_navigate_to_path -> {
+                        listener.navigateToPath()
+                        true
+                    }
                     else -> false
                 }
             }
@@ -208,5 +217,7 @@ class BreadcrumbLayout : HorizontalScrollView {
         fun navigateTo(path: Path)
         fun copyPath(path: Path)
         fun openInNewTask(path: Path)
+        /** Opens the jump-to-path dialog (long-press on the breadcrumb bar). */
+        fun navigateToPath()
     }
 }

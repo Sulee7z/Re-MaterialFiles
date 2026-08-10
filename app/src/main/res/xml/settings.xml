@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 
 <!--
   ~ Copyright (c) 2018 Hai Zhang <dreaming.in.code.zh@gmail.com>
@@ -100,6 +100,11 @@
             android:entries="@array/settings_open_apk_default_action_entries"
             android:entryValues="@array/pref_entry_values_open_apk_default_action"
             app:useSimpleSummaryProvider="true" />
+
+        <SwitchPreferenceCompat
+            android:key="@string/pref_key_two_pane_browsing"
+            android:title="@string/settings_two_pane_browsing_title"
+            android:summary="@string/settings_two_pane_browsing_summary" />
 
         <SwitchPreferenceCompat
             android:key="@string/pref_key_show_pdf_thumbnail_pre_28"

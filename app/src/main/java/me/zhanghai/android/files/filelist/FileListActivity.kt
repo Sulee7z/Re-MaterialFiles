@@ -8,26 +8,106 @@ package me.zhanghai.android.files.filelist
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.fragment.app.commit
 import java8.nio.file.Path
+import me.zhanghai.android.files.R
 import me.zhanghai.android.files.app.AppActivity
 import me.zhanghai.android.files.file.MimeType
+import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.util.createIntent
 import me.zhanghai.android.files.util.extraPath
 import me.zhanghai.android.files.util.putArgs
+import me.zhanghai.android.files.util.valueCompat
 
 class FileListActivity : AppActivity() {
     private lateinit var fragment: FileListFragment
+
+    /** The two-pane value this Activity was created with; used to rebuild only on change. */
+    private val twoPaneAtCreation: Boolean = Settings.FILE_LIST_TWO_PANE.valueCompat
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         // Calls ensureSubDecor().
         findViewById<View>(android.R.id.content)
-        if (savedInstanceState == null) {
+        if (twoPaneAtCreation) {
+            // MT Manager style two-pane browsing: two independent file lists side by side.
+            // Copy/cut on one pane and paste on the other to move files across panes (the
+            // paste state is shared). The right pane starts at the default directory.
+            // The layout uses fixed container ids so FragmentManager can restore the two
+            // fragments across Activity recreation.
+            setContentView(R.layout.file_list_activity_two_pane)
+            // Fixed widths instead of layout weights: DrawerLayout (the FileListFragment
+            // root) crashes when measured with AT_MOST by a weighted LinearLayout.
+            val paneWidth = resources.displayMetrics.widthPixels / 2
+            findViewById<View>(R.id.leftPane).layoutParams.width = paneWidth
+            findViewById<View>(R.id.rightPane).layoutParams.width = paneWidth
+            // ZenFile-style active-pane tracking: touching either pane makes it the active
+            // pane, and the back key navigates it. Container-level listeners fire on any
+            // touch inside the pane (taps, scrolls, long-presses).
+            findViewById<View>(R.id.leftPane).setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    TwoPaneState.activePaneSecondary = false
+                }
+                false
+            }
+            findViewById<View>(R.id.rightPane).setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    TwoPaneState.activePaneSecondary = true
+                }
+                false
+            }
+            // Back key navigates the pane the user last touched (both fragments do not
+            // register their own back callbacks in two-pane mode).
+            onBackPressedDispatcher.addCallback(
+                this,
+                object : androidx.activity.OnBackPressedCallback(true) {
+                    override fun handleOnBackPressed() {
+                        Log.i(
+                            "TwoPaneDebug",
+                            "back pressed: activePaneSecondary=${TwoPaneState.activePaneSecondary}"
+                        )
+                        val activeFragment = if (TwoPaneState.activePaneSecondary) {
+                            supportFragmentManager
+                                .findFragmentById(R.id.rightPane) as? FileListFragment
+                        } else {
+                            supportFragmentManager
+                                .findFragmentById(R.id.leftPane) as? FileListFragment
+                        }
+                        if (activeFragment == null || !activeFragment.performBack()) {
+                            // The touched pane cannot navigate up (e.g. it is at its root):
+                            // try the other pane before falling through to the default exit.
+                            val otherFragment = if (TwoPaneState.activePaneSecondary) {
+                                supportFragmentManager
+                                    .findFragmentById(R.id.leftPane) as? FileListFragment
+                            } else {
+                                supportFragmentManager
+                                    .findFragmentById(R.id.rightPane) as? FileListFragment
+                            }
+                            if (otherFragment == null || !otherFragment.performBack()) {
+                                isEnabled = false
+                                onBackPressedDispatcher.onBackPressed()
+                            }
+                        }
+                    }
+                }
+            )
+            if (savedInstanceState == null) {
+                val leftFragment = FileListFragment().putArgs(FileListFragment.Args(intent))
+                supportFragmentManager.commit { add(R.id.leftPane, leftFragment) }
+                val rightIntent = FileListActivity.createViewIntent(
+                    Settings.FILE_LIST_DEFAULT_DIRECTORY.valueCompat
+                )
+                val rightFragment = FileListFragment()
+                    .putArgs(FileListFragment.Args(rightIntent, secondaryPane = true))
+                supportFragmentManager.commit { add(R.id.rightPane, rightFragment) }
+            }
+        } else if (savedInstanceState == null) {
             fragment = FileListFragment().putArgs(FileListFragment.Args(intent))
             supportFragmentManager.commit { add(android.R.id.content, fragment) }
         } else {
@@ -36,8 +116,28 @@ class FileListActivity : AppActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Apply two-pane setting changes when returning from the settings screen: the
+        // Activity is stopped while the setting screen is on top. Recreate() would restore
+        // the old fragment hierarchy into containers that no longer match the new pane
+        // layout (crash), so finish and start a fresh instance instead.
+        if (Settings.FILE_LIST_TWO_PANE.valueCompat != twoPaneAtCreation) {
+            finish()
+            startActivity(Intent(this, FileListActivity::class.java))
+        }
+    }
+
+    private fun currentFragment(): FileListFragment? =
+        if (Settings.FILE_LIST_TWO_PANE.valueCompat) {
+            supportFragmentManager.findFragmentById(R.id.leftPane) as? FileListFragment
+        } else {
+            fragment
+        }
+
     override fun onKeyShortcut(keyCode: Int, event: KeyEvent): Boolean {
-        if (fragment.onKeyShortcut(keyCode, event)) {
+        val currentFragment = currentFragment()
+        if (currentFragment != null && currentFragment.onKeyShortcut(keyCode, event)) {
             return true
         }
         return super.onKeyUp(keyCode, event)

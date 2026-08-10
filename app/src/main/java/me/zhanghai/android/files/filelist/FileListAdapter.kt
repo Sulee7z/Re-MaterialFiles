@@ -59,6 +59,9 @@ class FileListAdapter(
 ) : AnimatedListAdapter<FileItem, FileListAdapter.ViewHolder>(CALLBACK), PopupTextProvider {
     private var isSearching = false
 
+    /** True when this list is the secondary (right) pane of two-pane browsing. */
+    var isSecondaryPane: Boolean = false
+
     private lateinit var _viewType: FileViewType
     var viewType: FileViewType
         get() = _viewType
@@ -502,6 +505,23 @@ class FileListAdapter(
         menu.findItem(R.id.action_convert_encoding).isVisible = !isDirectory && isTextFile(file)
         menu.findItem(R.id.action_archive).isVisible = !isArchivePath
         menu.findItem(R.id.action_add_bookmark).isVisible = isDirectory
+        // Two-pane cross actions: copy/cut to the other pane (titles depend on the side).
+        val twoPane = me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat
+        val otherPaneRes = if (isSecondaryPane) {
+            R.string.file_item_action_copy_to_left
+        } else {
+            R.string.file_item_action_copy_to_right
+        }
+        menu.findItem(R.id.action_copy_to_other_pane).isVisible = twoPane
+        menu.findItem(R.id.action_copy_to_other_pane).setTitle(otherPaneRes)
+        menu.findItem(R.id.action_cut_to_other_pane).isVisible = twoPane
+        menu.findItem(R.id.action_cut_to_other_pane).setTitle(
+            if (isSecondaryPane) {
+                R.string.file_item_action_cut_to_left
+            } else {
+                R.string.file_item_action_cut_to_right
+            }
+        )
         holder.popupMenu.setOnMenuItemClickListener {
             when (it.itemId) {
                 R.id.action_open_with -> {
@@ -514,6 +534,14 @@ class FileListAdapter(
                 }
                 R.id.action_copy -> {
                     listener.copyFile(file)
+                    true
+                }
+                R.id.action_copy_to_other_pane -> {
+                    listener.copyToOtherPane(file)
+                    true
+                }
+                R.id.action_cut_to_other_pane -> {
+                    listener.cutToOtherPane(file)
                     true
                 }
                 R.id.action_delete -> {
@@ -709,6 +737,9 @@ class FileListAdapter(
         fun openFileWith(file: FileItem)
         fun cutFile(file: FileItem)
         fun copyFile(file: FileItem)
+        /** Copy/cut the file to the other pane's current directory (two-pane mode). */
+        fun copyToOtherPane(file: FileItem)
+        fun cutToOtherPane(file: FileItem)
         fun confirmDeleteFile(file: FileItem)
         fun showRenameFileDialog(file: FileItem)
         fun hideFile(file: FileItem)

@@ -939,6 +939,13 @@
     <string name="settings_black_night_mode">Black night mode</string>
     <string name="settings_file_list_animation_title">File list animation</string>
     <string name="settings_file_list_dense_layout_title">File list dense layout</string>
+    <string name="settings_two_pane_browsing_title">Two-pane browsing</string>
+    <string name="settings_two_pane_browsing_summary">Show two independent file lists side by side; copy/cut on one side and paste on the other to move files across panes</string>
+    <string name="file_item_action_copy_to_right">Copy to right pane</string>
+    <string name="file_item_action_cut_to_right">Cut to right pane</string>
+    <string name="file_item_action_copy_to_left">Copy to left pane</string>
+    <string name="file_item_action_cut_to_left">Cut to left pane</string>
+    <string name="file_list_title_navigate_hint">Tap the title to jump to a path</string>
     <string name="settings_file_name_ellipsize_title">Display long file name</string>
     <string-array name="settings_file_name_ellipsize_entries">
         <item>Ellipsize the beginning</item>
