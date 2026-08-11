@@ -596,12 +596,6 @@ class FileListAdapter(
         menu.findItem(R.id.action_convert_encoding).isVisible = !isDirectory && isTextFile(file)
         menu.findItem(R.id.action_archive).isVisible = !isArchivePath
         menu.findItem(R.id.action_add_bookmark).isVisible = isDirectory
-        // The cross-pane items exist only in the single-file menu for single-pane mode
-        // (original behavior). In two-pane mode the multi-select action bar in the shared
-        // top bar handles cross-pane transfers, so hide them here.
-        val isTwoPane = me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat
-        menu.findItem(R.id.action_copy_to_other_pane).isVisible = !isTwoPane
-        menu.findItem(R.id.action_cut_to_other_pane).isVisible = !isTwoPane
         holder.popupMenu.setOnMenuItemClickListener {
             when (it.itemId) {
                 R.id.action_open_with -> {
@@ -614,14 +608,6 @@ class FileListAdapter(
                 }
                 R.id.action_copy -> {
                     listener.copyFile(file)
-                    true
-                }
-                R.id.action_copy_to_other_pane -> {
-                    listener.copyToOtherPane(file)
-                    true
-                }
-                R.id.action_cut_to_other_pane -> {
-                    listener.cutToOtherPane(file)
                     true
                 }
                 R.id.action_delete -> {
@@ -809,9 +795,6 @@ class FileListAdapter(
         fun openFileWith(file: FileItem)
         fun cutFile(file: FileItem)
         fun copyFile(file: FileItem)
-        /** Copy/cut the file to the other pane's current directory (two-pane mode). */
-        fun copyToOtherPane(file: FileItem)
-        fun cutToOtherPane(file: FileItem)
         fun confirmDeleteFile(file: FileItem)
         fun showRenameFileDialog(file: FileItem)
         fun hideFile(file: FileItem)

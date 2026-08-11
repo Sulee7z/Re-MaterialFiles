@@ -1863,21 +1863,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         copyFiles(fileItemSetOf(file))
     }
 
-    override fun copyToOtherPane(file: FileItem) {
-        val target = otherPaneCurrentPath() ?: return
-        FileJobService.copy(
-            makePathListForJob(fileItemSetOf(file)), target, requireContext()
-        )
-    }
-
-    override fun cutToOtherPane(file: FileItem) {
-        val target = otherPaneCurrentPath() ?: return
-        FileJobService.move(
-            makePathListForJob(fileItemSetOf(file)), target, requireContext()
-        )
-    }
-
-    /** The current directory of the other pane in two-pane mode, or null. */
+    /** The current directory of the other pane in two-pane mode, or null (F5/F6 shortcut). */
     private fun otherPaneCurrentPath(): Path? =
         if (args.secondaryPane) {
             TwoPaneState.primaryPanePath
