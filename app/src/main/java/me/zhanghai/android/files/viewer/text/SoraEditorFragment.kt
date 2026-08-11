@@ -17,6 +17,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import io.github.rosemoe.sora.event.ContentChangeEvent
 import io.github.rosemoe.sora.event.EventReceiver
+import io.github.rosemoe.sora.lang.EmptyLanguage
 import io.github.rosemoe.sora.langs.java.JavaLanguage
 import io.github.rosemoe.sora.widget.CodeEditor
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
@@ -93,7 +94,11 @@ class SoraEditorFragment : Fragment(), ConfirmReloadDialogFragment.Listener,
             activity.supportActionBar!!.setDisplayHomeAsUpEnabled(true)
         }
 
-        codeEditor.setEditorLanguage(JavaLanguage())
+        // Use the Java language only for Java/Kotlin sources; everything else (XML, JSON,
+        // logs, configs, ...) renders as plain text. Running the Java analyzer on a large
+        // XML file makes scrolling OOM the process (and can take down the system UI), so
+        // the analyzer must never run on non-Java content.
+        codeEditor.setEditorLanguage(if (isJavaSource()) JavaLanguage() else EmptyLanguage())
         codeEditor.colorScheme =
             if (NightModeHelper.isInNightMode(activity)) SchemeDarcula() else EditorColorScheme()
 
@@ -107,6 +112,14 @@ class SoraEditorFragment : Fragment(), ConfirmReloadDialogFragment.Listener,
                 requireActivity().invalidateOptionsMenu()
             }
         }
+    }
+
+    /** True when the opened file is a Java/Kotlin source that benefits from the Java analyzer. */
+    private fun isJavaSource(): Boolean {
+        val fileName = argsFile.fileName?.toString().orEmpty()
+        return fileName.endsWith(".java", ignoreCase = true) ||
+            fileName.endsWith(".kt", ignoreCase = true) ||
+            fileName.endsWith(".kts", ignoreCase = true)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -145,7 +158,8 @@ class SoraEditorFragment : Fragment(), ConfirmReloadDialogFragment.Listener,
                     }
                     R.id.action_syntax_highlight -> {
                         codeEditor.setEditorLanguage(
-                            if (codeEditor.editorLanguage is JavaLanguage) null else JavaLanguage()
+                            if (codeEditor.editorLanguage is JavaLanguage) EmptyLanguage()
+                            else JavaLanguage()
                         )
                         item.isChecked = codeEditor.editorLanguage is JavaLanguage
                         true

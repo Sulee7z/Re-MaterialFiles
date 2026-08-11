@@ -54,6 +54,24 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 
+/** Text file extensions recognized by the encoding-conversion feature (shared by the
+ *  per-item menu and the two-pane multi-select menu). */
+internal val TEXT_FILE_EXTENSIONS = setOf(
+    "txt", "log", "xml", "json", "html", "htm", "css", "js", "ts", "java", "kt",
+    "kts", "c", "h", "cpp", "hpp", "py", "go", "rs", "sh", "bat", "cmd", "ps1",
+    "md", "csv", "tsv", "ini", "cfg", "conf", "properties", "gradle", "smali",
+    "yml", "yaml", "toml", "sql", "svg", "xsd", "xsl", "pro", "rc", "mk",
+    "gitignore", "editorconfig"
+)
+
+internal fun isTextFile(file: FileItem): Boolean {
+    if (file.mimeType.type == "text") {
+        return true
+    }
+    val extension = file.name.substringAfterLast('.', "").lowercase()
+    return extension in TEXT_FILE_EXTENSIONS
+}
+
 class FileListAdapter(
     private val listener: Listener
 ) : AnimatedListAdapter<FileItem, FileListAdapter.ViewHolder>(CALLBACK), PopupTextProvider {
@@ -559,7 +577,7 @@ class FileListAdapter(
         menu.findItem(R.id.action_hide).isVisible = !isReadOnly
         menu.findItem(R.id.action_extract).isVisible = file.isArchiveFile
         menu.findItem(R.id.action_dex_analyze).isVisible =
-            file.name.endsWith(".dex", ignoreCase = true)
+            file.name.endsWith(".dex", ignoreCase = true) || file.mimeType.isApk
         menu.findItem(R.id.action_install).isVisible = file.mimeType.isApk
         menu.findItem(R.id.action_apk_string_search).isVisible = file.mimeType.isApk
         menu.findItem(R.id.action_elf_analyze).isVisible =
@@ -713,14 +731,6 @@ class FileListAdapter(
     companion object {
         private val PAYLOAD_STATE_CHANGED = Any()
 
-        private val TEXT_FILE_EXTENSIONS = setOf(
-            "txt", "log", "xml", "json", "html", "htm", "css", "js", "ts", "java", "kt",
-            "kts", "c", "h", "cpp", "hpp", "py", "go", "rs", "sh", "bat", "cmd", "ps1",
-            "md", "csv", "tsv", "ini", "cfg", "conf", "properties", "gradle", "smali",
-            "yml", "yaml", "toml", "sql", "svg", "xsd", "xsl", "pro", "rc", "mk",
-            "gitignore", "editorconfig"
-        )
-
         private val CALLBACK = object : DiffUtil.ItemCallback<FileItem>() {
             override fun areItemsTheSame(oldItem: FileItem, newItem: FileItem): Boolean =
                 oldItem.path == newItem.path
@@ -778,14 +788,6 @@ class FileListAdapter(
         )
 
         lateinit var popupMenu: PopupMenu
-    }
-
-    private fun isTextFile(file: FileItem): Boolean {
-        if (file.mimeType.type == "text") {
-            return true
-        }
-        val extension = file.name.substringAfterLast('.', "").lowercase()
-        return extension in TEXT_FILE_EXTENSIONS
     }
 
     interface Listener {

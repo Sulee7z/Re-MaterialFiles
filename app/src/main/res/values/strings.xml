@@ -746,6 +746,8 @@
     <string name="dex_method_no_code">This method has no code</string>
     <string name="dex_smali_write_error">Failed to write smali file</string>
     <string name="dex_string_copied">Copied to clipboard</string>
+    <string name="dex_string_id_copied">Copied string id: %1$d</string>
+    <string name="dex_string_item_format">%1$d  %2$s</string>
     <string name="dex_find_references">Find references</string>
 
     <string name="file_item_action_install">Install</string>

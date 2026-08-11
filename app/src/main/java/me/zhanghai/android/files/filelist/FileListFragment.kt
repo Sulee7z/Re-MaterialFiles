@@ -279,10 +279,11 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         if (!isSecondaryPane && !isTwoPane) {
             activity.setTitle(R.string.file_list_title)
             activity.setSupportActionBar(binding.toolbar)
-        } else if (isSecondaryPane) {
-            // The secondary (right) pane has no drawer: keep the DrawerLayout (it is the
-            // fragment root and must stay visible), hide the navigation panel and lock the
-            // drawer closed.
+        } else if (isTwoPane) {
+            // In two-pane mode the navigation drawer lives at the Activity level; the
+            // per-pane DrawerLayouts must not intercept any edge swipes (a swipe on the
+            // left pane would otherwise try to open the hidden per-pane drawer and jam
+            // the list). Hide the navigation panel and lock the drawer closed.
             binding.root.findViewById<View>(R.id.navigationFragment)?.isVisible = false
             binding.drawerLayout?.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED)
         }
@@ -1176,61 +1177,46 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             menu.findItem(R.id.action_archive).isVisible = !isCurrentPathReadOnly
             menu.findItem(R.id.action_batch_rename).isVisible = !isCurrentPathReadOnly
             if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
-                // Per-file operations, following Amaze's action-mode rules:
-                // single selection: open-with/share (files only), rename, timestamp,
-                // shortcut; multi selection: only operations that make sense on a
-                // selection.
-                val singleFile = files.size == 1
-                menu.findItem(R.id.action_rename).isVisible = !isAnyFileReadOnly && singleFile
-                menu.findItem(R.id.action_set_timestamp).isVisible =
-                    !isAnyFileReadOnly && singleFile
+                // Mirror the single-file three-dot menu exactly: an item is visible when it
+                // would be visible for ANY selected file (a single selection behaves
+                // identically to the per-item menu; a multi selection keeps every option
+                // that applies to at least one file).
+                menu.findItem(R.id.action_rename).isVisible = !isAnyFileReadOnly
+                menu.findItem(R.id.action_set_timestamp).isVisible = !isAnyFileReadOnly
                 menu.findItem(R.id.action_copy_path).isVisible = true
                 menu.findItem(R.id.action_add_bookmark).isVisible =
-                    singleFile && files.single().attributes.isDirectory
+                    files.any { it.attributes.isDirectory }
                 menu.findItem(R.id.action_create_shortcut).isVisible =
-                    singleFile && !files.single().attributes.isDirectory
+                    files.any { !it.attributes.isDirectory }
                 menu.findItem(R.id.action_properties).isVisible = true
                 menu.findItem(R.id.action_hide).isVisible = !isAnyFileReadOnly
-                // Open-with and share only for files (never directories); share works for
-                // a multi selection only when every selected item is a file.
-                val singleFileIsDirectory = singleFile && files.single().attributes.isDirectory
+                // Open-with and share only for files (never directories).
                 menu.findItem(R.id.action_open_with).isVisible =
-                    singleFile && !singleFileIsDirectory
+                    files.any { !it.attributes.isDirectory }
                 menu.findItem(R.id.action_share).isVisible =
-                    if (files.all { !it.attributes.isDirectory }) {
-                        true
-                    } else {
-                        false
-                    }
-                // Analyzer/action items mirror the single-file menu, shown only for a
-                // single selection of the matching type. singleFileItem != null iff
-                // files.size == 1, i.e. singleFile.
-                val singleFileItem = files.singleOrNull()
-                val singleFileName = singleFileItem?.name.orEmpty()
+                    files.any { !it.attributes.isDirectory }
+                // Analyzer/action items mirror the single-file menu (visible when they
+                // apply to any selected file).
                 menu.findItem(R.id.action_dex_analyze).isVisible =
-                    singleFileItem != null &&
-                        singleFileName.endsWith(".dex", ignoreCase = true)
+                    files.any { it.name.endsWith(".dex", ignoreCase = true) }
                 menu.findItem(R.id.action_elf_analyze).isVisible =
-                    singleFileItem != null && (singleFileName.endsWith(".so", ignoreCase = true) ||
-                        singleFileName.endsWith(".elf", ignoreCase = true))
+                    files.any { it.name.endsWith(".so", ignoreCase = true) ||
+                        it.name.endsWith(".elf", ignoreCase = true) }
                 menu.findItem(R.id.action_hex_view).isVisible =
-                    singleFileItem != null && !singleFileItem.attributes.isDirectory
-                menu.findItem(R.id.action_install).isVisible =
-                    singleFileItem != null && singleFileItem.mimeType.isApk
+                    files.any { !it.attributes.isDirectory }
+                menu.findItem(R.id.action_install).isVisible = files.any { it.mimeType.isApk }
                 menu.findItem(R.id.action_apk_string_search).isVisible =
-                    singleFileItem != null && singleFileItem.mimeType.isApk
-                menu.findItem(R.id.action_compare_apk).isVisible =
-                    singleFileItem != null && singleFileItem.mimeType.isApk
+                    files.any { it.mimeType.isApk }
+                menu.findItem(R.id.action_compare_apk).isVisible = files.any { it.mimeType.isApk }
                 menu.findItem(R.id.action_view_manifest).isVisible =
-                    singleFileItem != null && singleFileItem.mimeType.isApk
+                    files.any { it.mimeType.isApk }
                 menu.findItem(R.id.action_auto_sign_apk).isVisible =
-                    singleFileItem != null && singleFileItem.mimeType.isApk
-                menu.findItem(R.id.action_sign_apk).isVisible =
-                    singleFileItem != null && singleFileItem.mimeType.isApk
+                    files.any { it.mimeType.isApk }
+                menu.findItem(R.id.action_sign_apk).isVisible = files.any { it.mimeType.isApk }
                 menu.findItem(R.id.action_rename_apk).isVisible =
-                    singleFileItem != null && singleFileItem.mimeType.isApk
+                    files.any { it.mimeType.isApk }
                 menu.findItem(R.id.action_convert_encoding).isVisible =
-                    singleFileItem != null && !singleFileItem.attributes.isDirectory
+                    files.any { !it.attributes.isDirectory && isTextFile(it) }
             }
             // The regular clipboard cut/copy keep their original icons and stay visible
             // (copy/cut on one pane, then paste on the other pane).

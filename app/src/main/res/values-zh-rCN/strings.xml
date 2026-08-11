@@ -599,6 +599,8 @@
     <string name="dex_method_no_code">此方法没有代码</string>
     <string name="dex_smali_write_error">写入 smali 文件失败</string>
     <string name="dex_string_copied">已复制到剪贴板</string>
+    <string name="dex_string_id_copied">已复制字符串 id: %1$d</string>
+    <string name="dex_string_item_format">%1$d  %2$s</string>
     <string name="dex_find_references">查找引用</string>
 
     <string name="file_item_action_install">安装</string>

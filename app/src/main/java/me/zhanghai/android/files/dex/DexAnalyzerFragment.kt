@@ -61,11 +61,13 @@ class DexAnalyzerFragment : Fragment() {
 
     private lateinit var binding: DexAnalyzerFragmentBinding
 
-    private val viewModel by viewModels { { DexFileViewModel(args.path) } }
+    private val viewModel by viewModels {
+        { DexFileViewModel(args.path, File(requireContext().cacheDir, "dex-analyze")) }
+    }
 
     private lateinit var classesAdapter: ClassListAdapter
     private lateinit var stringsAdapter: StringListAdapter
-    private var allStrings: List<String> = emptyList()
+    private var allStrings: List<Pair<Int, String>> = emptyList()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -115,7 +117,7 @@ class DexAnalyzerFragment : Fragment() {
         binding.classesRecyclerView.layoutManager = LinearLayoutManager(context)
         binding.classesRecyclerView.adapter = classesAdapter
 
-        stringsAdapter = StringListAdapter(::copyString)
+            stringsAdapter = StringListAdapter(::copyString, ::copyStringId)
         binding.stringsRecyclerView.layoutManager = LinearLayoutManager(context)
         binding.stringsRecyclerView.adapter = stringsAdapter
 
@@ -154,7 +156,9 @@ class DexAnalyzerFragment : Fragment() {
                     binding.errorText.isVisible = false
                     val dexFile = state.data
                     classesAdapter.replace(dexFile.classes.sortedBy { it.className }, true)
-                    allStrings = dexFile.strings
+                    allStrings = dexFile.strings.withIndex().map { (index, string) ->
+                        index to string
+                    }
                     filterStrings(binding.stringSearchView.query?.toString().orEmpty())
                 }
             }
@@ -190,7 +194,7 @@ class DexAnalyzerFragment : Fragment() {
                 val filtered = if (query.isEmpty()) {
                     all
                 } else {
-                    all.filter { matchesQuery(query, it, regex) }
+                    all.filter { matchesQuery(query, it.second, regex) }
                 }
                 filtered to all.size
             }
@@ -437,11 +441,18 @@ class DexAnalyzerFragment : Fragment() {
         return Paths.get(file.absolutePath)
     }
 
-    private fun copyString(string: String) {
+    private fun copyString(string: Pair<Int, String>) {
         val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE)
             as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText(null, string))
+        clipboard.setPrimaryClip(ClipData.newPlainText(null, string.second))
         showToast(getString(R.string.dex_string_copied))
+    }
+
+    private fun copyStringId(id: Int) {
+        val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE)
+            as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText(null, id.toString()))
+        showToast(getString(R.string.dex_string_id_copied, id))
     }
 
     @Parcelize
@@ -481,13 +492,14 @@ private class ClassListAdapter(
 }
 
 private class StringListAdapter(
-    private val onStringClick: (String) -> Unit
-) : ListAdapter<String, StringListAdapter.ViewHolder>(
-    object : DiffUtil.ItemCallback<String>() {
-        override fun areItemsTheSame(oldItem: String, newItem: String): Boolean =
-            oldItem == newItem
+    private val onStringClick: (Pair<Int, String>) -> Unit,
+    private val onStringIdLongClick: (Int) -> Unit
+) : ListAdapter<Pair<Int, String>, StringListAdapter.ViewHolder>(
+    object : DiffUtil.ItemCallback<Pair<Int, String>>() {
+        override fun areItemsTheSame(oldItem: Pair<Int, String>, newItem: Pair<Int, String>): Boolean =
+            oldItem.first == newItem.first
 
-        override fun areContentsTheSame(oldItem: String, newItem: String): Boolean =
+        override fun areContentsTheSame(oldItem: Pair<Int, String>, newItem: Pair<Int, String>): Boolean =
             oldItem == newItem
     }
 ) {
@@ -501,9 +513,16 @@ private class StringListAdapter(
         )
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val item = getItem(position)
-        holder.binding.stringText.text = item
-        holder.binding.root.setOnClickListener { onStringClick(item) }
+        val (id, string) = getItem(position)
+        val context = holder.binding.root.context
+        holder.binding.stringText.text = context.getString(
+            R.string.dex_string_item_format, id, string
+        )
+        holder.binding.root.setOnClickListener { onStringClick(id to string) }
+        holder.binding.root.setOnLongClickListener {
+            onStringIdLongClick(id)
+            true
+        }
     }
 }
 

@@ -41,7 +41,10 @@ import java.io.InputStream
 import java.net.URI
 
 object ArchiveFileSystemProvider : FileSystemProvider(), PathObservableProvider, Searchable {
-    private const val SCHEME = "archive"
+private const val SCHEME = "archive"
+
+/** Largest single archive entry we will buffer into memory for direct reading (64 MiB). */
+private const val MAX_READ_SIZE = 64 * 1024 * 1024
 
     private val fileSystems = FileSystemCache<Path, ArchiveFileSystem>()
 
@@ -123,7 +126,70 @@ object ArchiveFileSystemProvider : FileSystemProvider(), PathObservableProvider,
         if (attributes.isNotEmpty()) {
             throw UnsupportedOperationException(attributes.contentToString())
         }
-        throw UnsupportedOperationException()
+        // Read the whole entry into memory and expose it as a read-only channel. Archive
+        // entries (files inside zip/7z/...) are typically small, and this is what makes
+        // opening files inside an APK/zip (e.g. AndroidManifest.xml via the text viewer)
+        // work at all. Uses the existing newInputStream path so passwords/encrypted
+        // archives keep working. Entries larger than MAX_READ_SIZE are rejected instead
+        // of being buffered into memory (a big .so inside an APK would OOM the process).
+        val bytes = file.fileSystem.newInputStream(file).use {
+            val buffer = it.readBytes()
+            if (buffer.size > MAX_READ_SIZE) {
+                throw java.io.IOException("File too large to open in archive: ${file}")
+            }
+            buffer
+        }
+        return object : SeekableByteChannel {
+            private var position = 0L
+            private var closed = false
+
+            override fun read(dst: java.nio.ByteBuffer): Int {
+                checkOpen()
+                if (position >= bytes.size) {
+                    return -1
+                }
+                val toRead = minOf(dst.remaining().toLong(), bytes.size - position).toInt()
+                dst.put(bytes, position.toInt(), toRead)
+                position += toRead
+                return toRead
+            }
+
+            override fun write(src: java.nio.ByteBuffer): Int {
+                throw java.nio.channels.NonWritableChannelException()
+            }
+
+            override fun position(): Long {
+                checkOpen()
+                return position
+            }
+
+            override fun position(newPosition: Long): SeekableByteChannel {
+                checkOpen()
+                position = newPosition
+                return this
+            }
+
+            override fun size(): Long {
+                checkOpen()
+                return bytes.size.toLong()
+            }
+
+            override fun truncate(size: Long): SeekableByteChannel {
+                throw java.nio.channels.NonWritableChannelException()
+            }
+
+            override fun isOpen(): Boolean = !closed
+
+            override fun close() {
+                closed = true
+            }
+
+            private fun checkOpen() {
+                if (closed) {
+                    throw java.nio.channels.ClosedChannelException()
+                }
+            }
+        }
     }
 
     @Throws(IOException::class)
