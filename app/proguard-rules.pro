@@ -66,6 +66,19 @@
 -keep class org.bouncycastle.cms.** { *; }
 -keep class org.bouncycastle.operator.** { *; }
 
+# Shizuku
+-keep class rikka.shizuku.** { *; }
+
+# Stellar (Shizuku fork): the privileged API framework classes are loaded by the Stellar
+# service binder, so they must not be obfuscated or stripped in release builds.
+-keep class roro.stellar.** { *; }
+-keep class com.stellar.** { *; }
+
+# rikka.hidden (hidden API compat layer used by the Stellar user service process): invokes
+# framework methods through reflection/Unsafe, so it must not be obfuscated in release builds.
+-keep class rikka.hidden.** { *; }
+-dontwarn rikka.hidden.**
+
 # smali/baksmali/dexlib2: DEX assembly/disassembly for the signature killer and the
 # dex++ editor. These libraries are invoked by name and manipulate binary structures
 # internally, so they must not be obfuscated or stripped in release builds.

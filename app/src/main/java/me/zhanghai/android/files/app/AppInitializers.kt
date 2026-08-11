@@ -15,6 +15,7 @@ import me.zhanghai.android.files.filejob.fileJobNotificationTemplate
 import me.zhanghai.android.files.ftpserver.ftpServerServiceNotificationTemplate
 import me.zhanghai.android.files.hiddenapi.HiddenApi
 import me.zhanghai.android.files.provider.FileSystemProviders
+import me.zhanghai.android.files.provider.root.StellarUserServiceCompat
 import me.zhanghai.android.files.searchindex.FileIndexer
 import me.zhanghai.android.files.searchindex.SearchIndexDb
 import me.zhanghai.android.files.settings.Settings
@@ -30,6 +31,7 @@ import me.zhanghai.android.files.provider.ftp.client.Client as FtpClient
 import me.zhanghai.android.files.provider.sftp.client.Client as SftpClient
 import me.zhanghai.android.files.provider.smb.client.Client as SmbClient
 import me.zhanghai.android.files.provider.webdav.client.Client as WebDavClient
+import roro.stellar.Stellar
 
 val appInitializers = listOf(
     ::initializeCrashlytics,
@@ -40,6 +42,7 @@ val appInitializers = listOf(
     ::initializeSearchIndexDb,
     ::upgradeApp,
     ::initializeLiveDataObjects,
+    ::initializeStellarListeners,
     ::initializeCustomTheme,
     ::initializeNightMode,
     ::createNotificationChannels,
@@ -85,6 +88,18 @@ private fun initializeLiveDataObjects() {
 StorageVolumeListLiveData.value
 Settings.FILE_LIST_DEFAULT_DIRECTORY.value
 SearchIndexDb.initialize(application)
+}
+
+private fun initializeStellarListeners() {
+    // Stellar (https://github.com/roro2239/Stellar), a Shizuku fork with a privileged API
+    // framework, is supported alongside the original Shizuku integration. When the Stellar
+    // service goes away, notify the waiting user-service connections so that the next
+    // launch attempt starts a fresh user service process.
+    // @see <a href="https://github.com/roro2239/Stellar/blob/main/INTEGRATION_GUIDE.md">Stellar</a>
+    val binderDeadListener = Stellar.OnBinderDeadListener {
+        StellarUserServiceCompat.onBinderDead()
+    }
+    Stellar.addBinderDeadListener(binderDeadListener)
 }
 
 private fun initializeSearchIndexDb() = SearchIndexDb.initialize(application)

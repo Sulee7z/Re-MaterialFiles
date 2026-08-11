@@ -22,7 +22,9 @@ lateinit var rootContext: Context private set
 
 object RootFileService : RemoteFileService(
     RemoteInterface {
-        if (SuiFileServiceLauncher.isSuiAvailable() || SuiFileServiceLauncher.isShizukuBinderAvailable()) {
+        if (SuiFileServiceLauncher.isSuiAvailable()
+            || SuiFileServiceLauncher.isShizukuBinderAvailable()
+            || SuiFileServiceLauncher.isStellarBinderAvailable()) {
             SuiFileServiceLauncher.launchService()
         } else {
             LibSuFileServiceLauncher.launchService()

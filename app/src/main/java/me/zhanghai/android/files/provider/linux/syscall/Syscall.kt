@@ -22,7 +22,16 @@ import java.io.InterruptedIOException
 
 object Syscall {
     init {
-        System.loadLibrary("syscall")
+        try {
+            System.loadLibrary("syscall")
+        } catch (e: UnsatisfiedLinkError) {
+            // When running in an app_process user service process (Stellar/Shizuku), the
+            // class loader cannot find libraries inside the CLASSPATH APK. Load the
+            // extraction made by NativeLibraryLoader before the service starts instead.
+            if (!NativeLibraryLoader.ensureSyscallLibrary()) {
+                throw e
+            }
+        }
     }
 
     @Throws(SyscallException::class)

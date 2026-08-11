@@ -460,6 +460,26 @@
             android:multiprocess="false"
             android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
+        <!--
+          ~ Stellar (a Shizuku fork) support, kept alongside the original Shizuku
+          ~ integration: the Stellar manager delivers its binder to this provider and the
+          ~ app's user service can then run with ADB/root privileges. A compat subclass is
+          ~ used because the current manager build cannot unmarshal the user-service
+          ~ BinderContainer in attachUserService(); the binder is delivered directly.
+          ~ @see <a href="https://github.com/roro2239/Stellar">Stellar</a>
+          -->
+        <provider
+            android:name="me.zhanghai.android.files.provider.root.StellarProviderCompat"
+            android:authorities="${applicationId}.stellar"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
+        <meta-data
+            android:name="roro.stellar.permissions"
+            android:value="stellar" />
+
         <provider
             android:name="me.zhanghai.android.files.app.AppProvider"
             android:authorities="@string/app_provider_authority"

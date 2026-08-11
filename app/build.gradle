@@ -144,6 +144,25 @@ dependencies {
     implementation 'org.smali:dexlib2:2.5.2'
     implementation 'org.smali:smali:2.5.2'
     implementation 'org.smali:baksmali:2.5.2'
+
+    // Stellar (https://github.com/roro2239/Stellar), a Shizuku fork with a privileged API
+    // framework. Like Shizuku, it lets apps run user services with ADB/root privileges;
+    // support is kept alongside the original Shizuku integration (SuiFileServiceLauncher
+    // picks whichever backend is available). The userservice module is not published on
+    // JitPack, so its bindUserService logic lives in StellarUserServiceCompat.
+    implementation 'com.github.roro2239.Stellar-API:aidl:main-SNAPSHOT'
+    implementation 'com.github.roro2239.Stellar-API:shared:main-SNAPSHOT'
+    implementation 'com.github.roro2239.Stellar-API:api:main-SNAPSHOT'
+    implementation 'com.github.roro2239.Stellar-API:provider:main-SNAPSHOT'
+    // Hidden API compat layer for the Stellar user service process: it runs as app_process
+    // (shell, uid 2000) and must call ActivityManager.getContentProviderExternal(), which is
+    // hidden. rikka.hidden:compat is the same library the Stellar manager's UserServiceStarter
+    // uses; it invokes hidden methods through the hidden API bypass (Unsafe) mechanism, which
+    // works in shell processes where setHiddenApiExemptions() is silently ignored.
+    implementation 'dev.rikka.hidden:compat:4.4.0'
+    // Compile-time stubs for hidden framework classes (android.content.IContentProvider etc.)
+    // referenced by StellarUserServiceMain; the Stellar manager uses the same stub module.
+    compileOnly 'dev.rikka.hidden:stub:4.4.0'
 }
 
 dependencies {

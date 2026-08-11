@@ -24,6 +24,7 @@ import me.zhanghai.android.files.provider.remote.RemoteFileServiceInterface
 import me.zhanghai.android.files.provider.remote.RemoteFileSystemException
 import rikka.shizuku.Shizuku
 import rikka.sui.Sui
+import roro.stellar.Stellar
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -84,104 +85,249 @@ object SuiFileServiceLauncher {
         }
     }
 
+    // Stellar (https://github.com/roro2239/Stellar) is a Shizuku fork with its own
+    // privileged API framework; support is kept alongside the original Shizuku
+    // integration. Like Shizuku it can be started with ADB or root.
+    @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.M)
+    fun isStellarBinderAvailable(): Boolean {
+        synchronized(lock) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+                return false
+            }
+            return try {
+                Stellar.pingBinder()
+            } catch (e: Throwable) {
+                // Stellar isn't installed, or the binder isn't available yet.
+                false
+            }
+        }
+    }
+
+    @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.M)
+    fun isStellarAvailable(): Boolean {
+        synchronized(lock) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+                return false
+            }
+            return try {
+                Stellar.pingBinder() && Stellar.checkSelfPermission()
+            } catch (e: Throwable) {
+                // Stellar isn't installed, or the binder isn't available yet.
+                false
+            }
+        }
+    }
+
     @RequiresApi(Build.VERSION_CODES.M)
     @Throws(RemoteFileSystemException::class)
     fun launchService(): IRemoteFileService {
         synchronized(lock) {
-            if (!isSuiAvailable() && !isShizukuBinderAvailable()) {
-                throw RemoteFileSystemException("Shizuku isn't available")
+            if (!isSuiAvailable() && !isShizukuBinderAvailable() && !isStellarBinderAvailable()) {
+                throw RemoteFileSystemException("Shizuku/Stellar isn't available")
             }
-            if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-                val granted = try {
-                    runBlocking<Boolean> {
-                        suspendCancellableCoroutine { continuation ->
-                            val listener = object : Shizuku.OnRequestPermissionResultListener {
-                                override fun onRequestPermissionResult(
-                                    requestCode: Int,
-                                    grantResult: Int
-                                ) {
-                                    Shizuku.removeRequestPermissionResultListener(this)
-                                    val granted = grantResult == PackageManager.PERMISSION_GRANTED
-                                    continuation.resume(granted)
-                                }
-                            }
-                            Shizuku.addRequestPermissionResultListener(listener)
-                            continuation.invokeOnCancellation {
-                                Shizuku.removeRequestPermissionResultListener(listener)
-                            }
-                            Shizuku.requestPermission(listener.hashCode())
-                        }
-                    }
-                } catch (e: InterruptedException) {
-                    throw RemoteFileSystemException(e)
-                }
-                if (!granted) {
-                    throw RemoteFileSystemException("Sui permission isn't granted")
-                }
+            // The original Shizuku backend takes precedence; Stellar is the fallback.
+            return if (isShizukuBinderAvailable()) {
+                launchShizukuService()
+            } else {
+                launchStellarService()
             }
-            return try {
-                runBlocking {
-                    try {
-                        withTimeout(RootFileService.TIMEOUT_MILLIS) {
-                            suspendCancellableCoroutine { continuation ->
-                                val serviceArgs = Shizuku.UserServiceArgs(
-                                    ComponentName(application, SuiFileServiceInterface::class.java)
-                                )
-                                    .debuggable(BuildConfig.DEBUG)
-                                    .daemon(false)
-                                    .processNameSuffix("sui")
-                                    .version(BuildConfig.VERSION_CODE)
-                                val connection = object : ServiceConnection {
-                                    override fun onServiceConnected(
-                                        name: ComponentName,
-                                        service: IBinder
-                                    ) {
-                                        val serviceInterface =
-                                            IRemoteFileService.Stub.asInterface(service)
-                                        continuation.resume(serviceInterface)
-                                    }
+        }
+    }
 
-                                    override fun onServiceDisconnected(name: ComponentName) {
-                                        if (continuation.isActive) {
-                                            continuation.resumeWithException(
-                                                RemoteFileSystemException(
-                                                    "Sui service disconnected"
-                                                )
-                                            )
-                                        }
-                                    }
-
-                                    override fun onBindingDied(name: ComponentName) {
-                                        if (continuation.isActive) {
-                                            continuation.resumeWithException(
-                                                RemoteFileSystemException("Sui binding died")
-                                            )
-                                        }
-                                    }
-
-                                    override fun onNullBinding(name: ComponentName) {
-                                        if (continuation.isActive) {
-                                            continuation.resumeWithException(
-                                                RemoteFileSystemException("Sui binding is null")
-                                            )
-                                        }
-                                    }
-                                }
-                                Shizuku.bindUserService(serviceArgs, connection)
-                                continuation.invokeOnCancellation {
-                                    Shizuku.unbindUserService(serviceArgs, connection, true)
-                                }
+    @RequiresApi(Build.VERSION_CODES.M)
+    @Throws(RemoteFileSystemException::class)
+    private fun launchShizukuService(): IRemoteFileService {
+        if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+            val granted = try {
+                runBlocking<Boolean> {
+                    suspendCancellableCoroutine { continuation ->
+                        val listener = object : Shizuku.OnRequestPermissionResultListener {
+                            override fun onRequestPermissionResult(
+                                requestCode: Int,
+                                grantResult: Int
+                            ) {
+                                Shizuku.removeRequestPermissionResultListener(this)
+                                val granted = grantResult == PackageManager.PERMISSION_GRANTED
+                                continuation.resume(granted)
                             }
                         }
-                    } catch (e: TimeoutCancellationException) {
-                        throw RemoteFileSystemException(e)
+                        Shizuku.addRequestPermissionResultListener(listener)
+                        continuation.invokeOnCancellation {
+                            Shizuku.removeRequestPermissionResultListener(listener)
+                        }
+                        Shizuku.requestPermission(listener.hashCode())
                     }
                 }
             } catch (e: InterruptedException) {
                 throw RemoteFileSystemException(e)
             }
+            if (!granted) {
+                throw RemoteFileSystemException("Sui permission isn't granted")
+            }
+        }
+        return try {
+            runBlocking {
+                try {
+                    withTimeout(RootFileService.TIMEOUT_MILLIS) {
+                        suspendCancellableCoroutine { continuation ->
+                            val serviceArgs = Shizuku.UserServiceArgs(
+                                ComponentName(application, SuiFileServiceInterface::class.java)
+                            )
+                                .debuggable(BuildConfig.DEBUG)
+                                .daemon(false)
+                                .processNameSuffix("sui")
+                                .version(BuildConfig.VERSION_CODE)
+                            val connection = object : ServiceConnection {
+                                override fun onServiceConnected(
+                                    name: ComponentName,
+                                    service: IBinder
+                                ) {
+                                    val serviceInterface =
+                                        IRemoteFileService.Stub.asInterface(service)
+                                    continuation.resume(serviceInterface)
+                                }
+
+                                override fun onServiceDisconnected(name: ComponentName) {
+                                    if (continuation.isActive) {
+                                        continuation.resumeWithException(
+                                            RemoteFileSystemException(
+                                                "Sui service disconnected"
+                                            )
+                                        )
+                                    }
+                                }
+
+                                override fun onBindingDied(name: ComponentName) {
+                                    if (continuation.isActive) {
+                                        continuation.resumeWithException(
+                                            RemoteFileSystemException("Sui binding died")
+                                        )
+                                    }
+                                }
+
+                                override fun onNullBinding(name: ComponentName) {
+                                    if (continuation.isActive) {
+                                        continuation.resumeWithException(
+                                            RemoteFileSystemException("Sui binding is null")
+                                        )
+                                    }
+                                }
+                            }
+                            Shizuku.bindUserService(serviceArgs, connection)
+                            continuation.invokeOnCancellation {
+                                Shizuku.unbindUserService(serviceArgs, connection, true)
+                            }
+                        }
+                    }
+                } catch (e: TimeoutCancellationException) {
+                    throw RemoteFileSystemException(e)
+                }
+            }
+        } catch (e: InterruptedException) {
+            throw RemoteFileSystemException(e)
         }
     }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    @Throws(RemoteFileSystemException::class)
+    private fun launchStellarService(): IRemoteFileService {
+        if (!Stellar.checkSelfPermission()) {
+            val granted = try {
+                runBlocking<Boolean> {
+                    suspendCancellableCoroutine { continuation ->
+                        val listener = object : Stellar.OnRequestPermissionResultListener {
+                            override fun onRequestPermissionResult(
+                                requestCode: Int, allowed: Boolean, onetime: Boolean
+                            ) {
+                                Stellar.removeRequestPermissionResultListener(this)
+                                continuation.resume(allowed)
+                            }
+                        }
+                        Stellar.addRequestPermissionResultListener(listener)
+                        continuation.invokeOnCancellation {
+                            Stellar.removeRequestPermissionResultListener(listener)
+                        }
+                        Stellar.requestPermission(requestCode = listener.hashCode())
+                    }
+                }
+            } catch (e: InterruptedException) {
+                throw RemoteFileSystemException(e)
+            }
+            if (!granted) {
+                throw RemoteFileSystemException("Stellar permission isn't granted")
+            }
+        }
+        return try {
+            runBlocking {
+                try {
+                    withTimeout(RootFileService.TIMEOUT_MILLIS) {
+                        suspendCancellableCoroutine { continuation ->
+                            val callback = object : StellarUserServiceCompat.ServiceCallback {
+                                override fun onServiceConnected(service: IBinder) {
+                                    continuation.resume(
+                                        IRemoteFileService.Stub.asInterface(service)
+                                    )
+                                }
+
+                                override fun onServiceDisconnected() {
+                                    if (continuation.isActive) {
+                                        continuation.resumeWithException(
+                                            RemoteFileSystemException(
+                                                "Stellar service disconnected"
+                                            )
+                                        )
+                                    }
+                                }
+
+                                override fun onServiceStartFailed(errorCode: Int, message: String) {
+                                    if (continuation.isActive) {
+                                        continuation.resumeWithException(
+                                            RemoteFileSystemException(
+                                                "Stellar service start failed: $message"
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                            StellarUserServiceCompat.expectBinder(callback)
+                            try {
+                                // Start the user service process directly through
+                                // Stellar.newProcess() with THIS app's APK as the
+                                // CLASSPATH (same sh -c form the Stellar manager uses for
+                                // its UserServiceStarter), instead of the manager's
+                                // startUserService() (whose attachUserService cannot
+                                // unmarshal the BinderContainer and fails). The process
+                                // delivers its binder back through our StellarProviderCompat.
+                                val apkPath = application.packageManager
+                                    .getApplicationInfo(application.packageName, 0).sourceDir
+                                val processName = "${application.packageName}:stellar"
+                                val command = "CLASSPATH='$apkPath' /system/bin/app_process " +
+                                    "/system/bin --nice-name='$processName' " +
+                                    "me.zhanghai.android.files.provider.root.StellarUserServiceMain"
+                                val cmd: Array<String?> = arrayOf("sh", "-c", command)
+                                val process = Stellar.newProcess(cmd, null, null)
+                                stellarProcess = process
+                            } catch (e: Throwable) {
+                                StellarUserServiceCompat.onUserServiceStartFailed(
+                                    -1, "newProcess failed: ${e.message}"
+                                )
+                            }
+                            continuation.invokeOnCancellation {
+                                stellarProcess?.destroy()
+                                stellarProcess = null
+                            }
+                        }
+                    }
+                } catch (e: TimeoutCancellationException) {
+                    throw RemoteFileSystemException(e)
+                }
+            }
+        } catch (e: InterruptedException) {
+            throw RemoteFileSystemException(e)
+        }
+    }
+
+    private var stellarProcess: roro.stellar.StellarRemoteProcess? = null
 }
 
 @Keep
