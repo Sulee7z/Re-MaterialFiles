@@ -30,6 +30,12 @@
     <color name="color_surface_dark">@color/google_grey_900</color>
     <color name="color_surface">@color/color_surface_light</color>
 
+    <!-- Outline color for the MD2 theme (MD3 has it built in). ~12% black on light
+         surface / ~12% white on dark surface, matching Material 3's colorOutline. -->
+    <color name="color_outline_light">#1F000000</color>
+    <color name="color_outline_dark">#14FFFFFF</color>
+    <color name="color_outline">@color/color_outline_light</color>
+
     <color name="activity_icon_tint">@color/secondary_text_default_material_light</color>
 
     <color name="shortcut_icon_background">#F5F5F5</color>

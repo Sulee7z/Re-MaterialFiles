@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Copyright (c) 2026 Sulee7z <94352968+sulee7z@users.noreply.github.com>
+  ~ All Rights Reserved.
+  -->
+
+<!--
+  ~ Modifier key (CTRL/ALT/SHIFT) background: highlighted while the modifier is toggled
+  ~ on, matching Termux's extra-keys row where the active modifier lights up.
+  -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_activated="true" android:color="?attr/colorPrimaryContainer" />
+    <item android:color="?attr/colorSurface" />
+</selector>

@@ -6,6 +6,7 @@
 package me.zhanghai.android.files.terminal
 
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -94,9 +95,18 @@ class TerminalFragment : Fragment() {
     private fun setupExtraKeys() {
         binding.escKey.setOnClickListener { send(0x1b.toByte()) }
         binding.tabKey.setOnClickListener { send(0x09.toByte()) }
-        binding.ctrlKey.setOnClickListener { client.toggleCtrl() }
-        binding.altKey.setOnClickListener { client.toggleAlt() }
-        binding.shiftKey.setOnClickListener { client.toggleShift() }
+        binding.ctrlKey.setOnClickListener {
+            client.toggleCtrl()
+            updateModifierKeyUi()
+        }
+        binding.altKey.setOnClickListener {
+            client.toggleAlt()
+            updateModifierKeyUi()
+        }
+        binding.shiftKey.setOnClickListener {
+            client.toggleShift()
+            updateModifierKeyUi()
+        }
         binding.minusKey.setOnClickListener { send("\u002d") }
         binding.slashKey.setOnClickListener { send("/") }
         binding.pipeKey.setOnClickListener { send("|") }
@@ -104,6 +114,13 @@ class TerminalFragment : Fragment() {
         binding.downKey.setOnClickListener { send("\u001b[B") }
         binding.leftKey.setOnClickListener { send("\u001b[D") }
         binding.rightKey.setOnClickListener { send("\u001b[C") }
+    }
+
+    /** Highlights the toggled-on modifier keys, like Termux's extra-keys row. */
+    private fun updateModifierKeyUi() {
+        binding.ctrlKey.isActivated = client.ctrlKey
+        binding.altKey.isActivated = client.altKey
+        binding.shiftKey.isActivated = client.shiftKey
     }
 
     private fun send(text: String) {
@@ -121,5 +138,19 @@ class TerminalFragment : Fragment() {
         terminalView.requestFocus()
         val imm = requireContext().getSystemService<InputMethodManager>() ?: return
         imm.showSoftInput(terminalView, InputMethodManager.SHOW_FORCED)
+    }
+
+    /** Forwards physical keyboard events to the TerminalView (called by the Activity). */
+    fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (!isAdded) {
+            return false
+        }
+        val terminalView = binding.terminalView
+        terminalView.requestFocus()
+        return when (event.action) {
+            KeyEvent.ACTION_DOWN -> terminalView.onKeyDown(event.keyCode, event)
+            KeyEvent.ACTION_UP -> terminalView.onKeyUp(event.keyCode, event)
+            else -> terminalView.dispatchKeyEvent(event)
+        }
     }
 }

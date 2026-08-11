@@ -6,6 +6,7 @@
 package me.zhanghai.android.files.terminal
 
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.View
 import androidx.fragment.app.commit
 import me.zhanghai.android.files.app.AppActivity
@@ -25,5 +26,16 @@ class TerminalActivity : AppActivity() {
             val fragment = TerminalFragment().putArgs(args)
             supportFragmentManager.commit { add(android.R.id.content, fragment) }
         }
+    }
+
+    // Physical (bluetooth/USB) keyboard support: route every key event to the TerminalView
+    // first so ctrl/alt/shift combinations (e.g. Ctrl+C) reach the emulator, like Termux.
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val fragment = supportFragmentManager
+            .findFragmentById(android.R.id.content) as? TerminalFragment
+        if (fragment != null && fragment.dispatchKeyEvent(event)) {
+            return true
+        }
+        return super.dispatchKeyEvent(event)
     }
 }

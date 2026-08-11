@@ -90,6 +90,16 @@ abstract class ToolbarActionMode(
     val isActive: Boolean
         get() = callback != null
 
+    /** Returns the current callback holder, or null when the mode is not active. */
+    fun currentCallback(): Callback? = callback
+
+    /** Finishes the mode only when [owner] is the current callback holder. */
+    fun finishIfOwned(owner: Callback, animate: Boolean = true) {
+        if (callback === owner) {
+            finish(animate)
+        }
+    }
+
     fun start(callback: Callback, animate: Boolean = true) {
         this.callback = callback
         onBackPressedCallback.isEnabled = true

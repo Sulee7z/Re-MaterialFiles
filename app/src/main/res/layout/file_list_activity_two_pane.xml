@@ -5,32 +5,135 @@
   ~ All Rights Reserved.
   -->
 
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.drawerlayout.widget.DrawerLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/activityDrawerLayout"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="horizontal">
+    android:layout_height="match_parent">
 
     <!--
-      ~ MT Manager style two-pane browsing. Fixed ids so FragmentManager can restore the two
-      ~ FileListFragments across Activity recreation. Widths are set in code (no layout
-      ~ weights): DrawerLayout (the FileListFragment root) crashes when a weight-based
-      ~ LinearLayout measures it with AT_MOST.
+      ~ Responsive dual-pane content (Ghost Commander style): on wide screens (landscape or
+      ~ >= 600dp) both panes are shown side by side; on narrow screens only the ACTIVE pane
+      ~ is shown and a bottom "switch to the other side" bar appears (like Ghost Commander's
+      ~ sxs mode toggling). The active pane is highlighted by its title bar color
+      ~ (highlightCurrentTitle). The shared top bar (search/sort/three dots) sits above both
+      ~ panes; the FAB is fixed at the bottom-right. The navigation drawer is hosted by this
+      ~ full-screen DrawerLayout so it draws over the divider and the right pane.
       -->
     <FrameLayout
-        android:id="@+id/leftPane"
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        tools:ignore="Suspicious0dp" />
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
 
-    <View
-        android:layout_width="1dp"
-        android:layout_height="match_parent"
-        android:background="?attr/colorOutline" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
 
-    <FrameLayout
-        android:id="@+id/rightPane"
-        android:layout_width="0dp"
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="?actionBarSize">
+
+                <androidx.appcompat.widget.Toolbar
+                    android:id="@+id/sharedToolbar"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="?colorAppBarSurface"
+                    android:theme="?actionBarTheme"
+                    app:popupTheme="?actionBarPopupTheme"
+                    tools:ignore="MissingClass" />
+
+                <!--
+                  ~ The shared multi-select action bar: rendered in the SAME top bar layer as
+                  ~ the three-line menu button (overlaying the search/sort/three-dots items).
+                  ~ When files are selected in either pane, this bar replaces the top-bar
+                  ~ items with: delete, copy (original icons), copy-to-other-pane and
+                  ~ cut-to-other-pane (dedicated icons).
+                  -->
+                <me.zhanghai.android.files.ui.OverlayToolbar
+                    android:id="@+id/sharedOverlayToolbar"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="?colorAppBarSurface"
+                    android:visibility="gone"
+                    app:popupTheme="?actionBarPopupTheme" />
+            </FrameLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:orientation="horizontal">
+
+                <!--
+                  ~ Each pane is a file-list container. The per-pane path display is the
+                  ~ fragment's own breadcrumb bar (same component as single-pane mode); the
+                  ~ active pane is marked by a highlight border + dimmed inactive pane.
+                  ~ Fixed ids so FragmentManager can restore the two FileListFragments across
+                  ~ Activity recreation. Pane widths are set in code (no layout weights):
+                  ~ DrawerLayout (the FileListFragment root) crashes when a weight-based
+                  ~ LinearLayout measures it with AT_MOST.
+                  -->
+                <FrameLayout
+                    android:id="@+id/leftPane"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    tools:ignore="Suspicious0dp">
+
+                    <FrameLayout
+                        android:id="@+id/leftPaneContent"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+                </FrameLayout>
+
+                <View
+                    android:id="@+id/divider"
+                    android:layout_width="1dp"
+                    android:layout_height="match_parent"
+                    android:background="?attr/colorOutline" />
+
+                <FrameLayout
+                    android:id="@+id/rightPane"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    tools:ignore="Suspicious0dp">
+
+                    <FrameLayout
+                        android:id="@+id/rightPaneContent"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+                </FrameLayout>
+            </LinearLayout>
+        </LinearLayout>
+
+        <com.leinardi.android.speeddial.SpeedDialOverlayLayout
+            android:id="@+id/fabBgView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fitsSystemWindows="true" />
+
+        <com.leinardi.android.speeddial.SpeedDialView
+            android:id="@+id/floatingActionButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end|bottom"
+            android:layout_margin="@dimen/screen_edge_margin_minus_16dp"
+            app:sdMainFabAnimationRotateAngle="135"
+            app:sdMainFabClosedSrc="@drawable/add_icon_white_24dp"
+            app:sdOverlayLayout="@id/fabBgView" />
+    </FrameLayout>
+
+    <!--
+      ~ The navigation drawer lives at the Activity level (full-screen DrawerLayout), so it
+      ~ opens over the divider and the right pane exactly like the single-pane drawer.
+      ~ Content width is 65% of the screen; the drawer background covers the rest.
+      -->
+    <me.zhanghai.android.files.ui.NavigationFrameLayout
+        android:id="@+id/activityNavigationFragment"
+        android:layout_width="match_parent"
         android:layout_height="match_parent"
-        tools:ignore="Suspicious0dp" />
-</LinearLayout>
+        android:layout_gravity="start"
+        android:background="?colorSurface"
+        android:fitsSystemWindows="true">
+    </me.zhanghai.android.files.ui.NavigationFrameLayout>
+</androidx.drawerlayout.widget.DrawerLayout>

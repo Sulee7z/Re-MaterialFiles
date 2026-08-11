@@ -36,37 +36,158 @@
 
     <item
         android:id="@+id/action_extract"
-        android:orderInCategory="100"
+        android:orderInCategory="200"
         android:title="@string/file_list_select_action_extract"
         app:showAsAction="never" />
 
     <item
         android:id="@+id/action_archive"
-        android:orderInCategory="100"
+        android:orderInCategory="200"
         android:title="@string/file_list_select_action_archive"
         app:showAsAction="never" />
 
     <item
         android:id="@+id/action_share"
-        android:orderInCategory="100"
+        android:orderInCategory="200"
         android:title="@string/share"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_open_with"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_open_with"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_hide"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_hide"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_rename"
+        android:orderInCategory="200"
+        android:title="@string/rename"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_set_timestamp"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_set_timestamp"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_copy_path"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_copy_path"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_add_bookmark"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_add_bookmark"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_create_shortcut"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_create_shortcut"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_properties"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_properties"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_extract"
+        android:orderInCategory="200"
+        android:title="@string/file_list_select_action_extract"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_dex_analyze"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_dex_analyze"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_elf_analyze"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_elf_analyze"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_hex_view"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_hex_view"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_install"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_install"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_apk_string_search"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_apk_string_search"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_compare_apk"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_compare_apk"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_view_manifest"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_view_manifest"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_auto_sign_apk"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_auto_sign_apk"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_sign_apk"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_sign_apk"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_rename_apk"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_rename_apk"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_convert_encoding"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_convert_encoding"
         app:showAsAction="never" />
 
     <item
         android:id="@+id/action_select_all"
         android:alphabeticShortcut="a"
-        android:orderInCategory="100"
+        android:orderInCategory="300"
         android:title="@string/select_all"
         app:showAsAction="never" />
+
     <item
         android:id="@+id/action_select_range"
-        android:orderInCategory="100"
+        android:orderInCategory="300"
         android:title="@string/select_range"
         app:showAsAction="never" />
 
     <item
         android:id="@+id/action_batch_rename"
-        android:orderInCategory="100"
+        android:orderInCategory="300"
         android:title="@string/file_list_select_action_batch_rename"
         app:showAsAction="never" />
 </menu>

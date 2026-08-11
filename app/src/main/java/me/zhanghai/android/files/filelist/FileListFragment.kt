@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2018 Hai Zhang <dreaming.in.code.zh@gmail.com>
  * All Rights Reserved.
  */
@@ -23,7 +23,6 @@ import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuInflater
 import android.view.MenuItem
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.CheckBox
@@ -208,7 +207,11 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     private val args by args<Args>()
     private val argsPath by lazy { args.intent.extraPath }
 
-    private val viewModel by viewModels { { FileListViewModel() } }
+    /** True when this fragment is the secondary (right) pane of two-pane browsing. */
+    private val isSecondaryPane: Boolean
+        get() = args.secondaryPane
+
+    internal val viewModel by viewModels { { FileListViewModel() } }
 
     private lateinit var binding: Binding
 
@@ -225,14 +228,20 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     private lateinit var adapter: FileListAdapter
 
     private val debouncedSearchRunnable = DebouncedRunnable(Handler(Looper.getMainLooper()), 400) {
-        if (!isResumed || !viewModel.isSearchViewExpanded) {
+        if (!isResumed) {
             return@DebouncedRunnable
         }
-        val query = viewModel.searchViewQuery
+        // The shared search bar follows the ACTIVE pane (like the FAB): the search state
+        // and results belong to whichever pane the user is working on.
+        val targetViewModel = activePaneFragment().viewModel
+        if (!targetViewModel.isSearchViewExpanded) {
+            return@DebouncedRunnable
+        }
+        val query = targetViewModel.searchViewQuery
         if (query.isEmpty()) {
             return@DebouncedRunnable
         }
-        viewModel.search(query)
+        targetViewModel.search(query)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -253,27 +262,39 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         super.onActivityCreated(savedInstanceState)
 
-        if (savedInstanceState == null) {
-            navigationFragment = NavigationFragment()
-            childFragmentManager.commit { add(R.id.navigationFragment, navigationFragment) }
-        } else {
-            navigationFragment = childFragmentManager.findFragmentById(R.id.navigationFragment)
-                as NavigationFragment
-        }
-        navigationFragment.listener = this
         val activity = requireActivity() as AppCompatActivity
-        val isSecondaryPane = args.secondaryPane
-        if (!isSecondaryPane) {
+        val isTwoPane = me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat
+        if (!isTwoPane) {
+            // Single-pane mode: each pane owns its own drawer (the Activity-level drawer is
+            // only used in two-pane mode).
+            if (savedInstanceState == null) {
+                navigationFragment = NavigationFragment()
+                childFragmentManager.commit { add(R.id.navigationFragment, navigationFragment) }
+            } else {
+                navigationFragment = childFragmentManager.findFragmentById(R.id.navigationFragment)
+                    as NavigationFragment
+            }
+            navigationFragment.listener = this
+        }
+        if (!isSecondaryPane && !isTwoPane) {
             activity.setTitle(R.string.file_list_title)
             activity.setSupportActionBar(binding.toolbar)
-        } else {
+        } else if (isSecondaryPane) {
             // The secondary (right) pane has no drawer: keep the DrawerLayout (it is the
             // fragment root and must stay visible), hide the navigation panel and lock the
             // drawer closed.
             binding.root.findViewById<View>(R.id.navigationFragment)?.isVisible = false
             binding.drawerLayout?.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED)
         }
-        overlayActionMode = OverlayToolbarActionMode(binding.overlayToolbar)
+        // Two-pane mode shares ONE multi-select action bar rendered over the shared top
+        // bar (the same layer as the three-line menu button): selecting files in either
+        // pane turns the top bar into the action bar (delete/copy/cross-pane). Single-pane
+        // mode uses the pane's own overlay toolbar.
+        overlayActionMode = if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+            (activity as FileListActivity).getSharedOverlayActionMode()
+        } else {
+            OverlayToolbarActionMode(binding.overlayToolbar)
+        }
         bottomActionMode = PersistentBarLayoutToolbarActionMode(
             binding.persistentBarLayout, binding.bottomBarLayout, binding.bottomToolbar
         )
@@ -298,20 +319,42 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             this.isSecondaryPane = args.secondaryPane
         }
         binding.recyclerView.adapter = adapter
+        // NOTE: the active-pane tracking does NOT live here. View.setOnTouchListener on
+        // the RecyclerView never fires for touches consumed by item children (click/ripple
+        // consume ACTION_DOWN first), so tapping files/folders would not switch the active
+        // pane. Tracking is centralized in FileListActivity.dispatchTouchEvent() using the
+        // touch X coordinate (each pane is exactly half the screen), which cannot miss any
+        // touch anywhere in the pane (items, breadcrumb, empty state, toolbar, …).
         val fastScroller = ThemedFastScroller.create(binding.recyclerView)
         binding.recyclerView.setOnApplyWindowInsetsListener(
             ScrollingViewOnApplyWindowInsetsListener(binding.recyclerView, fastScroller)
         )
-        binding.speedDialView.inflate(R.menu.file_list_speed_dial)
-        binding.speedDialView.setOnActionSelectedListener {
-            when (it.id) {
-                R.id.action_create_file -> showCreateFileDialog()
-                R.id.action_create_directory -> showCreateDirectoryDialog()
+        if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+            // Two-pane layout adjustments: the shared top bar (search/sort/three dots)
+            // lives in the Activity above both panes and is always visible, so both pane
+            // toolbars are hidden (the breadcrumb path bars stay). The FAB is owned by the
+            // Activity (fixed bottom-right, like Amaze) and targets the active pane, so the
+            // per-pane FABs are hidden. Shrink icons, hide folder icons and remove the
+            // per-item three-dot buttons.
+            binding.toolbar.isVisible = false
+            binding.speedDialView.isVisible = false
+            applyTwoPaneSmallIcons()
+            adapter.hideFolderIcons = true
+            adapter.hideMenuButtons = true
+        }
+        if (!me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+            binding.speedDialView.inflate(R.menu.file_list_speed_dial)
+            binding.speedDialView.setOnActionSelectedListener {
+                val target = this
+                when (it.id) {
+                    R.id.action_create_file -> target.showCreateFileDialog()
+                    R.id.action_create_directory -> target.showCreateDirectoryDialog()
+                }
+                // Returning false causes the speed dial to close without animation.
+                //return false
+                binding.speedDialView.close()
+                true
             }
-            // Returning false causes the speed dial to close without animation.
-            //return false
-            binding.speedDialView.close()
-            true
         }
 
         val viewLifecycleOwner = viewLifecycleOwner
@@ -443,9 +486,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
         super.onCreateOptionsMenu(menu, inflater)
-        if (args.secondaryPane) {
-            // The secondary (right) pane shares the activity toolbar with the primary pane,
-            // so it does not contribute any menu items.
+        val isTwoPane = me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat
+        if (isSecondaryPane != isTwoPane) {
+            // Single-pane mode: only the primary pane contributes menus. Two-pane mode:
+            // only the right pane renders the shared top bar and contributes menus.
             return
         }
 
@@ -457,10 +501,12 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     private fun setUpSearchView() {
         val searchView = menuBinding.searchItem.actionView as FixQueryChangeSearchView
         // MenuItem.OnActionExpandListener.onMenuItemActionExpand() is called before SearchView
-        // resets the query.
+        // resets the query. The search bar follows the ACTIVE pane (like the FAB): opening
+        // it targets the pane the user is working on, and results show in that pane.
         searchView.setOnSearchClickListener {
-            viewModel.isSearchViewExpanded = true
-            searchView.setQuery(viewModel.searchViewQuery, false)
+            val targetViewModel = activePaneFragment().viewModel
+            targetViewModel.isSearchViewExpanded = true
+            searchView.setQuery(targetViewModel.searchViewQuery, false)
             debouncedSearchRunnable()
         }
         // SearchView.OnCloseListener.onClose() is not always called.
@@ -468,15 +514,16 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             override fun onMenuItemActionExpand(item: MenuItem): Boolean = true
 
             override fun onMenuItemActionCollapse(item: MenuItem): Boolean {
-                viewModel.isSearchViewExpanded = false
-                viewModel.stopSearching()
+                val targetViewModel = activePaneFragment().viewModel
+                targetViewModel.isSearchViewExpanded = false
+                targetViewModel.stopSearching()
                 return true
             }
         })
         searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String): Boolean {
                 debouncedSearchRunnable.cancel()
-                viewModel.search(query)
+                activePaneFragment().viewModel.search(query)
                 return true
             }
 
@@ -484,12 +531,12 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 if (searchView.shouldIgnoreQueryChange) {
                     return false
                 }
-                viewModel.searchViewQuery = query
+                activePaneFragment().viewModel.searchViewQuery = query
                 debouncedSearchRunnable()
                 return false
             }
         })
-        if (viewModel.isSearchViewExpanded) {
+        if (activePaneFragment().viewModel.isSearchViewExpanded) {
             menuBinding.searchItem.expandActionView()
         }
     }
@@ -498,6 +545,44 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         if (this::menuBinding.isInitialized && menuBinding.searchItem.isActionViewExpanded) {
             menuBinding.searchItem.collapseActionView()
         }
+    }
+
+    /** Opens the navigation drawer (used by the shared top bar's three-line button). */
+    fun openNavigationDrawer() {
+        if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+            // Two-pane mode: the drawer lives in the Activity's full-screen DrawerLayout.
+            (requireActivity() as FileListActivity).openNavigationDrawer()
+            return
+        }
+        val drawerLayout = binding.drawerLayout
+        if (drawerLayout != null) {
+            if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                drawerLayout.closeDrawer(GravityCompat.START)
+            } else {
+                drawerLayout.openDrawer(GravityCompat.START)
+            }
+        }
+        if (binding.persistentDrawerLayout != null) {
+            Settings.FILE_LIST_PERSISTENT_DRAWER_OPEN.putValue(
+                !Settings.FILE_LIST_PERSISTENT_DRAWER_OPEN.valueCompat
+            )
+        }
+    }
+
+    /**
+     * The pane the shared actions (search, FAB) act on: the pane the user last touched.
+     * In two-pane mode the shared search bar follows this pane, exactly like the FAB.
+     */
+    private fun activePaneFragment(): FileListFragment {
+        if (isSecondaryPane && !TwoPaneState.activePaneSecondary) {
+            return (requireActivity() as FileListActivity)
+                .findFileListFragment(secondaryPane = false) ?: this
+        }
+        if (!isSecondaryPane && TwoPaneState.activePaneSecondary) {
+            return (requireActivity() as FileListActivity)
+                .findFileListFragment(secondaryPane = true) ?: this
+        }
+        return this
     }
 
     override fun onPrepareOptionsMenu(menu: Menu) {
@@ -509,14 +594,32 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            android.R.id.home -> {
-                binding.drawerLayout?.openDrawer(GravityCompat.START)
-                if (binding.persistentDrawerLayout != null) {
-                    Settings.FILE_LIST_PERSISTENT_DRAWER_OPEN.putValue(
-                        !Settings.FILE_LIST_PERSISTENT_DRAWER_OPEN.valueCompat
-                    )
+        // In two-pane mode the shared top bar follows the active pane: whoever receives a
+        // menu event while the OTHER pane is active must forward it to the active pane.
+        if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+            val activeIsSecondary = TwoPaneState.activePaneSecondary
+            if (isSecondaryPane != activeIsSecondary) {
+                val activeFragment = (requireActivity() as FileListActivity)
+                    .findFileListFragment(secondaryPane = activeIsSecondary)
+                if (activeFragment != null && activeFragment.performMenuAction(item.itemId)) {
+                    return true
                 }
+            }
+        }
+        return performMenuAction(item.itemId)
+    }
+
+    /**
+     * Executes a top-bar menu action on THIS pane's list. Uses only this fragment's
+     * viewModel, so it can be invoked for the left pane from the right pane's shared top
+     * bar without touching the (non-existent) left menu UI.
+     */
+    fun performMenuAction(itemId: Int): Boolean {
+        return when (itemId) {
+            android.R.id.home -> {
+                // Toggle: open when closed, close when open (this path is hit instead of
+                // the Activity's handler because fragments receive menu events first).
+                openNavigationDrawer()
                 true
             }
             R.id.action_view_list -> {
@@ -544,8 +647,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 true
             }
             R.id.action_sort_order_ascending -> {
+                // Toggle based on the current order, independent of any menu check state
+                // (the left pane has no visible menu in two-pane mode).
                 viewModel.setSortOrder(
-                    if (!menuBinding.sortOrderAscendingItem.isChecked) {
+                    if (viewModel.sortOptions.order == Order.DESCENDING) {
                         Order.ASCENDING
                     } else {
                         Order.DESCENDING
@@ -554,11 +659,11 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 true
             }
             R.id.action_sort_directories_first -> {
-                viewModel.setSortDirectoriesFirst(!menuBinding.sortDirectoriesFirstItem.isChecked)
+                viewModel.setSortDirectoriesFirst(!viewModel.sortOptions.isDirectoriesFirst)
                 true
             }
             R.id.action_view_sort_path_specific -> {
-                viewModel.isViewSortPathSpecific = !menuBinding.viewSortPathSpecificItem.isChecked
+                viewModel.isViewSortPathSpecific = !viewModel.isViewSortPathSpecific
                 true
             }
             R.id.action_new_task -> {
@@ -582,7 +687,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 true
             }
             R.id.action_show_hidden_files -> {
-                setShowHiddenFiles(!menuBinding.showHiddenFilesItem.isChecked)
+                setShowHiddenFiles(!Settings.FILE_LIST_SHOW_HIDDEN_FILES.valueCompat)
                 true
             }
             R.id.action_manage_hidden -> {
@@ -621,11 +726,31 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 createShortcut()
                 true
             }
-            else -> super.onOptionsItemSelected(item)
+            else -> false
         }
     }
 
     fun onKeyShortcut(keyCode: Int, event: KeyEvent): Boolean {
+        // F5/F6 cross-pane transfer (MT Manager / Total Commander style): the ACTIVE
+        // pane's selection goes to the OTHER pane's current directory. F5 copies,
+        // F6 moves. Only meaningful in two-pane mode.
+        val isTwoPane = me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat
+        if (isTwoPane && viewModel.selectedFiles.isNotEmpty()) {
+            if (keyCode == KeyEvent.KEYCODE_F5) {
+                val files = viewModel.selectedFiles
+                val target = otherPaneCurrentPath() ?: return true
+                FileJobService.copy(makePathListForJob(files), target, requireContext())
+                viewModel.selectFiles(files, false)
+                return true
+            }
+            if (keyCode == KeyEvent.KEYCODE_F6) {
+                val files = viewModel.selectedFiles
+                val target = otherPaneCurrentPath() ?: return true
+                FileJobService.move(makePathListForJob(files), target, requireContext())
+                viewModel.selectFiles(files, false)
+                return true
+            }
+        }
         if (bottomActionMode.isActive) {
             val menu = bottomActionMode.menu
             menu.setQwertyMode(
@@ -955,16 +1080,38 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     private fun onSelectedFilesChanged(files: FileItemSet) {
+        // Both panes share ONE multi-select action bar over the shared top bar, so only
+        // one pane may hold a selection at a time: selecting files clears the other
+        // pane's selection (clearing must NOT touch the active pane).
+        if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat &&
+            files.isNotEmpty()
+        ) {
+            TwoPaneState.setActivePaneSecondary(isSecondaryPane)
+            val activity = requireActivity() as FileListActivity
+            val otherFragment = activity.findFileListFragment(secondaryPane = !isSecondaryPane)
+            if (otherFragment != null && otherFragment.viewModel.selectedFiles.isNotEmpty()) {
+                otherFragment.viewModel.clearSelectedFiles()
+            }
+        }
         updateOverlayToolbar()
         adapter.replaceSelectedFiles(files)
+    }
+
+    /** Hides the toolbar overflow (three-dot) menu by clearing its icon. */
+    private fun androidx.appcompat.widget.Toolbar.hideOverflowMenu() {
+        overflowIcon = null
+    }
+
+    /** Switches list item icons to the small size so filenames get more room. */
+    private fun applyTwoPaneSmallIcons() {
+        adapter.useSmallIcons = true
     }
 
     /**
      * Applies the dense-layout setting. In two-pane mode the dedicated two-pane dense
      * switch takes precedence over the global one.
      */
-    private fun updateDenseLayout() {
-        onDenseLayoutChanged(
+    private fun updateDenseLayout() {        onDenseLayoutChanged(
             if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
                 me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE_DENSE.valueCompat
             } else {
@@ -985,9 +1132,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     private fun updateOverlayToolbar() {
         val files = viewModel.selectedFiles
         if (files.isEmpty()) {
-            if (overlayActionMode.isActive) {
-                overlayActionMode.finish()
-            }
+            overlayActionMode.finishIfOwned(overlayCallback)
             return
         }
         val pickOptions = viewModel.pickOptions
@@ -1030,22 +1175,114 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             val isCurrentPathReadOnly = viewModel.currentPath.fileSystem.isReadOnly
             menu.findItem(R.id.action_archive).isVisible = !isCurrentPathReadOnly
             menu.findItem(R.id.action_batch_rename).isVisible = !isCurrentPathReadOnly
+            if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+                // Per-file operations, following Amaze's action-mode rules:
+                // single selection: open-with/share (files only), rename, timestamp,
+                // shortcut; multi selection: only operations that make sense on a
+                // selection.
+                val singleFile = files.size == 1
+                menu.findItem(R.id.action_rename).isVisible = !isAnyFileReadOnly && singleFile
+                menu.findItem(R.id.action_set_timestamp).isVisible =
+                    !isAnyFileReadOnly && singleFile
+                menu.findItem(R.id.action_copy_path).isVisible = true
+                menu.findItem(R.id.action_add_bookmark).isVisible =
+                    singleFile && files.single().attributes.isDirectory
+                menu.findItem(R.id.action_create_shortcut).isVisible =
+                    singleFile && !files.single().attributes.isDirectory
+                menu.findItem(R.id.action_properties).isVisible = true
+                menu.findItem(R.id.action_hide).isVisible = !isAnyFileReadOnly
+                // Open-with and share only for files (never directories); share works for
+                // a multi selection only when every selected item is a file.
+                val singleFileIsDirectory = singleFile && files.single().attributes.isDirectory
+                menu.findItem(R.id.action_open_with).isVisible =
+                    singleFile && !singleFileIsDirectory
+                menu.findItem(R.id.action_share).isVisible =
+                    if (files.all { !it.attributes.isDirectory }) {
+                        true
+                    } else {
+                        false
+                    }
+                // Analyzer/action items mirror the single-file menu, shown only for a
+                // single selection of the matching type. singleFileItem != null iff
+                // files.size == 1, i.e. singleFile.
+                val singleFileItem = files.singleOrNull()
+                val singleFileName = singleFileItem?.name.orEmpty()
+                menu.findItem(R.id.action_dex_analyze).isVisible =
+                    singleFileItem != null &&
+                        singleFileName.endsWith(".dex", ignoreCase = true)
+                menu.findItem(R.id.action_elf_analyze).isVisible =
+                    singleFileItem != null && (singleFileName.endsWith(".so", ignoreCase = true) ||
+                        singleFileName.endsWith(".elf", ignoreCase = true))
+                menu.findItem(R.id.action_hex_view).isVisible =
+                    singleFileItem != null && !singleFileItem.attributes.isDirectory
+                menu.findItem(R.id.action_install).isVisible =
+                    singleFileItem != null && singleFileItem.mimeType.isApk
+                menu.findItem(R.id.action_apk_string_search).isVisible =
+                    singleFileItem != null && singleFileItem.mimeType.isApk
+                menu.findItem(R.id.action_compare_apk).isVisible =
+                    singleFileItem != null && singleFileItem.mimeType.isApk
+                menu.findItem(R.id.action_view_manifest).isVisible =
+                    singleFileItem != null && singleFileItem.mimeType.isApk
+                menu.findItem(R.id.action_auto_sign_apk).isVisible =
+                    singleFileItem != null && singleFileItem.mimeType.isApk
+                menu.findItem(R.id.action_sign_apk).isVisible =
+                    singleFileItem != null && singleFileItem.mimeType.isApk
+                menu.findItem(R.id.action_rename_apk).isVisible =
+                    singleFileItem != null && singleFileItem.mimeType.isApk
+                menu.findItem(R.id.action_convert_encoding).isVisible =
+                    singleFileItem != null && !singleFileItem.attributes.isDirectory
+            }
+            // The regular clipboard cut/copy keep their original icons and stay visible
+            // (copy/cut on one pane, then paste on the other pane).
+            menu.findItem(R.id.action_cut).isVisible = !isAnyFileReadOnly
+            menu.findItem(R.id.action_copy).isVisible = true
+            // Single-pane mode keeps the ORIGINAL menu: every item added for two-pane
+            // browsing (open-with, per-file ops, analyzers, ...) is hidden so the single
+            // pane behaves exactly as before.
+            if (!me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+                menu.findItem(R.id.action_open_with).isVisible = false
+                menu.findItem(R.id.action_hide).isVisible = false
+                menu.findItem(R.id.action_rename).isVisible = false
+                menu.findItem(R.id.action_set_timestamp).isVisible = false
+                menu.findItem(R.id.action_copy_path).isVisible = false
+                menu.findItem(R.id.action_add_bookmark).isVisible = false
+                menu.findItem(R.id.action_create_shortcut).isVisible = false
+                menu.findItem(R.id.action_properties).isVisible = false
+                menu.findItem(R.id.action_dex_analyze).isVisible = false
+                menu.findItem(R.id.action_elf_analyze).isVisible = false
+                menu.findItem(R.id.action_hex_view).isVisible = false
+                menu.findItem(R.id.action_install).isVisible = false
+                menu.findItem(R.id.action_apk_string_search).isVisible = false
+                menu.findItem(R.id.action_compare_apk).isVisible = false
+                menu.findItem(R.id.action_view_manifest).isVisible = false
+                menu.findItem(R.id.action_auto_sign_apk).isVisible = false
+                menu.findItem(R.id.action_sign_apk).isVisible = false
+                menu.findItem(R.id.action_rename_apk).isVisible = false
+                menu.findItem(R.id.action_convert_encoding).isVisible = false
+            }
         }
-        if (!overlayActionMode.isActive) {
-            binding.appBarLayout.setExpanded(true)
-            binding.appBarLayout.addOnOffsetChangedListener(
-                AppBarLayoutExpandHackListener(binding.recyclerView)
-            )
-            overlayActionMode.start(object : ToolbarActionMode.Callback {
-                override fun onToolbarActionModeMenuItemClicked(
-                    toolbarActionMode: ToolbarActionMode,
-                    item: MenuItem
-                ): Boolean = onOverlayActionModeMenuItemClicked(item)
+        if (!overlayActionMode.isActive || overlayActionMode.currentCallback() != overlayCallback) {
+            // In single-pane mode expand the scrolling app bar so the overlay toolbar
+            // (inside it) is visible; in two-pane mode the shared top bar is fixed, so no
+            // expansion is needed (and expanding the pane's own app bar is meaningless).
+            if (!me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+                binding.appBarLayout.setExpanded(true)
+                binding.appBarLayout.addOnOffsetChangedListener(
+                    AppBarLayoutExpandHackListener(binding.recyclerView)
+                )
+            }
+            overlayActionMode.start(overlayCallback)
+        }
+    }
 
-                override fun onToolbarActionModeFinished(toolbarActionMode: ToolbarActionMode) {
-                    onOverlayActionModeFinished()
-                }
-            })
+    private val overlayCallback = object : ToolbarActionMode.Callback {
+        override fun onToolbarActionModeMenuItemClicked(
+            toolbarActionMode: ToolbarActionMode,
+            item: MenuItem
+        ): Boolean = onOverlayActionModeMenuItemClicked(item)
+
+        override fun onToolbarActionModeFinished(toolbarActionMode: ToolbarActionMode) {
+            onOverlayActionModeFinished()
         }
     }
 
@@ -1093,6 +1330,107 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             }
             R.id.action_batch_rename -> {
                 showBatchRenameDialog(viewModel.selectedFiles)
+                true
+            }
+            R.id.action_open_with -> {
+                val file = viewModel.selectedFiles.singleOrNull() ?: return false
+                openFileWith(file)
+                true
+            }
+            R.id.action_hide -> {
+                val files = viewModel.selectedFiles
+                if (files.size == 1) {
+                    hideFile(files.single())
+                } else {
+                    val hiddenPaths = HiddenPaths.getAll().toMutableSet()
+                    files.forEach { hiddenPaths += it.path.toString() }
+                    HiddenPaths.set(hiddenPaths)
+                    viewModel.reload()
+                }
+                true
+            }
+            R.id.action_rename -> {
+                val file = viewModel.selectedFiles.singleOrNull() ?: return false
+                showRenameFileDialog(file)
+                true
+            }
+            R.id.action_set_timestamp -> {
+                val file = viewModel.selectedFiles.singleOrNull() ?: return false
+                showSetTimestampDialog(file)
+                true
+            }
+            R.id.action_copy_path -> {
+                viewModel.selectedFiles.forEach { copyPath(it) }
+                true
+            }
+            R.id.action_add_bookmark -> {
+                val file = viewModel.selectedFiles.singleOrNull() ?: return false
+                addBookmark(file)
+                true
+            }
+            R.id.action_create_shortcut -> {
+                val file = viewModel.selectedFiles.singleOrNull() ?: return false
+                createShortcut(file)
+                true
+            }
+            R.id.action_properties -> {
+                val file = viewModel.selectedFiles.singleOrNull() ?: return false
+                showPropertiesDialog(file)
+                true
+            }
+            R.id.action_dex_analyze -> {
+                val file = viewModel.selectedFiles.singleOrNull() ?: return false
+                showDexAnalyzer(file)
+                true
+            }
+            R.id.action_elf_analyze -> {
+                val file = viewModel.selectedFiles.singleOrNull() ?: return false
+                showElfAnalyzer(file)
+                true
+            }
+            R.id.action_hex_view -> {
+                val file = viewModel.selectedFiles.singleOrNull() ?: return false
+                showHexViewer(file)
+                true
+            }
+            R.id.action_install -> {
+                val file = viewModel.selectedFiles.singleOrNull() ?: return false
+                installFile(file)
+                true
+            }
+            R.id.action_apk_string_search -> {
+                val file = viewModel.selectedFiles.singleOrNull() ?: return false
+                showApkStringSearch(file)
+                true
+            }
+            R.id.action_compare_apk -> {
+                val file = viewModel.selectedFiles.singleOrNull() ?: return false
+                compareApk(file)
+                true
+            }
+            R.id.action_view_manifest -> {
+                val file = viewModel.selectedFiles.singleOrNull() ?: return false
+                showManifest(file)
+                true
+            }
+            R.id.action_auto_sign_apk -> {
+                val file = viewModel.selectedFiles.singleOrNull() ?: return false
+                autoSignApk(file)
+                true
+            }
+            R.id.action_sign_apk -> {
+                val file = viewModel.selectedFiles.singleOrNull() ?: return false
+                showSignApkDialog(file)
+                true
+            }
+            R.id.action_rename_apk -> {
+                val file = viewModel.selectedFiles.singleOrNull() ?: return false
+                renameApkWithVersion(file)
+                true
+            }
+            R.id.action_convert_encoding -> {
+                val file = viewModel.selectedFiles.singleOrNull() ?: return false
+                showEncodingConversionDialog(file)
                 true
             }
             else -> false
@@ -1177,6 +1515,14 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     private fun updateBottomToolbar() {
+        // Two-pane mode hides the bottom paste bar entirely: it would sit behind the FAB
+        // at the bottom-right (ugly), and cross-pane transfers are done differently.
+        if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+            if (bottomActionMode.isActive) {
+                bottomActionMode.finish()
+            }
+            return
+        }
         val pickOptions = viewModel.pickOptions
         if (pickOptions != null) {
             bottomActionMode.setMenuResource(R.menu.file_list_pick_bottom)
@@ -1325,6 +1671,17 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         }
         viewModel.clearPasteState()
     }
+
+    /** Public wrapper for the FAB's "paste to this pane" action (MT Manager style). */
+    fun pasteFilesToCurrentPane() {
+        if (viewModel.pasteState.files.isEmpty()) {
+            return
+        }
+        pasteFiles(viewModel.currentPath)
+    }
+
+    /** Whether this pane has pending clipboard content that can be pasted here. */
+    fun hasPasteContent(): Boolean = viewModel.pasteState.files.isNotEmpty()
 
     private fun makePathListForJob(files: FileItemSet): List<Path> =
         files.map { it.path }.sortedBy { it.toUri() }
@@ -1542,7 +1899,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         Log.i(TAG, "showManageHiddenDialog() with ${hiddenPaths.size} hidden paths: $hiddenPaths")
         if (hiddenPaths.isEmpty()) {
             // A toast is too easy to miss; use a dialog so the user actually learns how to
-            // reach the Hide entry (the ⋮ menu on a file, not long-press which is multi-select).
+            // reach the Hide entry (the 鈰?menu on a file, not long-press which is multi-select).
             MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.file_list_action_manage_hidden)
                 .setMessage(R.string.file_list_action_manage_hidden_empty)
@@ -2410,7 +2767,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     private fun formatTimestamp(time: Long): String =
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(time))
 
-    private fun showCreateFileDialog() {
+    fun showCreateFileDialog() {
         CreateFileDialogFragment.show(this)
     }
 
@@ -2419,7 +2776,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         FileJobService.create(path, false, requireContext())
     }
 
-    private fun showCreateDirectoryDialog() {
+    fun showCreateDirectoryDialog() {
         CreateDirectoryDialogFragment.show(this)
     }
 
@@ -2445,6 +2802,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     override fun closeNavigationDrawer() {
+        if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+            (requireActivity() as FileListActivity).closeNavigationDrawer()
+            return
+        }
         binding.drawerLayout?.closeDrawer(GravityCompat.START)
     }
 
@@ -2749,7 +3110,19 @@ object TwoPaneState {
     @Volatile
     var secondaryPanePath: java8.nio.file.Path? = null
 
+    private val _activePaneSecondary = java.util.concurrent.atomic.AtomicBoolean(false)
+
     /** The pane the user last touched; the back key navigates it. */
+    val activePaneSecondary: Boolean
+        get() = _activePaneSecondary.get()
+
+    /** Called whenever the active pane changes, so the Activity can restyle the panes. */
     @Volatile
-    var activePaneSecondary: Boolean = false
+    var activePaneSecondaryListener: (() -> Unit)? = null
+
+    fun setActivePaneSecondary(secondary: Boolean) {
+        if (_activePaneSecondary.getAndSet(secondary) != secondary) {
+            activePaneSecondaryListener?.invoke()
+        }
+    }
 }

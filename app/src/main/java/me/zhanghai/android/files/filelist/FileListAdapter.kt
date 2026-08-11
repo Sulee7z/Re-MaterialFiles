@@ -58,9 +58,35 @@ class FileListAdapter(
     private val listener: Listener
 ) : AnimatedListAdapter<FileItem, FileListAdapter.ViewHolder>(CALLBACK), PopupTextProvider {
     private var isSearching = false
-
     /** True when this list is the secondary (right) pane of two-pane browsing. */
     var isSecondaryPane: Boolean = false
+
+    /** True when the two-pane small-icon layout is active (shows more filename text). */
+    var useSmallIcons: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                notifyDataSetChanged()
+            }
+        }
+
+    /** True to hide folder icons in the list (two-pane mode, shows more text). */
+    var hideFolderIcons: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                notifyDataSetChanged()
+            }
+        }
+
+    /** True to hide the per-item "three dots" menu button (two-pane lists). */
+    var hideMenuButtons: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                notifyDataSetChanged()
+            }
+        }
 
     private lateinit var _viewType: FileViewType
     var viewType: FileViewType
@@ -276,12 +302,12 @@ class FileListAdapter(
     private fun onTouchListener(context: Context, holder: ViewHolder, view: View, event: MotionEvent, file: FileItem) {
         if (_viewType == FileViewType.GRID) return
         val maxWaitMillisSelection = 400L
-        val lineHeight = (view.parent as CheckableForegroundLinearLayout).height
         val localPosition = holder.absoluteAdapterPosition
         val horizontalError = 7.5f
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 view.parent.requestDisallowInterceptTouchEvent(true)
+                _touchData.reset()
                 _touchData.setup(
                     pStartTouchPosX = event.x,
                     pStartTouchPosY = event.y,
@@ -302,8 +328,13 @@ class FileListAdapter(
                 _touchData.threadedWaiter.start()
             }
             MotionEvent.ACTION_MOVE -> {
-                val deltaPos = ((event.y - _touchData.clickedLineAnchorY) / lineHeight).roundToInt()
-                val newPosition: Int = localPosition + deltaPos
+                // event.y is local to the icon view while clickedLineAnchorY is based on
+                // the row position. Mixing those coordinate spaces shifts selection by
+                // neighbouring rows, especially with the 48dp dense-row layout. Resolve
+                // the current adapter position from the RecyclerView child instead.
+                val newPosition = positionAtEvent(view, event, localPosition)
+                if (newPosition < 0) return
+                val deltaPos = newPosition - localPosition
                 if (newPosition != _touchData.lastPosSelected && !_touchData.isGestureHorizontal) {
                     if (!_touchData.isMultipleSelectionStarted) {
                         _touchData.isMultipleSelectionStarted = true
@@ -342,12 +373,29 @@ class FileListAdapter(
                 if (!_touchData.isMultipleSelectionStarted && TouchData.isClickAction(context, _touchData.startTouchPosX, _touchData.startTouchPosY, event.x, event.y)) {
                     _touchData.isDuringClick = false
                     view.performClick()
-                    view.parent.requestDisallowInterceptTouchEvent(false)
                 }
-                _touchData.isMultipleSelectionStarted = false
-                _touchData.isDeltaPosSet = false
+                view.parent.requestDisallowInterceptTouchEvent(false)
+                _touchData.reset()
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                // A cancelled gesture (e.g. the list started scrolling) must not leave
+                // stale long-press/drag state behind, otherwise the next touch on another
+                // row would mis-select files.
+                _touchData.reset()
+                view.parent.requestDisallowInterceptTouchEvent(false)
             }
         }
+    }
+
+    private fun positionAtEvent(view: View, event: MotionEvent, fallback: Int): Int {
+        val recyclerView = view.parent?.parent as? RecyclerView ?: return fallback
+        val location = IntArray(2)
+        recyclerView.getLocationOnScreen(location)
+        val child = recyclerView.findChildViewUnder(
+            event.rawX - location[0],
+            event.rawY - location[1]
+        ) ?: return fallback
+        return recyclerView.getChildViewHolder(child).bindingAdapterPosition
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -357,6 +405,7 @@ class FileListAdapter(
         val isEnabled = isFileSelectable(file) || isDirectory
         holder.itemLayout.isEnabled = isEnabled
         holder.menuButton.isEnabled = isEnabled
+        holder.menuButton.isVisible = !hideMenuButtons
         val menu = holder.popupMenu.menu
         val path = file.path
         val hasPickOptions = pickOptions != null
@@ -401,16 +450,37 @@ class FileListAdapter(
             }
         }
         holder.iconLayout.apply {
-            setOnTouchListener { view, event ->
-                onTouchListener(context, holder, view, event, file)
-                true
+            // Two-pane folders: collapse the icon area to zero width so the name spans
+            // the full row (the drag-to-select gesture is handled on the whole item row).
+            val rowContext = holder.itemLayout.context
+            val iconLayoutParams = layoutParams
+            if (hideFolderIcons && isDirectory) {
+                iconLayoutParams.width = 0
+                (iconLayoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = 0
+            } else {
+                iconLayoutParams.width = rowContext.resources
+                    .getDimensionPixelSize(R.dimen.touch_target_size)
+                (iconLayoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd =
+                    rowContext.resources.getDimensionPixelSize(
+                        R.dimen.content_start_from_screen_edge_margin_minus_44dp
+                    )
             }
+            layoutParams = iconLayoutParams
             setOnClickListener { selectFile(file) }
+        }
+        holder.itemLayout.setOnTouchListener { view, event ->
+            onTouchListener(holder.itemLayout.context, holder, view, event, file)
+            true
         }
         val iconRes = file.mimeType.iconRes
         holder.iconImage.apply {
-            isVisible = true
+            isVisible = !(hideFolderIcons && isDirectory)
             setImageResource(iconRes)
+            if (useSmallIcons) {
+                val size = holder.itemLayout.context.resources
+                    .getDimensionPixelSize(R.dimen.small_icon_size)
+                layoutParams = layoutParams.apply { width = size; height = size }
+            }
         }
         holder.directoryThumbnailImage?.isVisible = isDirectory
         holder.thumbnailOutlineView?.isVisible = !isDirectory
@@ -505,23 +575,12 @@ class FileListAdapter(
         menu.findItem(R.id.action_convert_encoding).isVisible = !isDirectory && isTextFile(file)
         menu.findItem(R.id.action_archive).isVisible = !isArchivePath
         menu.findItem(R.id.action_add_bookmark).isVisible = isDirectory
-        // Two-pane cross actions: copy/cut to the other pane (titles depend on the side).
-        val twoPane = me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat
-        val otherPaneRes = if (isSecondaryPane) {
-            R.string.file_item_action_copy_to_left
-        } else {
-            R.string.file_item_action_copy_to_right
-        }
-        menu.findItem(R.id.action_copy_to_other_pane).isVisible = twoPane
-        menu.findItem(R.id.action_copy_to_other_pane).setTitle(otherPaneRes)
-        menu.findItem(R.id.action_cut_to_other_pane).isVisible = twoPane
-        menu.findItem(R.id.action_cut_to_other_pane).setTitle(
-            if (isSecondaryPane) {
-                R.string.file_item_action_cut_to_left
-            } else {
-                R.string.file_item_action_cut_to_right
-            }
-        )
+        // The cross-pane items exist only in the single-file menu for single-pane mode
+        // (original behavior). In two-pane mode the multi-select action bar in the shared
+        // top bar handles cross-pane transfers, so hide them here.
+        val isTwoPane = me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat
+        menu.findItem(R.id.action_copy_to_other_pane).isVisible = !isTwoPane
+        menu.findItem(R.id.action_cut_to_other_pane).isVisible = !isTwoPane
         holder.popupMenu.setOnMenuItemClickListener {
             when (it.itemId) {
                 R.id.action_open_with -> {
@@ -796,6 +855,18 @@ private data class TouchData(
         clickedLineAnchorY = pClickedLineAnchorY
         lastPosSelected = pLastPosSelected
         actionIdentifier = pActionIdentifier
+    }
+
+    /** Fully resets the gesture state after ACTION_UP / ACTION_CANCEL. */
+    fun reset() {
+        isDuringClick = false
+        isGestureHorizontal = false
+        isMultipleSelectionStarted = false
+        isDeltaPosSet = false
+        isDeltaPosGrowing = false
+        prevDeltaPos = 0
+        lastPosSelected = -1
+        actionIdentifier = 0L
     }
 
     companion object {
