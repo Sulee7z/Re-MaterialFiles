@@ -44,6 +44,7 @@ import androidx.core.graphics.drawable.IconCompat
 import androidx.core.view.GravityCompat
 import androidx.core.view.isVisible
 import androidx.core.view.updatePaddingRelative
+import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.commit
@@ -288,6 +289,14 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             // the list). Hide the navigation panel and lock the drawer closed.
             binding.root.findViewById<View>(R.id.navigationFragment)?.isVisible = false
             binding.drawerLayout?.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED)
+            // The Activity's shared top bar already consumes the status-bar inset, so the
+            // pane's AppBarLayout must not inflate for it again (that would pad the pane
+            // content by the status-bar height on devices where the window insets reach
+            // the pane). Turning off fitsSystemWindows on the pane's CoordinatorLayout
+            // stops the AppBarLayout from consuming the top inset, while PersistentBarLayout
+            // still routes the bottom inset to the pane's bottom bar.
+            val coordinatorLayout = binding.persistentBarLayout.getChildAt(0) as? CoordinatorLayout
+            coordinatorLayout?.fitsSystemWindows = false
         }
         // Two-pane mode shares ONE multi-select action bar rendered over the shared top
         // bar (the same layer as the three-line menu button): selecting files in either

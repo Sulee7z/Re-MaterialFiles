@@ -15,7 +15,9 @@ import android.view.MotionEvent
 import android.view.View
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.core.view.GravityCompat
+import androidx.core.view.ViewCompat
 import androidx.core.view.isVisible
+import androidx.core.view.updatePaddingRelative
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.fragment.app.commit
 import androidx.lifecycle.LifecycleOwner
@@ -94,6 +96,17 @@ class FileListActivity : AppActivity() {
             // The layout uses fixed container ids so FragmentManager can restore the two
             // fragments across Activity recreation.
             setContentView(R.layout.file_list_activity_two_pane)
+            // The window draws a transparent status bar (per the theme), so the shared
+            // top bar must extend its background under the status bar and pad its content
+            // by the status-bar height — the same behavior the single-pane AppBarLayout
+            // gets from its fitsSystemWindows chain. Without this the top-bar items sit
+            // under the transparent status bar on some devices.
+            ViewCompat.setOnApplyWindowInsetsListener(
+                findViewById(R.id.sharedTopBarFrame)
+            ) { view, insets ->
+                view.updatePaddingRelative(top = insets.systemWindowInsetTop)
+                insets
+            }
             // The shared top bar spans both panes and hosts the activity action bar
             // (search/sort/three dots); the per-pane toolbars stay hidden. The multi-select
             // action bar renders in the SAME top bar layer (sharedOverlayToolbar), so
