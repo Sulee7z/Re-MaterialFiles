@@ -37,10 +37,10 @@ def versionPatch = versionProperties.getProperty('versionPatch', '0').toInteger(
 def appVersionName = "${versionMajor}.${versionMinor}.${versionPatch}"
 
 android {
-    namespace 'me.zhanghai.android.files'
+    namespace = 'me.zhanghai.android.files'
     buildToolsVersion = '36.0.0'
     compileSdk 36
-    ndkVersion '28.1.13356709'
+    ndkVersion = '28.1.13356709'
     defaultConfig {
         applicationId 'me.zhanghai.android.files'
         minSdk 26
@@ -63,16 +63,16 @@ android {
         }
     }
     buildFeatures {
-        aidl true
-        buildConfig true
-        viewBinding true
-        resValues true
+        aidl = true
+        buildConfig = true
+        viewBinding = true
+        resValues = true
     }
     androidResources {
-        generateLocaleConfig true
+        generateLocaleConfig = true
     }
     compileOptions {
-        coreLibraryDesugaringEnabled true
+        coreLibraryDesugaringEnabled = true
         sourceCompatibility JavaVersion.VERSION_25
         targetCompatibility JavaVersion.VERSION_25
     }
@@ -89,19 +89,19 @@ android {
     buildTypes {
         release {
             minifyEnabled true
-            shrinkResources true
+            shrinkResources = true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
+            signingConfig = signingConfigs.release
 //#ifdef NONFREE
             firebaseCrashlytics {
-                nativeSymbolUploadEnabled true
+                nativeSymbolUploadEnabled = true
             }
 //#endif
         }
     }
     packagingOptions {
         jniLibs {
-            useLegacyPackaging true
+            useLegacyPackaging = true
         }
         resources {
             excludes += [
@@ -119,7 +119,7 @@ android {
 
 repositories {
     maven {
-        url 'https://jitpack.io'
+        url = 'https://jitpack.io'
     }
 }
 dependencies {
@@ -171,7 +171,7 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     // kotlinx-coroutines-android depends on kotlin-stdlib-jdk8
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:${rootProject.ext.kotlin_version}"
     def kotlinx_coroutines_version = '1.11.0'
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:$kotlinx_coroutines_version"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$kotlinx_coroutines_version"

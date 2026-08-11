@@ -69,6 +69,29 @@ object SuiFileServiceLauncher {
         }
     }
 
+    // The Stellar manager (a Shizuku fork) exposes a Shizuku-compatible binder when its
+    // compatibility layer is enabled, so Shizuku.pingBinder() alone does not mean the real
+    // Shizuku manager is present. Only the real Shizuku manager can run our user service
+    // through the original Shizuku startUserService() path (the Stellar manager's
+    // attachUserService() cannot unmarshal the BinderContainer and fails), so check that
+    // the Shizuku manager is actually installed before preferring that path.
+    @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.M)
+    fun isShizukuManagerInstalled(): Boolean {
+        synchronized(lock) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+                return false
+            }
+            return try {
+                application.packageManager.getPackageInfo(SHIZUKU_MANAGER_PACKAGE_NAME, 0) != null
+            } catch (e: Throwable) {
+                // The Shizuku manager isn't installed.
+                false
+            }
+        }
+    }
+
+    private const val SHIZUKU_MANAGER_PACKAGE_NAME = "moe.shizuku.privileged.api"
+
     @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.M)
     fun isShizukuAvailable(): Boolean {
         synchronized(lock) {
@@ -125,8 +148,12 @@ object SuiFileServiceLauncher {
             if (!isSuiAvailable() && !isShizukuBinderAvailable() && !isStellarBinderAvailable()) {
                 throw RemoteFileSystemException("Shizuku/Stellar isn't available")
             }
-            // The original Shizuku backend takes precedence; Stellar is the fallback.
-            return if (isShizukuBinderAvailable()) {
+            // The original Shizuku backend takes precedence, but only when the real Shizuku
+            // manager is installed: the Stellar manager's Shizuku compatibility layer also
+            // answers Shizuku.pingBinder(), yet its startUserService/attachUserService path
+            // cannot deliver our user service binder, so fall back to the Stellar-specific
+            // path in that case.
+            return if (isShizukuBinderAvailable() && isShizukuManagerInstalled()) {
                 launchShizukuService()
             } else {
                 launchStellarService()

@@ -29,6 +29,12 @@ allprojects {
     }
 }
 
+// Project-level Kotlin version, shared with subprojects (explicit lookup avoids the
+// deprecated implicit parent-project property resolution).
+ext {
+    kotlin_version = '2.4.10'
+}
+
 tasks.register('clean', Delete) {
     delete rootProject.buildDir
 }
