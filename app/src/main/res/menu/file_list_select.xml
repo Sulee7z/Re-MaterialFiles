@@ -101,12 +101,6 @@
         app:showAsAction="never" />
 
     <item
-        android:id="@+id/action_extract"
-        android:orderInCategory="200"
-        android:title="@string/file_list_select_action_extract"
-        app:showAsAction="never" />
-
-    <item
         android:id="@+id/action_dex_analyze"
         android:orderInCategory="200"
         android:title="@string/file_item_action_dex_analyze"
