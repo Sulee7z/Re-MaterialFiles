@@ -58,4 +58,10 @@ object AutoSigner {
         val certificate = keyStore.getCertificate(ALIAS) as X509Certificate
         return privateKey to certificate
     }
+
+    /** One-call convenience: signs [input] with the auto-generated key into [output]. */
+    fun sign(context: Context, input: File, output: File) {
+        val (privateKey, certificate) = getOrCreateKey(context)
+        ApkSigner.sign(input, output, privateKey, certificate)
+    }
 }

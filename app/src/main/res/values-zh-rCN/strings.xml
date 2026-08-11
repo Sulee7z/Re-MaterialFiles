@@ -591,6 +591,7 @@
     <string name="file_item_action_dex_analyze">DEX 分析</string>
     <string name="dex_analyze_error_unknown">未知错误</string>
     <string name="dex_search_classes">搜索类</string>
+    <string name="dex_search_members">搜索成员</string>
     <string name="dex_search_strings">搜索字符串</string>
     <string name="dex_string_count_format">共 %2$d 个字符串,显示 %1$d 个</string>
     <string name="dex_class_description_format">%1$s · %2$d 个方法</string>
@@ -671,6 +672,18 @@
     <string name="dex_export_smali_skipped_format">%1$d 个已跳过(类名不安全)</string>
     <string name="dex_export_smali_error">导出 smali 失败</string>
 
+    <string name="file_item_action_edit_dex_smali">编辑 smali (dex++)</string>
+    <string name="dex_smali_edit_title_format">编辑 %1$s</string>
+    <string name="dex_smali_save">保存</string>
+    <string name="dex_smali_save_progress">正在汇编并写入…</string>
+    <string name="dex_smali_save_success">smali 修改已保存</string>
+    <string name="dex_smali_save_error">保存 smali 失败</string>
+    <string name="dex_smali_save_done_format">已保存: %1$s</string>
+    <string name="dex_smali_no_changes">没有可保存的修改</string>
+    <string name="dex_smali_compile_error_format">汇编失败:\n%1$s</string>
+    <string name="dex_smali_method_not_found">在反汇编的 dex 中未找到该方法</string>
+    <string name="dex_smali_class_not_found_format">在反汇编的 dex 中未找到类 %1$s</string>
+
     <string name="file_item_action_view_manifest">查看清单</string>
     <string name="manifest_decode_error">解析清单失败</string>
 
@@ -731,6 +744,37 @@
     <string name="apk_sign_error">签名失败</string>
     <string name="apk_sign_v1_note">使用 APK 签名方案 v1 + v2 + v3</string>
     <string name="file_item_action_auto_sign_apk">一键签名 APK</string>
+
+    <string name="file_item_action_kill_signature">去除签名校验</string>
+    <string name="apk_kill_title">去除签名校验</string>
+    <string name="apk_kill_confirm_format">将注入一个杀手应用,使应用认为它仍持有原始签名,然后用生成的密钥重新签名 APK。\n\n仅对通过 PackageManager.getPackageInfo().signatures 校验签名的应用有效。\n\n输出: %1$s</string>
+    <string name="apk_kill_started">正在去除签名校验…</string>
+    <string name="apk_kill_done_format">完成: %1$s</string>
+    <string name="apk_kill_error">去除签名校验失败</string>
+    <string name="apk_kill_error_final_application">该应用的 Application 类是 final 的,无法被继承</string>
+    <string name="apk_kill_error_non_public_application">该应用的 Application 类不是 public 的,无法被继承</string>
+    <string name="apk_kill_error_final_attach">该应用的 attachBaseContext() 是 final 的,无法被重写</string>
+
+    <string name="file_item_action_edit_arsc">编辑资源 (ARSC)</string>
+    <string name="arsc_editor_title">ARSC 编辑器</string>
+    <string name="arsc_editor_save">保存</string>
+    <string name="arsc_editor_save_progress">正在写入资源…</string>
+    <string name="arsc_editor_save_error">保存资源失败</string>
+    <string name="arsc_editor_save_done_format">已保存: %1$s</string>
+    <string name="arsc_package_count_format">%1$d 种类型</string>
+    <string name="arsc_package_title_format">%1$s</string>
+    <string name="arsc_type_row_format">%1$s (%2$s)</string>
+    <string name="arsc_type_title_format">%1$s (%2$s)</string>
+    <string name="arsc_no_types">该包中没有类型</string>
+    <string name="arsc_no_entries">该类型中没有条目</string>
+    <string name="arsc_entry_complex">(复合值)</string>
+    <string name="arsc_entry_type_format">类型: %1$s</string>
+    <string name="arsc_entry_edit_title_format">编辑 %1$s</string>
+    <string name="arsc_entry_value_type_format">值类型: %1$s</string>
+    <string name="arsc_value_invalid">无效的值</string>
+    <string name="arsc_value_not_editable">该值类型不可编辑</string>
+    <string name="arsc_value_edited">值已更新</string>
+    <string name="arsc_config_default">默认</string>
 
     <string name="encoding_convert_source">源编码</string>
     <string name="encoding_convert_target">目标编码</string>

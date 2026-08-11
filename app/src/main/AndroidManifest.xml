@@ -343,6 +343,18 @@
             android:theme="@style/Theme.MaterialFiles" />
 
         <activity
+            android:name="me.zhanghai.android.files.dex.DexSmaliEditorActivity"
+            android:exported="false"
+            android:label="@string/file_item_action_edit_dex_smali"
+            android:theme="@style/Theme.MaterialFiles" />
+
+        <activity
+            android:name="me.zhanghai.android.files.arsc.ArscEditorActivity"
+            android:exported="false"
+            android:label="@string/arsc_editor_title"
+            android:theme="@style/Theme.MaterialFiles" />
+
+        <activity
             android:name="me.zhanghai.android.files.apksearch.ApkStringSearchActivity"
             android:exported="false"
             android:label="@string/apk_string_search_title"

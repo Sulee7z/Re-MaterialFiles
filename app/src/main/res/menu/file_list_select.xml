@@ -155,6 +155,18 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/action_kill_signature"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_kill_signature"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_edit_arsc"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_edit_arsc"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_rename_apk"
         android:orderInCategory="200"
         android:title="@string/file_item_action_rename_apk"

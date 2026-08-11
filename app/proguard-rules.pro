@@ -65,3 +65,15 @@
 -keep class org.bouncycastle.cert.** { *; }
 -keep class org.bouncycastle.cms.** { *; }
 -keep class org.bouncycastle.operator.** { *; }
+
+# smali/baksmali/dexlib2: DEX assembly/disassembly for the signature killer and the
+# dex++ editor. These libraries are invoked by name and manipulate binary structures
+# internally, so they must not be obfuscated or stripped in release builds.
+-keep class org.jf.dexlib2.** { *; }
+-keep class org.jf.smali.** { *; }
+-keep class org.jf.baksmali.** { *; }
+-dontwarn org.jf.dexlib2.**
+
+# The generated KillerApplication dex references only framework classes, but the
+# libraries that build it must survive R8.
+-keep class org.jf.** { *; }

@@ -84,6 +84,14 @@
         android:title="@string/file_item_action_sign_apk" />
 
     <item
+        android:id="@+id/action_kill_signature"
+        android:title="@string/file_item_action_kill_signature" />
+
+    <item
+        android:id="@+id/action_edit_arsc"
+        android:title="@string/file_item_action_edit_arsc" />
+
+    <item
         android:id="@+id/action_rename_apk"
         android:title="@string/file_item_action_rename_apk" />
 

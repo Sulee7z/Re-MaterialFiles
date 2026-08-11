@@ -71,7 +71,13 @@ data class DexClass(
     val sourceFile: String?,
     val fields: List<DexFieldDef>,
     val methods: List<DexMethodDef>,
-    val references: List<DexReference> = emptyList()
+    val references: List<DexReference> = emptyList(),
+    /**
+     * The classesN.dex entry this class was parsed from, when the DEX came from inside an
+     * APK (null for a standalone .dex file). The dex++ editor uses it to write the
+     * reassembled class back into the right entry.
+     */
+    val sourceDex: String? = null
 )
 
 class DexFile(

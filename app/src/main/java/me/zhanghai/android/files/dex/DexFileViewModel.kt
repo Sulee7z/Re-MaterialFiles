@@ -117,7 +117,9 @@ class DexFileViewModel(
                     types.addAll(dexFile.types)
                     fields.addAll(dexFile.fields)
                     methods.addAll(dexFile.methods)
-                    classes.addAll(dexFile.classes)
+                    // Record which classesN.dex entry each class came from, so the dex++
+                    // editor can reassemble and write back the right entry.
+                    classes.addAll(dexFile.classes.map { it.copy(sourceDex = name) })
                 } catch (e: Exception) {
                     // Skip unparsable dex entries; one bad dex must not fail the whole APK
                     // (the parser can throw more than DexParseException).

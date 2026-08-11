@@ -108,8 +108,10 @@ import me.zhanghai.android.files.hex.HexViewerActivity
 import me.zhanghai.android.files.logcat.LogcatActivity
 import me.zhanghai.android.files.activitylauncher.ActivityLauncherActivity
 import me.zhanghai.android.files.apkmanifest.AndroidManifestDecoder
+import me.zhanghai.android.files.apkkiller.ApkSignatureKiller
 import me.zhanghai.android.files.apksign.ApkSigner
 import me.zhanghai.android.files.apksign.AutoSigner
+import me.zhanghai.android.files.arsc.ArscEditorActivity
 import me.zhanghai.android.files.fileproperties.FilePropertiesDialogFragment
 import me.zhanghai.android.files.navigation.BookmarkDirectories
 import me.zhanghai.android.files.navigation.BookmarkDirectory
@@ -1213,6 +1215,11 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 menu.findItem(R.id.action_auto_sign_apk).isVisible =
                     files.any { it.mimeType.isApk }
                 menu.findItem(R.id.action_sign_apk).isVisible = files.any { it.mimeType.isApk }
+                menu.findItem(R.id.action_kill_signature).isVisible =
+                    files.any { it.mimeType.isApk }
+                menu.findItem(R.id.action_edit_arsc).isVisible = files.any {
+                    it.mimeType.isApk || it.name.endsWith(".arsc", ignoreCase = true)
+                }
                 menu.findItem(R.id.action_rename_apk).isVisible =
                     files.any { it.mimeType.isApk }
                 menu.findItem(R.id.action_convert_encoding).isVisible =
@@ -1243,6 +1250,8 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 menu.findItem(R.id.action_view_manifest).isVisible = false
                 menu.findItem(R.id.action_auto_sign_apk).isVisible = false
                 menu.findItem(R.id.action_sign_apk).isVisible = false
+                menu.findItem(R.id.action_kill_signature).isVisible = false
+                menu.findItem(R.id.action_edit_arsc).isVisible = false
                 menu.findItem(R.id.action_rename_apk).isVisible = false
                 menu.findItem(R.id.action_convert_encoding).isVisible = false
             }
@@ -1407,6 +1416,16 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             R.id.action_sign_apk -> {
                 val file = viewModel.selectedFiles.singleOrNull() ?: return false
                 showSignApkDialog(file)
+                true
+            }
+            R.id.action_kill_signature -> {
+                val file = viewModel.selectedFiles.singleOrNull() ?: return false
+                killSignature(file)
+                true
+            }
+            R.id.action_edit_arsc -> {
+                val file = viewModel.selectedFiles.singleOrNull() ?: return false
+                showArscEditor(file)
                 true
             }
             R.id.action_rename_apk -> {
@@ -2547,6 +2566,49 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 }
             }
         }
+    }
+
+    override fun killSignature(file: FileItem) {
+        val outputName = file.name.substringBeforeLast('.', file.name) + "-nosign.apk"
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.apk_kill_title)
+            .setMessage(getString(R.string.apk_kill_confirm_format, outputName))
+            .setPositiveButton(R.string.file_item_action_kill_signature) { _, _ ->
+                lifecycleScope.launch(Dispatchers.IO) {
+                    val result = try {
+                        val cacheDirectory = File(requireContext().cacheDir, "apk-kill-output")
+                        cacheDirectory.mkdirs()
+                        val outputFile = File(cacheDirectory, "output.apk")
+                        ApkSignatureKiller.kill(requireContext(), file.path, outputFile)
+                        val outputPath = file.path.parent.resolve(outputName)
+                        Files.newInputStream(Paths.get(outputFile.absolutePath)).use { input ->
+                            Files.newOutputStream(outputPath).use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        outputFile.delete()
+                        outputName
+                    } catch (e: Throwable) {
+                        Log.e("ApkSignatureKiller", "kill failed", e)
+                        withContext(Dispatchers.Main) {
+                            showToast(e.localizedMessage ?: getString(R.string.apk_kill_error))
+                        }
+                        return@launch
+                    }
+                    withContext(Dispatchers.Main) {
+                        showToast(getString(R.string.apk_kill_done_format, result))
+                        viewModel.reload()
+                    }
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    override fun showArscEditor(file: FileItem) {
+        val intent = ArscEditorActivity::class.createIntent()
+        intent.extraPath = file.path
+        startActivitySafe(intent)
     }
 
     override fun showEncodingConversionDialog(file: FileItem) {

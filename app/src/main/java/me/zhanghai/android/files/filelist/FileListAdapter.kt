@@ -587,8 +587,11 @@ class FileListAdapter(
         menu.findItem(R.id.action_compare_apk).isVisible = file.mimeType.isApk
         menu.findItem(R.id.action_view_manifest).isVisible = file.mimeType.isApk
         menu.findItem(R.id.action_set_timestamp).isVisible = !isReadOnly
-        menu.findItem(R.id.action_auto_sign_apk).isVisible = file.mimeType.isApk
-        menu.findItem(R.id.action_sign_apk).isVisible = file.mimeType.isApk
+                menu.findItem(R.id.action_auto_sign_apk).isVisible = file.mimeType.isApk
+                menu.findItem(R.id.action_sign_apk).isVisible = file.mimeType.isApk
+                menu.findItem(R.id.action_kill_signature).isVisible = file.mimeType.isApk
+                menu.findItem(R.id.action_edit_arsc).isVisible =
+                    file.mimeType.isApk || file.name.endsWith(".arsc", ignoreCase = true)
         menu.findItem(R.id.action_rename_apk).isVisible = file.mimeType.isApk
         menu.findItem(R.id.action_convert_encoding).isVisible = !isDirectory && isTextFile(file)
         menu.findItem(R.id.action_archive).isVisible = !isArchivePath
@@ -675,6 +678,14 @@ class FileListAdapter(
                 }
                 R.id.action_sign_apk -> {
                     listener.showSignApkDialog(file)
+                    true
+                }
+                R.id.action_kill_signature -> {
+                    listener.killSignature(file)
+                    true
+                }
+                R.id.action_edit_arsc -> {
+                    listener.showArscEditor(file)
                     true
                 }
                 R.id.action_rename_apk -> {
@@ -815,6 +826,8 @@ class FileListAdapter(
         fun showSetTimestampDialog(file: FileItem)
         fun autoSignApk(file: FileItem)
         fun showSignApkDialog(file: FileItem)
+        fun killSignature(file: FileItem)
+        fun showArscEditor(file: FileItem)
         fun renameApkWithVersion(file: FileItem)
         fun showEncodingConversionDialog(file: FileItem)
         fun showCreateArchiveDialog(file: FileItem)

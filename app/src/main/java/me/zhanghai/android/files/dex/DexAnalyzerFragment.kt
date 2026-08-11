@@ -29,7 +29,6 @@ import java.io.File
 import java.io.IOException
 import java8.nio.file.Files
 import java8.nio.file.Path
-import java8.nio.file.Paths
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -37,7 +36,6 @@ import kotlinx.parcelize.Parcelize
 import kotlinx.parcelize.WriteWith
 import me.zhanghai.android.files.R
 import me.zhanghai.android.files.databinding.DexAnalyzerFragmentBinding
-import me.zhanghai.android.files.databinding.DexClassDetailDialogBinding
 import me.zhanghai.android.files.databinding.DexClassItemBinding
 import me.zhanghai.android.files.databinding.DexMemberItemBinding
 import me.zhanghai.android.files.databinding.DexReferenceItemBinding
@@ -53,7 +51,6 @@ import me.zhanghai.android.files.util.createIntent
 import me.zhanghai.android.files.util.extraPath
 import me.zhanghai.android.files.util.showToast
 import me.zhanghai.android.files.util.viewModels
-import me.zhanghai.android.files.viewer.text.TextEditorActivity
 
 class DexAnalyzerFragment : Fragment() {
 
@@ -68,6 +65,17 @@ class DexAnalyzerFragment : Fragment() {
     private lateinit var classesAdapter: ClassListAdapter
     private lateinit var stringsAdapter: StringListAdapter
     private var allStrings: List<Pair<Int, String>> = emptyList()
+
+    // MT-style two-level navigation: the class list swaps to the selected class's member
+    // list, and back navigation restores the previous list and its scroll position.
+    private lateinit var membersAdapter: MemberListAdapter
+    private val navigationStack = ArrayDeque<DexNavState>()
+    private var memberDexClass: DexClass? = null
+    private var allMembers: List<MemberItem> = emptyList()
+    private var memberQuery: String = ""
+    private var currentFilteredClasses: List<DexClass> = emptyList()
+
+    private data class DexNavState(val filteredClasses: List<DexClass>, val scrollPosition: Int)
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -113,9 +121,35 @@ class DexAnalyzerFragment : Fragment() {
             override fun onTabReselected(tab: com.google.android.material.tabs.TabLayout.Tab) {}
         })
 
-        classesAdapter = ClassListAdapter(::showClassDetail)
+        classesAdapter = ClassListAdapter(::openClassMembers)
         binding.classesRecyclerView.layoutManager = LinearLayoutManager(context)
         binding.classesRecyclerView.adapter = classesAdapter
+
+        membersAdapter = MemberListAdapter(
+            onHeaderClick = { dexClass ->
+                val superclassName = dexClass.superclassName ?: return@MemberListAdapter
+                val owner = viewModel.classByName(superclassName)
+                if (owner != null) {
+                    openClassMembers(owner)
+                }
+            },
+            onMemberClick = { member ->
+                val methodDef = member.methodDef
+                if (methodDef != null) {
+                    openMethodSmali(member.dexClass, methodDef)
+                    return@MemberListAdapter
+                }
+                // A field click jumps to its type when the type is a class descriptor.
+                val fieldType = member.fieldDef?.field?.type
+                if (fieldType != null && fieldType.startsWith("L") && fieldType.endsWith(";")) {
+                    val owner = viewModel.classByName(fieldType)
+                    if (owner != null) {
+                        openClassMembers(owner)
+                    }
+                }
+            },
+            onMemberLongClick = ::showMemberReferences
+        )
 
             stringsAdapter = StringListAdapter(::copyString, ::copyStringId)
         binding.stringsRecyclerView.layoutManager = LinearLayoutManager(context)
@@ -125,10 +159,28 @@ class DexAnalyzerFragment : Fragment() {
             override fun onQueryTextSubmit(query: String?): Boolean = false
 
             override fun onQueryTextChange(newText: String?): Boolean {
-                filterClasses(newText.orEmpty())
+                if (memberDexClass != null) {
+                    memberQuery = newText.orEmpty()
+                    filterMembers(newText.orEmpty())
+                } else {
+                    filterClasses(newText.orEmpty())
+                }
                 return false
             }
         })
+        // System back button pops the member-list navigation (MT style); at the root it
+        // falls through to the default (finishing the activity).
+        requireActivity().onBackPressedDispatcher.addCallback(
+            viewLifecycleOwner,
+            object : androidx.activity.OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (!navigateBack()) {
+                        isEnabled = false
+                        requireActivity().onBackPressedDispatcher.onBackPressed()
+                    }
+                }
+            }
+        )
         binding.stringSearchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String?): Boolean = false
 
@@ -155,7 +207,8 @@ class DexAnalyzerFragment : Fragment() {
                     binding.progress.isVisible = false
                     binding.errorText.isVisible = false
                     val dexFile = state.data
-                    classesAdapter.replace(dexFile.classes.sortedBy { it.className }, true)
+                    currentFilteredClasses = dexFile.classes.sortedBy { it.className }
+                    classesAdapter.replace(currentFilteredClasses, true)
                     allStrings = dexFile.strings.withIndex().map { (index, string) ->
                         index to string
                     }
@@ -182,6 +235,7 @@ class DexAnalyzerFragment : Fragment() {
                         .sortedBy { it.className }
                 }
             }
+            currentFilteredClasses = filtered
             classesAdapter.replace(filtered, true)
         }
     }
@@ -308,56 +362,68 @@ class DexAnalyzerFragment : Fragment() {
         return builder.toString()
     }
 
-    private fun showClassDetail(dexClass: DexClass) {
-        val dialogBinding = DexClassDetailDialogBinding.inflate(layoutInflater)
-        dialogBinding.classNameText.text = dexClass.className
-        dialogBinding.accessText.text = DexAccessFlags.forClass(dexClass.accessFlags)
-        dialogBinding.superclassText.text = dexClass.superclassName?.let {
-            getString(R.string.dex_class_superclass_format, it)
-        } ?: getString(R.string.dex_class_superclass_none)
-        val members = dexClass.fields.map { MemberItem(dexClass, it, null) } +
-            dexClass.methods.map { MemberItem(dexClass, null, it) }
-        var dialog: androidx.appcompat.app.AlertDialog? = null
-        val membersAdapter = MemberListAdapter(
-            onMemberClick = { member ->
-                val methodDef = member.methodDef
-                if (methodDef != null) {
-                    openMethodSmali(member.dexClass, methodDef)
-                    return@MemberListAdapter
-                }
-                // A field click jumps to its type when the type is a class descriptor.
-                val fieldType = member.fieldDef?.field?.type
-                if (fieldType != null && fieldType.startsWith("L") && fieldType.endsWith(";")) {
-                    val owner = viewModel.classByName(fieldType)
-                    if (owner != null) {
-                        dialog?.dismiss()
-                        showClassDetail(owner)
-                    }
-                }
-            },
-            onMemberLongClick = { member ->
-                showMemberReferences(member)
-            }
+    /**
+     * MT-style navigation: swaps the list to [dexClass]'s members. The previous list
+     * (with its scroll position) is pushed onto the navigation stack so the system back
+     * button / toolbar up arrow restores it.
+     */
+    private fun openClassMembers(dexClass: DexClass) {
+        val layoutManager = binding.classesRecyclerView.layoutManager as? LinearLayoutManager
+        navigationStack.addLast(
+            DexNavState(
+                currentFilteredClasses,
+                layoutManager?.findFirstVisibleItemPosition() ?: 0
+            )
         )
-        dialogBinding.membersRecyclerView.layoutManager = LinearLayoutManager(context)
-        dialogBinding.membersRecyclerView.adapter = membersAdapter
-        membersAdapter.replace(members, true)
-        dialog = MaterialAlertDialogBuilder(requireContext())
-            .setView(dialogBinding.root)
-            .setPositiveButton(R.string.dex_find_references) { _, _ ->
-                findReferencesAsync(dexClass.className) { viewModel.findClassReferences(it) }
+        memberDexClass = dexClass
+        allMembers = dexClass.fields.map { MemberItem(dexClass, it, null) } +
+            dexClass.methods.map { MemberItem(dexClass, null, it) }
+        binding.classesRecyclerView.adapter = membersAdapter
+        binding.classSearchView.setQuery("", false)
+        binding.classSearchView.queryHint = getString(R.string.dex_search_members)
+        filterMembers("")
+        updateTitle(dexClass.className)
+    }
+
+    private fun updateTitle(title: String) {
+        (requireActivity() as AppCompatActivity).supportActionBar?.title = title
+    }
+
+    private fun filterMembers(query: String) {
+        val dexClass = memberDexClass ?: return
+        lifecycleScope.launch {
+            val members = withContext(Dispatchers.Default) {
+                val filtered = if (query.isEmpty()) {
+                    allMembers
+                } else {
+                    allMembers.filter { it.text.contains(query, ignoreCase = true) }
+                }
+                listOf(DexMemberItem.Header(dexClass)) +
+                    filtered.map { DexMemberItem.Member(it) }
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
-        dialogBinding.superclassText.setOnClickListener {
-            val superclassName = dexClass.superclassName ?: return@setOnClickListener
-            val owner = viewModel.classByName(superclassName)
-            if (owner != null) {
-                dialog?.dismiss()
-                showClassDetail(owner)
-            }
+            membersAdapter.replace(members, true)
         }
     }
+
+    /**
+     * Pops the navigation stack, restoring the previous list and scroll position.
+     *
+     * @return true when a level was popped; false when already at the root list.
+     */
+    private fun navigateBack(): Boolean {
+        val state = navigationStack.removeLastOrNull() ?: return false
+        memberDexClass = null
+        binding.classesRecyclerView.adapter = classesAdapter
+        classesAdapter.replace(state.filteredClasses, true)
+        binding.classesRecyclerView.scrollToPosition(state.scrollPosition)
+        binding.classSearchView.queryHint = getString(R.string.dex_search_classes)
+        binding.classSearchView.setQuery("", false)
+        updateTitle(args.path.fileName.toString())
+        return true
+    }
+
+    /** Public entry for the activity's toolbar up arrow. */
+    fun navigateUp(): Boolean = navigateBack()
 
     private fun showMemberReferences(member: MemberItem) {
         if (member.methodDef != null) {
@@ -389,7 +455,7 @@ class DexAnalyzerFragment : Fragment() {
         val referenceAdapter = ReferenceListAdapter { reference ->
             val owner = viewModel.classByName(reference.ownerClass)
             if (owner != null) {
-                showClassDetail(owner)
+                openClassMembers(owner)
             }
         }
         dialogBinding.referencesRecyclerView.layoutManager = LinearLayoutManager(context)
@@ -414,31 +480,17 @@ class DexAnalyzerFragment : Fragment() {
             showToast(getString(R.string.dex_method_no_code))
             return
         }
-        lifecycleScope.launch(Dispatchers.IO) {
-            val path = try {
-                writeSmali(smali, dexClass)
-            } catch (e: IOException) {
-                withContext(Dispatchers.Main) {
-                    showToast(e.localizedMessage ?: getString(R.string.dex_smali_write_error))
-                }
-                return@launch
-            }
-            withContext(Dispatchers.Main) {
-                val intent = TextEditorActivity::class.createIntent()
-                intent.extraPath = path
-                startActivity(intent)
-            }
-        }
-    }
-
-    private fun writeSmali(smali: String, dexClass: DexClass): Path {
-        val directory = File(requireContext().cacheDir, "dex-smali")
-        directory.mkdirs()
-        val safeClassName = dexClass.className.removePrefix("L")
-            .removeSuffix(";").replace('/', '_')
-        val file = File(directory, "$safeClassName.smali")
-        Files.write(Paths.get(file.absolutePath), smali.toByteArray())
-        return Paths.get(file.absolutePath)
+        // The dex++ smali editor: opens the method's baksmali output for editing and can
+        // reassemble + write it back (into the .dex or the APK entry, re-signed).
+        val intent = DexSmaliEditorActivity::class.createIntent()
+        intent.extraPath = args.path
+        intent.putExtra(DexSmaliEditorFragment.EXTRA_SOURCE_DEX, dexClass.sourceDex)
+        intent.putExtra(DexSmaliEditorFragment.EXTRA_CLASS_NAME, dexClass.className)
+        intent.putExtra(
+            DexSmaliEditorFragment.EXTRA_METHOD_KEY,
+            method.method.name + method.method.shortDescriptor
+        )
+        startActivity(intent)
     }
 
     private fun copyString(string: Pair<Int, String>) {
@@ -542,15 +594,28 @@ private data class MemberItem(
         }
 }
 
+/** A member-list row: the class header (tappable to jump to the superclass) or a member. */
+private sealed class DexMemberItem {
+    class Header(val dexClass: DexClass) : DexMemberItem()
+    class Member(val item: MemberItem) : DexMemberItem()
+}
+
 private class MemberListAdapter(
+    private val onHeaderClick: (DexClass) -> Unit,
     private val onMemberClick: (MemberItem) -> Unit,
     private val onMemberLongClick: (MemberItem) -> Unit
-) : ListAdapter<MemberItem, MemberListAdapter.ViewHolder>(
-    object : DiffUtil.ItemCallback<MemberItem>() {
-        override fun areItemsTheSame(oldItem: MemberItem, newItem: MemberItem): Boolean =
-            oldItem == newItem
+) : ListAdapter<DexMemberItem, MemberListAdapter.ViewHolder>(
+    object : DiffUtil.ItemCallback<DexMemberItem>() {
+        override fun areItemsTheSame(oldItem: DexMemberItem, newItem: DexMemberItem): Boolean =
+            when {
+                oldItem is DexMemberItem.Header && newItem is DexMemberItem.Header ->
+                    oldItem.dexClass.className == newItem.dexClass.className
+                oldItem is DexMemberItem.Member && newItem is DexMemberItem.Member ->
+                    oldItem.item == newItem.item
+                else -> false
+            }
 
-        override fun areContentsTheSame(oldItem: MemberItem, newItem: MemberItem): Boolean =
+        override fun areContentsTheSame(oldItem: DexMemberItem, newItem: DexMemberItem): Boolean =
             oldItem == newItem
     }
 ) {
@@ -564,12 +629,32 @@ private class MemberListAdapter(
         )
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val item = getItem(position)
-        holder.binding.memberText.text = item.text
-        holder.binding.root.setOnClickListener { onMemberClick(item) }
-        holder.binding.root.setOnLongClickListener {
-            onMemberLongClick(item)
-            true
+        when (val item = getItem(position)) {
+            is DexMemberItem.Header -> {
+                val dexClass = item.dexClass
+                val superclass = dexClass.superclassName?.let {
+                    "extends $it"
+                } ?: "extends <none>"
+                holder.binding.memberText.text =
+                    "${dexClass.className}\n${DexAccessFlags.forClass(dexClass.accessFlags)} · $superclass"
+                holder.binding.root.setOnClickListener {
+                    val superclassName = dexClass.superclassName ?: return@setOnClickListener
+                    onHeaderClick(item.dexClass)
+                }
+                holder.binding.root.setOnLongClickListener {
+                    onHeaderClick(item.dexClass)
+                    true
+                }
+            }
+            is DexMemberItem.Member -> {
+                val member = item.item
+                holder.binding.memberText.text = member.text
+                holder.binding.root.setOnClickListener { onMemberClick(member) }
+                holder.binding.root.setOnLongClickListener {
+                    onMemberLongClick(member)
+                    true
+                }
+            }
         }
     }
 }

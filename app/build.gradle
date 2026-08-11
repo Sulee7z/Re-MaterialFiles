@@ -136,6 +136,14 @@ dependencies {
     implementation('com.android.tools.build:apksig:8.7.3') {
         exclude group: 'org.bouncycastle'
     }
+
+    // smali/baksmali/dexlib2: on-device DEX assembly and disassembly (the same pure-Java
+    // stack MT Manager and ApkTool M use). d8 from build-tools cannot run on Android at
+    // runtime (it is a desktop JVM tool), so these libraries are the on-device equivalent
+    // for compiling smali to dex and for the dex++ smali editor round-trip.
+    implementation 'org.smali:dexlib2:2.5.2'
+    implementation 'org.smali:smali:2.5.2'
+    implementation 'org.smali:baksmali:2.5.2'
 }
 
 dependencies {

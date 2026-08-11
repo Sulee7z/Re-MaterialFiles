@@ -738,6 +738,7 @@
     <string name="file_item_action_dex_analyze">Analyze DEX</string>
     <string name="dex_analyze_error_unknown">Unknown error</string>
     <string name="dex_search_classes">Search classes</string>
+    <string name="dex_search_members">Search members</string>
     <string name="dex_search_strings">Search strings</string>
     <string name="dex_string_count_format">%1$d of %2$d strings</string>
     <string name="dex_class_description_format">%1$s · %2$d methods</string>
@@ -836,6 +837,49 @@
     <string name="dex_export_smali_done_format">Exported %1$s classes</string>
     <string name="dex_export_smali_skipped_format">%1$d skipped (unsafe class name)</string>
     <string name="dex_export_smali_error">Failed to export smali</string>
+
+    <string name="file_item_action_edit_dex_smali">Edit smali (dex++)</string>
+    <string name="dex_smali_edit_title_format">Edit %1$s</string>
+    <string name="dex_smali_save">Save</string>
+    <string name="dex_smali_save_progress">Assembling and writing…</string>
+    <string name="dex_smali_save_success">Saved smali changes</string>
+    <string name="dex_smali_save_error">Failed to save smali</string>
+    <string name="dex_smali_save_done_format">Saved: %1$s</string>
+    <string name="dex_smali_no_changes">No changes to save</string>
+    <string name="dex_smali_compile_error_format">Assembly failed:\n%1$s</string>
+    <string name="dex_smali_method_not_found">Method not found in the disassembled dex</string>
+    <string name="dex_smali_class_not_found_format">Class %1$s not found in the disassembled dex</string>
+
+    <string name="file_item_action_kill_signature">Remove signature verification</string>
+    <string name="apk_kill_title">Remove signature verification</string>
+    <string name="apk_kill_confirm_format">This will inject a killer application that makes the app think it still has its original signature, then re-sign the APK with a generated key.\n\nOnly effective for apps that verify their signature via PackageManager.getPackageInfo().signatures.\n\nOutput: %1$s</string>
+    <string name="apk_kill_started">Removing signature verification…</string>
+    <string name="apk_kill_done_format">Done: %1$s</string>
+    <string name="apk_kill_error">Failed to remove signature verification</string>
+    <string name="apk_kill_error_final_application">The app\'s Application class is final and cannot be extended</string>
+    <string name="apk_kill_error_non_public_application">The app\'s Application class is not public and cannot be extended</string>
+    <string name="apk_kill_error_final_attach">The app\'s attachBaseContext() is final and cannot be overridden</string>
+
+    <string name="file_item_action_edit_arsc">Edit resources (ARSC)</string>
+    <string name="arsc_editor_title">ARSC editor</string>
+    <string name="arsc_editor_save">Save</string>
+    <string name="arsc_editor_save_progress">Writing resources…</string>
+    <string name="arsc_editor_save_error">Failed to save resources</string>
+    <string name="arsc_editor_save_done_format">Saved: %1$s</string>
+    <string name="arsc_package_count_format">%1$d types</string>
+    <string name="arsc_package_title_format">%1$s</string>
+    <string name="arsc_type_row_format">%1$s (%2$s)</string>
+    <string name="arsc_type_title_format">%1$s (%2$s)</string>
+    <string name="arsc_no_types">No types in this package</string>
+    <string name="arsc_no_entries">No entries in this type</string>
+    <string name="arsc_entry_complex">(complex value)</string>
+    <string name="arsc_entry_type_format">Type: %1$s</string>
+    <string name="arsc_entry_edit_title_format">Edit %1$s</string>
+    <string name="arsc_entry_value_type_format">Value type: %1$s</string>
+    <string name="arsc_value_invalid">Invalid value</string>
+    <string name="arsc_value_not_editable">This value type is not editable</string>
+    <string name="arsc_value_edited">Value updated</string>
+    <string name="arsc_config_default">default</string>
 
     <string name="file_item_action_view_manifest">View manifest</string>
     <string name="manifest_decode_error">Failed to decode manifest</string>
