@@ -16,6 +16,8 @@ import me.zhanghai.android.files.filelist.FileSortOptions
 import me.zhanghai.android.files.filelist.FileViewType
 import me.zhanghai.android.files.filelist.OpenApkDefaultAction
 import me.zhanghai.android.files.navigation.BookmarkDirectory
+import me.zhanghai.android.files.navigation.BookmarkRecentDefaultPage
+import me.zhanghai.android.files.navigation.RecentDirectory
 import me.zhanghai.android.files.navigation.StandardDirectorySettings
 import me.zhanghai.android.files.provider.root.RootStrategy
 import me.zhanghai.android.files.storage.FileSystemRoot
@@ -179,6 +181,16 @@ object Settings {
         EnumSettingLiveData(
             R.string.pref_key_root_strategy, R.string.pref_default_value_root_strategy,
             RootStrategy::class.java
+        )
+
+    val RECENT_DIRECTORIES: SettingLiveData<List<RecentDirectory>> =
+        ParcelValueSettingLiveData(R.string.pref_key_recent_directories, emptyList())
+
+    val BOOKMARK_RECENT_DEFAULT_PAGE: SettingLiveData<BookmarkRecentDefaultPage> =
+        EnumSettingLiveData(
+            R.string.pref_key_bookmark_recent_default_page,
+            R.string.pref_default_value_bookmark_recent_default_page,
+            BookmarkRecentDefaultPage::class.java
         )
 
     val ARCHIVE_FILE_NAME_ENCODING: SettingLiveData<String> =

@@ -32,7 +32,6 @@ import me.zhanghai.android.files.storage.Storage
 import me.zhanghai.android.files.storage.StorageVolumeListLiveData
 import me.zhanghai.android.files.util.createIntent
 import me.zhanghai.android.files.util.isMounted
-import me.zhanghai.android.files.util.putArgs
 import me.zhanghai.android.files.util.supportsExternalStorageManager
 import me.zhanghai.android.files.util.valueCompat
 
@@ -53,11 +52,8 @@ val navigationItems: List<NavigationItem?>
                 add(null)
                 addAll(standardDirectoryItems)
             }
-            val bookmarkDirectoryItems = bookmarkDirectoryItems
-            if (bookmarkDirectoryItems.isNotEmpty()) {
-                add(null)
-                addAll(bookmarkDirectoryItems)
-            }
+            add(null)
+            add(BookmarkRecentDirectoriesItem())
             add(null)
             addAll(menuItems)
         }
@@ -327,28 +323,22 @@ internal fun getExternalStorageDirectory(relativePath: String): String =
     @Suppress("DEPRECATION")
     Environment.getExternalStoragePublicDirectory(relativePath).path
 
-private val bookmarkDirectoryItems: List<NavigationItem>
-    @Size(min = 0)
-    get() = Settings.BOOKMARK_DIRECTORIES.valueCompat.map { BookmarkDirectoryItem(it) }
-
-private class BookmarkDirectoryItem(
-    private val bookmarkDirectory: BookmarkDirectory
-) : PathItem(bookmarkDirectory.path) {
-    // We cannot simply use super.getId() because different bookmark directories may have
-    // the same path.
-    override val id: Long
-        get() = bookmarkDirectory.id
+private class BookmarkRecentDirectoriesItem : NavigationItem() {
+    override val id: Long = R.string.navigation_recent_bookmark_directories.toLong()
 
     @DrawableRes
     override val iconRes: Int = R.drawable.directory_icon_white_24dp
 
-    override fun getTitle(context: Context): String = bookmarkDirectory.name
+    override fun getTitle(context: Context): String =
+        context.getString(R.string.navigation_recent_bookmark_directories)
+
+    override fun onClick(listener: Listener) {
+        listener.showBookmarkRecentDirectories()
+        listener.closeNavigationDrawer()
+    }
 
     override fun onLongClick(listener: Listener): Boolean {
-        listener.launchIntent(
-            EditBookmarkDirectoryDialogActivity::class.createIntent()
-                .putArgs(EditBookmarkDirectoryDialogFragment.Args(bookmarkDirectory))
-        )
+        listener.showBookmarkRecentDefaultPageDialog()
         return true
     }
 }

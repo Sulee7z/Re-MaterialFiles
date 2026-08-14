@@ -711,6 +711,10 @@
     <string name="navigation_edit_bookmark_directory_title">Bookmark folder</string>
     <string name="navigation_edit_bookmark_directory_name">Name</string>
     <string name="navigation_edit_bookmark_directory_path">Path</string>
+    <string name="navigation_recent_bookmark_directories">Recent &amp; Bookmarks</string>
+    <string name="recent_directories_title">Recent folders</string>
+    <string name="recent_directories_empty">No recently visited folders</string>
+    <string name="navigation_recent_bookmark_default_page_dialog_title">Choose default page</string>
     <string name="navigation_ftp_server" translatable="false">@string/ftp_server_title</string>
     <string name="navigation_settings" translatable="false">@string/settings_title</string>
     <string name="navigation_about" translatable="false">@string/about_title</string>
@@ -1014,6 +1018,11 @@
     <string name="settings_bookmark_directories_summary_empty">No bookmark folders</string>
     <string name="settings_bookmark_directory_list_title" translatable="false">@string/settings_bookmark_directories_title</string>
     <string name="settings_bookmark_directory_list_empty" translatable="false">@string/settings_bookmark_directories_summary_empty</string>
+    <string name="settings_bookmark_recent_default_page_title">Default page for Recent &amp; Bookmarks</string>
+    <string-array name="settings_bookmark_recent_default_page_entries">
+        <item>Bookmark folders</item>
+        <item>Recent folders</item>
+    </string-array>
     <string name="settings_root_strategy_title">Root access mode</string>
     <plurals name="settings_root_strategy_message_format">
         <item quantity="one">You have %1$,d file operation running and changing root access mode now may result in unexpected error. Are you sure you want to change it now?</item>

@@ -568,6 +568,10 @@
     <string name="navigation_edit_bookmark_directory_title">书签文件夹</string>
     <string name="navigation_edit_bookmark_directory_name">名称</string>
     <string name="navigation_edit_bookmark_directory_path">路径</string>
+    <string name="navigation_recent_bookmark_directories">最近/书签文件夹</string>
+    <string name="recent_directories_title">最近访问</string>
+    <string name="recent_directories_empty">暂无最近访问的文件夹</string>
+    <string name="navigation_recent_bookmark_default_page_dialog_title">选择默认页面</string>
 
     <string name="archive_viewer_title">归档文件查看器</string>
     <string name="image_viewer_title">图片查看器</string>
@@ -846,6 +850,11 @@
     <string name="settings_bookmark_directory_screenshots">屏幕截图</string>
     <string name="settings_bookmark_directories_title">书签文件夹</string>
     <string name="settings_bookmark_directories_summary_empty">无书签文件夹</string>
+    <string name="settings_bookmark_recent_default_page_title">最近/书签默认页面</string>
+    <string-array name="settings_bookmark_recent_default_page_entries">
+        <item>书签文件夹</item>
+        <item>最近访问</item>
+    </string-array>
     <string name="settings_root_strategy_title">Root 访问模式</string>
     <string-array name="settings_root_strategy_entries">
         <item>仅普通访问</item>

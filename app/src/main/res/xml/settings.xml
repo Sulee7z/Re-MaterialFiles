@@ -79,6 +79,14 @@
             android:title="@string/settings_bookmark_directories_title"
             android:summary="@string/settings_bookmark_directories_summary_empty" />
 
+        <rikka.preference.SimpleMenuPreference
+            android:key="@string/pref_key_bookmark_recent_default_page"
+            android:title="@string/settings_bookmark_recent_default_page_title"
+            android:defaultValue="@string/pref_default_value_bookmark_recent_default_page"
+            android:entries="@array/settings_bookmark_recent_default_page_entries"
+            android:entryValues="@array/pref_entry_values_bookmark_recent_default_page"
+            app:useSimpleSummaryProvider="true" />
+
         <me.zhanghai.android.files.settings.RootStrategyPreference
             android:key="@string/pref_key_root_strategy"
             android:title="@string/settings_root_strategy_title"

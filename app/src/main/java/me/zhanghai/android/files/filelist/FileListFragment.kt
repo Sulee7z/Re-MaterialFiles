@@ -118,6 +118,7 @@ import me.zhanghai.android.files.navigation.BookmarkDirectories
 import me.zhanghai.android.files.navigation.BookmarkDirectory
 import me.zhanghai.android.files.navigation.NavigationFragment
 import me.zhanghai.android.files.navigation.NavigationRootMapLiveData
+import me.zhanghai.android.files.navigation.RecentDirectories
 import me.zhanghai.android.files.provider.archive.createArchiveRootPath
 import me.zhanghai.android.files.provider.archive.isArchivePath
 import com.topjohnwu.superuser.Shell
@@ -802,6 +803,8 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 "frag=${System.identityHashCode(this)} vm=${System.identityHashCode(viewModel)} " +
                 "path=$path"
         )
+        // Record the visited directory for the Recent folders feature.
+        RecentDirectories.add(path)
         // Keep the two-pane state in sync so the other pane knows where to copy/cut to.
         if (args.secondaryPane) {
             TwoPaneState.secondaryPanePath = path

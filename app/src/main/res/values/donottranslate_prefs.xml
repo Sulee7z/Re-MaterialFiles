@@ -77,6 +77,13 @@
         <item>2</item>
         <item>3</item>
     </string-array>
+    <string name="pref_key_recent_directories">key_recent_directories</string>
+    <string name="pref_key_bookmark_recent_default_page">key_bookmark_recent_default_page</string>
+    <string name="pref_default_value_bookmark_recent_default_page">0</string>
+    <string-array name="pref_entry_values_bookmark_recent_default_page">
+        <item>0</item>
+        <item>1</item>
+    </string-array>
     <string name="pref_key_archive_file_name_encoding">key_archive_file_name_encoding</string>
     <string name="pref_default_value_archive_file_name_encoding">UTF-8</string>
     <string name="pref_key_open_apk_default_action">key_open_apk_default_action</string>
