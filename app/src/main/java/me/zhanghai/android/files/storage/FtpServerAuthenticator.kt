@@ -18,6 +18,8 @@ object FtpServerAuthenticator : Authenticator {
             transientServers.find { it.authority == authority }
         } ?: Settings.STORAGES.valueCompat.find {
             it is FtpServer && it.authority == authority
+        } as FtpServer? ?: Settings.STORAGES.valueCompat.find {
+            it is FtpServer && it.authority.sameConnection(authority)
         } as FtpServer?
         return server?.password
     }

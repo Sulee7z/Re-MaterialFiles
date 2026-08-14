@@ -30,6 +30,20 @@ data class Authority(
         return UriAuthority(userInfo, host, uriPort)
     }
 
+    /**
+     * Compares the connection-relevant fields of this authority with [other], ignoring the
+     * Everything search configuration. This is used as a fallback for password lookup, since a
+     * path parsed back from an URI may have lost the Everything fields (e.g. [everythingHttpPort]
+     * defaulting to 0 while a saved server stores 80).
+     */
+    fun sameConnection(other: Authority): Boolean =
+        protocol == other.protocol
+            && host == other.host
+            && port == other.port
+            && username == other.username
+            && mode == other.mode
+            && encoding == other.encoding
+
     override fun toString(): String = toUriAuthority().toString()
 
     companion object {

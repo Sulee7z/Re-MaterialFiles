@@ -120,7 +120,16 @@ object FtpFileSystemProvider : FileSystemProvider(), PathObservableProvider, Sea
                 ?: Authority.DEFAULT_MODE
             val encoding = queryUri?.getQueryParameter(FtpPath.QUERY_PARAMETER_ENCODING)
                 ?: Authority.DEFAULT_ENCODING
-            return Authority(protocol, host, port, username, mode, encoding)
+            val everythingWindowsRoot = queryUri
+                ?.getQueryParameter(FtpPath.QUERY_PARAMETER_EVERYTHING_WINDOWS_ROOT)
+                .orEmpty()
+            val everythingHttpPort = queryUri
+                ?.getQueryParameter(FtpPath.QUERY_PARAMETER_EVERYTHING_HTTP_PORT)
+                ?.toIntOrNull() ?: 0
+            return Authority(
+                protocol, host, port, username, mode, encoding,
+                everythingWindowsRoot, everythingHttpPort
+            )
         }
 
     @Throws(IOException::class)

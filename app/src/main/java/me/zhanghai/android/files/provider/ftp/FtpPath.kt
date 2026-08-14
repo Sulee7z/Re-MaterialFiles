@@ -68,6 +68,15 @@ internal class FtpPath : ByteStringListPath<FtpPath>, Client.Path {
                 if (authority.encoding != Authority.DEFAULT_ENCODING) {
                     appendQueryParameter(QUERY_PARAMETER_ENCODING, authority.encoding)
                 }
+                if (authority.everythingWindowsRoot.isNotEmpty()) {
+                    appendQueryParameter(
+                        QUERY_PARAMETER_EVERYTHING_WINDOWS_ROOT, authority.everythingWindowsRoot)
+                }
+                if (authority.everythingHttpPort != 0) {
+                    appendQueryParameter(
+                        QUERY_PARAMETER_EVERYTHING_HTTP_PORT,
+                        authority.everythingHttpPort.toString())
+                }
             }.build().query?.toByteString()
 
     override val defaultDirectory: FtpPath
@@ -124,6 +133,8 @@ internal class FtpPath : ByteStringListPath<FtpPath>, Client.Path {
 
         const val QUERY_PARAMETER_MODE = "mode"
         const val QUERY_PARAMETER_ENCODING = "encoding"
+        const val QUERY_PARAMETER_EVERYTHING_WINDOWS_ROOT = "everything_windows_root"
+        const val QUERY_PARAMETER_EVERYTHING_HTTP_PORT = "everything_http_port"
     }
 }
 
