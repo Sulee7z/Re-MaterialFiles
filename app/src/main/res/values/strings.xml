@@ -711,6 +711,7 @@
     <string name="navigation_edit_bookmark_directory_title">Bookmark folder</string>
     <string name="navigation_edit_bookmark_directory_name">Name</string>
     <string name="navigation_edit_bookmark_directory_path">Path</string>
+    <string name="navigation_edit_bookmark_directory_path_hint">Select folder</string>
     <string name="navigation_recent_bookmark_directories">Recent &amp; Bookmarks</string>
     <string name="recent_directories_title">Recent folders</string>
     <string name="recent_directories_empty">No recently visited folders</string>
@@ -1019,6 +1020,10 @@
     <string name="settings_bookmark_directory_list_title" translatable="false">@string/settings_bookmark_directories_title</string>
     <string name="settings_bookmark_directory_list_empty" translatable="false">@string/settings_bookmark_directories_summary_empty</string>
     <string name="settings_bookmark_recent_default_page_title">Default page for Recent &amp; Bookmarks</string>
+    <string name="settings_recent_directories_match_longest_title">Deduplicate recent folders by longest path</string>
+    <string name="settings_recent_directories_match_longest_summary">Keep only the longest matching path when adding a recently visited folder</string>
+    <string name="settings_show_add_button_title">Show add button</string>
+    <string name="settings_show_add_button_summary">Show the add button at the bottom right of the main screen</string>
     <string-array name="settings_bookmark_recent_default_page_entries">
         <item>Bookmark folders</item>
         <item>Recent folders</item>

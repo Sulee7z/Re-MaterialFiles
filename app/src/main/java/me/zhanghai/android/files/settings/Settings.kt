@@ -193,6 +193,20 @@ object Settings {
             BookmarkRecentDefaultPage::class.java
         )
 
+    /** Keep only the longest matching path when adding a recent directory. */
+    val RECENT_DIRECTORIES_MATCH_LONGEST: SettingLiveData<Boolean> =
+        BooleanSettingLiveData(
+            R.string.pref_key_recent_directories_match_longest,
+            R.bool.pref_default_value_recent_directories_match_longest
+        )
+
+    /** Show the add button at the bottom right of the main file list screen. */
+    val SHOW_ADD_BUTTON: SettingLiveData<Boolean> =
+        BooleanSettingLiveData(
+            R.string.pref_key_show_add_button,
+            R.bool.pref_default_value_show_add_button
+        )
+
     val ARCHIVE_FILE_NAME_ENCODING: SettingLiveData<String> =
         StringSettingLiveData(
             R.string.pref_key_archive_file_name_encoding,

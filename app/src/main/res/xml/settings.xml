@@ -87,6 +87,18 @@
             android:entryValues="@array/pref_entry_values_bookmark_recent_default_page"
             app:useSimpleSummaryProvider="true" />
 
+        <SwitchPreferenceCompat
+            android:key="@string/pref_key_recent_directories_match_longest"
+            android:title="@string/settings_recent_directories_match_longest_title"
+            android:summary="@string/settings_recent_directories_match_longest_summary"
+            android:defaultValue="@bool/pref_default_value_recent_directories_match_longest" />
+
+        <SwitchPreferenceCompat
+            android:key="@string/pref_key_show_add_button"
+            android:title="@string/settings_show_add_button_title"
+            android:summary="@string/settings_show_add_button_summary"
+            android:defaultValue="@bool/pref_default_value_show_add_button" />
+
         <me.zhanghai.android.files.settings.RootStrategyPreference
             android:key="@string/pref_key_root_strategy"
             android:title="@string/settings_root_strategy_title"

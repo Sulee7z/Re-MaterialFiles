@@ -17,6 +17,16 @@ object RecentDirectories {
         val recentDirectories = Settings.RECENT_DIRECTORIES.valueCompat.toMutableList()
             .apply {
                 removeFirst { it.path == path }
+                if (Settings.RECENT_DIRECTORIES_MATCH_LONGEST.valueCompat) {
+                    // Remove records that are ancestors of the new path (shorter
+                    // matching paths), keeping only the longest match.
+                    removeAll { it.path != path && path.startsWith(it.path) }
+                    // If the new path is an ancestor of an existing record (shorter
+                    // matching path), skip adding it to keep the longest match.
+                    if (any { it.path != path && it.path.startsWith(path) }) {
+                        return@apply
+                    }
+                }
                 add(0, RecentDirectory(path))
                 if (size > MAX_RECENT_DIRECTORIES) {
                     subList(MAX_RECENT_DIRECTORIES, size).clear()

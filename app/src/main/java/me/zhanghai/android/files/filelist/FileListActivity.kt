@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.MenuItem
 import android.view.MotionEvent
@@ -41,14 +42,24 @@ class FileListActivity : AppActivity() {
     /** The single shared multi-select action bar rendered over the shared top bar. */
     private lateinit var sharedOverlayActionMode: OverlayToolbarActionMode
 
-    /** The two-pane value this Activity was created with; used to rebuild only on change. */
-    private val twoPaneAtCreation: Boolean = Settings.FILE_LIST_TWO_PANE.valueCompat
+    /** The two-pane value this Activity was created with; used to rebuild only on change.
+     *  Computed in onCreate() because it reads intent, which is only set after attach(). */
+    private var twoPaneAtCreation: Boolean = false
 
     /** True while the FAB speed-dial menu is open; touches then must not flip the active pane. */
     private var fabIsOpen: Boolean = false
 
+    /** The effective two-pane mode; false for picker intents even when the setting is on. */
+    val isTwoPaneMode: Boolean
+        get() = twoPaneAtCreation
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Two-pane browsing must not apply to picker intents (open file/directory/create):
+        // in two-pane mode the per-pane toolbar carrying the picker confirm action is hidden,
+        // so the picker would show a plain list without any way to confirm the selection.
+        twoPaneAtCreation = Settings.FILE_LIST_TWO_PANE.valueCompat && !isPickMode(intent)
 
         // Restore the active-pane state across recreation/process death (the previous
         // process-global object lost it; it is now per-Activity-instance state).
@@ -99,12 +110,29 @@ class FileListActivity : AppActivity() {
             // The window draws a transparent status bar (per the theme), so the shared
             // top bar must extend its background under the status bar and pad its content
             // by the status-bar height — the same behavior the single-pane AppBarLayout
-            // gets from its fitsSystemWindows chain. Without this the top-bar items sit
-            // under the transparent status bar on some devices.
+            // gets from its fitsSystemWindows chain. The two-pane content sits inside a
+            // FrameLayout without fitsSystemWindows, and DrawerLayout only forwards
+            // window insets to children that opt in via fitsSystemWindows — so the
+            // insets never reach the top bar through the normal dispatch chain. Listen
+            // on the activity content view instead, which always receives the insets,
+            // and grow the top bar by the status-bar height so its background extends
+            // under the status bar while its content keeps the full action-bar size.
+            val topBarFrame = findViewById<View>(R.id.sharedTopBarFrame)
+            val actionBarSize = TypedValue().let { typedValue ->
+                if (theme.resolveAttribute(android.R.attr.actionBarSize, typedValue, true)) {
+                    resources.getDimensionPixelSize(typedValue.resourceId)
+                } else {
+                    topBarFrame.layoutParams.height
+                }
+            }
             ViewCompat.setOnApplyWindowInsetsListener(
-                findViewById(R.id.sharedTopBarFrame)
-            ) { view, insets ->
-                view.updatePaddingRelative(top = insets.systemWindowInsetTop)
+                findViewById<View>(android.R.id.content)
+            ) { _, insets ->
+                val top = insets.systemWindowInsetTop
+                if (topBarFrame.paddingTop != top) {
+                    topBarFrame.updatePaddingRelative(top = top)
+                    topBarFrame.layoutParams.height = actionBarSize + top
+                }
                 insets
             }
             // The shared top bar spans both panes and hosts the activity action bar
@@ -161,6 +189,8 @@ class FileListActivity : AppActivity() {
                         .setLabel(getString(R.string.paste))
                         .create()
                 )
+                // Show/hide the add button per the setting.
+                Settings.SHOW_ADD_BUTTON.observe(this@FileListActivity) { isVisible = it }
             }
             // The navigation drawer is hosted by this Activity's full-screen DrawerLayout
             // (like single-pane mode), so it draws over the divider and the right pane.
@@ -301,8 +331,10 @@ class FileListActivity : AppActivity() {
         // Apply two-pane setting changes when returning from the settings screen: the
         // Activity is stopped while the setting screen is on top. Recreate() would restore
         // the old fragment hierarchy into containers that no longer match the new pane
-        // layout (crash), so finish and start a fresh instance instead.
-        if (Settings.FILE_LIST_TWO_PANE.valueCompat != twoPaneAtCreation) {
+        // layout (crash), so finish and start a fresh instance instead. Picker activities
+        // always run single-pane regardless of the setting, so they must NOT be restarted
+        // here (that would close the picker and relaunch a plain file list).
+        if (!isPickMode(intent) && Settings.FILE_LIST_TWO_PANE.valueCompat != twoPaneAtCreation) {
             finish()
             startActivity(Intent(this, FileListActivity::class.java))
         }
@@ -416,14 +448,14 @@ class FileListActivity : AppActivity() {
     }
 
     private fun currentFragment(): FileListFragment? =
-        if (Settings.FILE_LIST_TWO_PANE.valueCompat) {
+        if (twoPaneAtCreation) {
             supportFragmentManager.findFragmentById(R.id.leftPaneContent) as? FileListFragment
         } else {
             fragment
         }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        if (item.itemId == android.R.id.home && Settings.FILE_LIST_TWO_PANE.valueCompat) {
+        if (item.itemId == android.R.id.home && twoPaneAtCreation) {
             // The shared top bar's three-line button toggles the Activity-level drawer.
             openNavigationDrawer()
             return true
@@ -484,6 +516,15 @@ class FileListActivity : AppActivity() {
 
     companion object {
         const val STATE_ACTIVE_PANE_SECONDARY = "state_active_pane_secondary"
+
+        /** True for picker intents (open file / directory / create), which must run in
+         *  single-pane mode: two-pane mode hides the per-pane toolbar that carries the
+         *  picker's confirm (check/save) action, so the picker would be unusable. */
+        fun isPickMode(intent: Intent): Boolean = when (intent.action) {
+            Intent.ACTION_GET_CONTENT, Intent.ACTION_OPEN_DOCUMENT,
+            Intent.ACTION_CREATE_DOCUMENT, Intent.ACTION_OPEN_DOCUMENT_TREE -> true
+            else -> false
+        }
 
         fun createViewIntent(path: Path): Intent =
             FileListActivity::class.createIntent()

@@ -42,6 +42,7 @@ import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import androidx.core.view.GravityCompat
+import androidx.core.view.ViewCompat
 import androidx.core.view.isVisible
 import androidx.core.view.updatePaddingRelative
 import androidx.coordinatorlayout.widget.CoordinatorLayout
@@ -217,6 +218,13 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     internal val viewModel by viewModels { { FileListViewModel() } }
 
+    /** The effective two-pane mode of the hosting Activity. Differs from the setting when
+     *  this Activity is a picker (open file/directory/create), which always runs single-pane
+     *  (two-pane hides the toolbar carrying the picker's confirm action). */
+    private val isTwoPaneMode: Boolean
+        get() = (activity as? FileListActivity)?.isTwoPaneMode
+            ?: me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat
+
     private lateinit var binding: Binding
 
     private lateinit var navigationFragment: NavigationFragment
@@ -267,7 +275,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         super.onActivityCreated(savedInstanceState)
 
         val activity = requireActivity() as AppCompatActivity
-        val isTwoPane = me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat
+        val isTwoPane = isTwoPaneMode
         if (!isTwoPane) {
             // Single-pane mode: each pane owns its own drawer (the Activity-level drawer is
             // only used in two-pane mode).
@@ -298,12 +306,21 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             // still routes the bottom inset to the pane's bottom bar.
             val coordinatorLayout = binding.persistentBarLayout.getChildAt(0) as? CoordinatorLayout
             coordinatorLayout?.fitsSystemWindows = false
+            // The pane AppBarLayout (FitsSystemWindowsAppBarLayout forces
+            // fitsSystemWindows=true) would otherwise consume the top inset as padding,
+            // pushing the breadcrumb bar down by the status-bar height below the shared
+            // top bar. Block its inset handling entirely: the shared top bar owns the
+            // status-bar area in two-pane mode.
+            binding.appBarLayout.fitsSystemWindows = false
+            ViewCompat.setOnApplyWindowInsetsListener(binding.appBarLayout) { _, insets ->
+                insets
+            }
         }
         // Two-pane mode shares ONE multi-select action bar rendered over the shared top
         // bar (the same layer as the three-line menu button): selecting files in either
         // pane turns the top bar into the action bar (delete/copy/cross-pane). Single-pane
         // mode uses the pane's own overlay toolbar.
-        overlayActionMode = if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+        overlayActionMode = if (isTwoPaneMode) {
             (activity as FileListActivity).getSharedOverlayActionMode()
         } else {
             OverlayToolbarActionMode(binding.overlayToolbar)
@@ -342,7 +359,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         binding.recyclerView.setOnApplyWindowInsetsListener(
             ScrollingViewOnApplyWindowInsetsListener(binding.recyclerView, fastScroller)
         )
-        if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+        if (isTwoPaneMode) {
             // Two-pane layout adjustments: the shared top bar (search/sort/three dots)
             // lives in the Activity above both panes and is always visible, so both pane
             // toolbars are hidden (the breadcrumb path bars stay). The FAB is owned by the
@@ -355,7 +372,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             adapter.hideFolderIcons = true
             adapter.hideMenuButtons = true
         }
-        if (!me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+        if (!isTwoPaneMode) {
             binding.speedDialView.inflate(R.menu.file_list_speed_dial)
             binding.speedDialView.setOnActionSelectedListener {
                 val target = this
@@ -368,10 +385,15 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 binding.speedDialView.close()
                 true
             }
+            // Show/hide the add button per the setting. (In two-pane mode the Activity
+            // owns the FAB and this per-pane one stays hidden, so only observe here.)
+            me.zhanghai.android.files.settings.Settings.SHOW_ADD_BUTTON.observe(viewLifecycleOwner) {
+                binding.speedDialView.isVisible = it
+            }
         }
 
         val viewLifecycleOwner = viewLifecycleOwner
-        if (!me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+        if (!isTwoPaneMode) {
             addOnBackPressedCallback(
                 object : OnBackPressedCallback(false) {
                     override fun handleOnBackPressed() {
@@ -499,7 +521,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
         super.onCreateOptionsMenu(menu, inflater)
-        val isTwoPane = me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat
+        val isTwoPane = isTwoPaneMode
         if (isSecondaryPane != isTwoPane) {
             // Single-pane mode: only the primary pane contributes menus. Two-pane mode:
             // only the right pane renders the shared top bar and contributes menus.
@@ -562,7 +584,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     /** Opens the navigation drawer (used by the shared top bar's three-line button). */
     fun openNavigationDrawer() {
-        if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+        if (isTwoPaneMode) {
             // Two-pane mode: the drawer lives in the Activity's full-screen DrawerLayout.
             (requireActivity() as FileListActivity).openNavigationDrawer()
             return
@@ -609,7 +631,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         // In two-pane mode the shared top bar follows the active pane: whoever receives a
         // menu event while the OTHER pane is active must forward it to the active pane.
-        if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+        if (isTwoPaneMode) {
             val activeIsSecondary = TwoPaneState.activePaneSecondary
             if (isSecondaryPane != activeIsSecondary) {
                 val activeFragment = (requireActivity() as FileListActivity)
@@ -747,7 +769,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         // F5/F6 cross-pane transfer (MT Manager / Total Commander style): the ACTIVE
         // pane's selection goes to the OTHER pane's current directory. F5 copies,
         // F6 moves. Only meaningful in two-pane mode.
-        val isTwoPane = me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat
+        val isTwoPane = isTwoPaneMode
         if (isTwoPane && viewModel.selectedFiles.isNotEmpty()) {
             if (keyCode == KeyEvent.KEYCODE_F5) {
                 val files = viewModel.selectedFiles
@@ -1098,7 +1120,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         // Both panes share ONE multi-select action bar over the shared top bar, so only
         // one pane may hold a selection at a time: selecting files clears the other
         // pane's selection (clearing must NOT touch the active pane).
-        if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat &&
+        if (isTwoPaneMode &&
             files.isNotEmpty()
         ) {
             TwoPaneState.setActivePaneSecondary(isSecondaryPane)
@@ -1127,7 +1149,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
      * switch takes precedence over the global one.
      */
     private fun updateDenseLayout() {        onDenseLayoutChanged(
-            if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+            if (isTwoPaneMode) {
                 me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE_DENSE.valueCompat
             } else {
                 me.zhanghai.android.files.settings.Settings.FILE_LIST_DENSE_LAYOUT.valueCompat
@@ -1190,7 +1212,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             val isCurrentPathReadOnly = viewModel.currentPath.fileSystem.isReadOnly
             menu.findItem(R.id.action_archive).isVisible = !isCurrentPathReadOnly
             menu.findItem(R.id.action_batch_rename).isVisible = !isCurrentPathReadOnly
-            if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+            if (isTwoPaneMode) {
                 // Mirror the single-file three-dot menu exactly: an item is visible when it
                 // would be visible for ANY selected file (a single selection behaves
                 // identically to the per-item menu; a multi selection keeps every option
@@ -1244,7 +1266,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             // Single-pane mode keeps the ORIGINAL menu: every item added for two-pane
             // browsing (open-with, per-file ops, analyzers, ...) is hidden so the single
             // pane behaves exactly as before.
-            if (!me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+            if (!isTwoPaneMode) {
                 menu.findItem(R.id.action_open_with).isVisible = false
                 menu.findItem(R.id.action_hide).isVisible = false
                 menu.findItem(R.id.action_rename).isVisible = false
@@ -1272,7 +1294,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             // In single-pane mode expand the scrolling app bar so the overlay toolbar
             // (inside it) is visible; in two-pane mode the shared top bar is fixed, so no
             // expansion is needed (and expanding the pane's own app bar is meaningless).
-            if (!me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+            if (!isTwoPaneMode) {
                 binding.appBarLayout.setExpanded(true)
                 binding.appBarLayout.addOnOffsetChangedListener(
                     AppBarLayoutExpandHackListener(binding.recyclerView)
@@ -1534,7 +1556,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     private fun updateBottomToolbar() {
         // Two-pane mode hides the bottom paste bar entirely: it would sit behind the FAB
         // at the bottom-right (ugly), and cross-pane transfers are done differently.
-        if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+        if (isTwoPaneMode) {
             if (bottomActionMode.isActive) {
                 bottomActionMode.finish()
             }
@@ -2848,7 +2870,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     override fun closeNavigationDrawer() {
-        if (me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE.valueCompat) {
+        if (isTwoPaneMode) {
             (requireActivity() as FileListActivity).closeNavigationDrawer()
             return
         }

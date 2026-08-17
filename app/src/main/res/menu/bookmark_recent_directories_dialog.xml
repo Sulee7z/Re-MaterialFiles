@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  ~ Copyright (c) 2026 Sulee7z <sulee7z@gmail.com>
+  ~ All Rights Reserved.
+  -->
+
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_add_bookmark"
+        android:icon="@drawable/add_icon_control_normal_24dp"
+        android:title="@string/file_list_action_add_bookmark"
+        app:showAsAction="always" />
+</menu>

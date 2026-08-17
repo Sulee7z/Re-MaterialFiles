@@ -851,6 +851,10 @@
     <string name="settings_bookmark_directories_title">书签文件夹</string>
     <string name="settings_bookmark_directories_summary_empty">无书签文件夹</string>
     <string name="settings_bookmark_recent_default_page_title">最近/书签默认页面</string>
+    <string name="settings_recent_directories_match_longest_title">最近文件夹按最长路径去重</string>
+    <string name="settings_recent_directories_match_longest_summary">添加最近访问的文件夹时,仅保留匹配的最长路径</string>
+    <string name="settings_show_add_button_title">显示添加按钮</string>
+    <string name="settings_show_add_button_summary">在主界面右下角显示添加按钮</string>
     <string-array name="settings_bookmark_recent_default_page_entries">
         <item>书签文件夹</item>
         <item>最近访问</item>

@@ -80,6 +80,10 @@
     <string name="pref_key_recent_directories">key_recent_directories</string>
     <string name="pref_key_bookmark_recent_default_page">key_bookmark_recent_default_page</string>
     <string name="pref_default_value_bookmark_recent_default_page">0</string>
+    <string name="pref_key_recent_directories_match_longest">key_recent_directories_match_longest</string>
+    <bool name="pref_default_value_recent_directories_match_longest">true</bool>
+    <string name="pref_key_show_add_button">key_show_add_button</string>
+    <bool name="pref_default_value_show_add_button">true</bool>
     <string-array name="pref_entry_values_bookmark_recent_default_page">
         <item>0</item>
         <item>1</item>
