@@ -502,6 +502,9 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         Settings.FILE_LIST_TWO_PANE_DENSE.observe(viewLifecycleOwner) { updateDenseLayout() }
         viewModel.pasteStateLiveData.observe(viewLifecycleOwner) { onPasteStateChanged(it) }
         Settings.FILE_NAME_ELLIPSIZE.observe(viewLifecycleOwner) { onFileNameEllipsizeChanged(it) }
+        Settings.FILE_LIST_WRAP_LONG_FILE_NAMES.observe(viewLifecycleOwner) {
+            onWrapLongFileNamesChanged(it)
+        }
         viewModel.fileListLiveData.observe(viewLifecycleOwner) { onFileListChanged(it) }
         Settings.FILE_LIST_SHOW_HIDDEN_FILES.observe(viewLifecycleOwner) {
             onShowHiddenFilesChanged(it)
@@ -1727,6 +1730,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     private fun onFileNameEllipsizeChanged(fileNameEllipsize: TextUtils.TruncateAt) {
         adapter.nameEllipsize = fileNameEllipsize
+    }
+
+    private fun onWrapLongFileNamesChanged(wrapLongFileNames: Boolean) {
+        adapter.wrapLongFileNames = wrapLongFileNames
     }
 
     override fun clearSelectedFiles() {

@@ -1001,6 +1001,8 @@
     <string name="settings_two_pane_dense_summary">Use dense (shorter) file list rows in two-pane mode so more files fit per pane</string>
     <string name="file_list_title_navigate_hint">Tap the title to jump to a path</string>
     <string name="settings_file_name_ellipsize_title">Display long file name</string>
+    <string name="settings_wrap_long_file_names_title">Wrap long file names</string>
+    <string name="settings_wrap_long_file_names_summary">Wrap file names onto multiple lines so the full name is always visible</string>
     <string-array name="settings_file_name_ellipsize_entries">
         <item>Ellipsize the beginning</item>
         <item>Ellipsize the middle</item>

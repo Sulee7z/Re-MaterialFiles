@@ -157,6 +157,12 @@ object Settings {
             TextUtils.TruncateAt::class.java
         )
 
+    /** Wrap long file names onto multiple lines so the full name is visible. */
+    val FILE_LIST_WRAP_LONG_FILE_NAMES: SettingLiveData<Boolean> =
+        BooleanSettingLiveData(
+            R.string.pref_key_wrap_long_file_names, R.bool.pref_default_value_wrap_long_file_names
+        )
+
     val STANDARD_DIRECTORY_SETTINGS: SettingLiveData<List<StandardDirectorySettings>> =
         ParcelValueSettingLiveData(R.string.pref_key_standard_directory_settings, emptyList())
 

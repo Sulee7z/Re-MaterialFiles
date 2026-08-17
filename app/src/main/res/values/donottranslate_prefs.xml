@@ -61,6 +61,8 @@
     <bool name="pref_default_value_two_pane_dense">true</bool>
     <string name="pref_key_file_name_ellipsize">key_file_name_ellipsize</string>
     <string name="pref_default_value_file_name_ellipsize">1</string>
+    <string name="pref_key_wrap_long_file_names">key_wrap_long_file_names</string>
+    <bool name="pref_default_value_wrap_long_file_names">false</bool>
     <string-array name="pref_entry_values_file_name_ellipsize">
         <item>0</item>
         <item>1</item>

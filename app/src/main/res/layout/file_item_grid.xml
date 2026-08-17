@@ -61,6 +61,7 @@
     </me.zhanghai.android.files.ui.AspectRatioFrameLayout>
 
     <LinearLayout
+        android:id="@+id/textLayout"
         android:layout_width="match_parent"
         android:layout_height="@dimen/single_line_list_item_height"
         android:layout_marginBottom="@dimen/screen_edge_margin_minus_8dp"

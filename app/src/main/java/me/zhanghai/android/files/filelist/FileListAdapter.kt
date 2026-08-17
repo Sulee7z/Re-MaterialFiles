@@ -155,6 +155,17 @@ class FileListAdapter(
             _denseLayout = value
         }
 
+    /** True to wrap long file names onto multiple lines so the full name is visible. */
+    private var _wrapLongFileNames: Boolean = false
+    var wrapLongFileNames: Boolean
+        get() = _wrapLongFileNames
+        set(value) {
+            if (_wrapLongFileNames != value) {
+                _wrapLongFileNames = value
+                notifyDataSetChanged()
+            }
+        }
+
     fun replaceSelectedFiles(files: FileItemSet) {
         val changedFiles = fileItemSetOf()
         val iterator = selectedFiles.iterator()
@@ -439,11 +450,50 @@ class FileListAdapter(
         val checked = file in selectedFiles
         holder.itemLayout.isChecked = checked
         holder.nameText.apply {
-            if (isSingleLineCompat) {
+            if (wrapLongFileNames) {
+                // Wrap mode: let the name take as many lines as it needs (the item
+                // height becomes content-driven, see below), so the full name shows.
+                setSingleLine(false)
+                maxLines = Int.MAX_VALUE
+                ellipsize = null
+                isSelected = false
+            } else if (isSingleLineCompat) {
                 val nameEllipsize = nameEllipsize
                 ellipsize = nameEllipsize
                 isSelected = nameEllipsize == TextUtils.TruncateAt.MARQUEE
+                setSingleLine(true)
+            } else {
+                // Grid item: restore the default two-line clamp.
+                maxLines = 2
+                ellipsize = TextUtils.TruncateAt.END
             }
+        }
+        val isList = holder.descriptionText != null
+        val itemContext = holder.itemLayout.context
+        holder.itemLayout.layoutParams = holder.itemLayout.layoutParams.apply {
+            height = if (wrapLongFileNames) {
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            } else if (isList && denseLayout) {
+                itemContext.resources.getDimensionPixelSize(R.dimen.dense_two_line_list_item_height)
+            } else if (isList) {
+                itemContext.resources.getDimensionPixelSize(R.dimen.two_line_list_item_height)
+            } else {
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            }
+        }
+        if (!isList) {
+            // Grid item: the text row (icon + name + menu) has a fixed single-line
+            // height by default; grow it with the wrapped name and restore it back.
+            (holder.nameText.parent as? ViewGroup)?.layoutParams =
+                (holder.nameText.parent as? ViewGroup)?.layoutParams?.apply {
+                    height = if (wrapLongFileNames) {
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    } else {
+                        itemContext.resources.getDimensionPixelSize(
+                            R.dimen.single_line_list_item_height
+                        )
+                    }
+                }
         }
         if (payloads.isNotEmpty()) {
             return

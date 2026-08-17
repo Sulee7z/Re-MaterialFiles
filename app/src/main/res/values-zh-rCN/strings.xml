@@ -837,6 +837,8 @@
     <string name="settings_two_pane_dense_summary">双行模式下使用更紧凑的文件行高,每栏显示更多文件</string>
     <string name="file_list_title_navigate_hint">点击标题可跳转路径</string>
     <string name="settings_file_name_ellipsize_title">显示长文件名</string>
+    <string name="settings_wrap_long_file_names_title">长文件名换行显示</string>
+    <string name="settings_wrap_long_file_names_summary">文件名过长时换行显示多行,方便查看完整文件名</string>
     <string-array name="settings_file_name_ellipsize_entries">
         <item>省略开头</item>
         <item>省略中间</item>
