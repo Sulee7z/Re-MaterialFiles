@@ -183,18 +183,17 @@ class BookmarkRecentDirectoriesDialogFragment : DialogFragment(),
             ?.pathCompat?.let { Paths.get(it) } ?: Paths.get("/")
 
     override fun onItemClick(item: BookmarkRecentDirectoryAdapter.Item) {
-        if (currentTab == 0) {
-            item.bookmarkDirectory?.let { editBookmarkDirectory(it) }
-        } else {
-            dismiss()
-            startActivitySafe(FileListActivity.createViewIntent(item.path))
-        }
+        // Tap on a bookmark/recent folder opens its folder.
+        dismiss()
+        startActivitySafe(FileListActivity.createViewIntent(item.path))
     }
 
     override fun onItemLongClick(item: BookmarkRecentDirectoryAdapter.Item) {
         if (currentTab == 0) {
+            // Long press on a bookmark edits it.
             item.bookmarkDirectory?.let { editBookmarkDirectory(it) }
         } else {
+            // Long press on a recent folder removes it.
             item.recentDirectory?.let { RecentDirectories.remove(it) }
         }
     }
