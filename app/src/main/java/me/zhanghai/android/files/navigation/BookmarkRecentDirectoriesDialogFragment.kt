@@ -6,35 +6,30 @@
 package me.zhanghai.android.files.navigation
 
 import android.app.Dialog
-import android.content.res.Configuration
-import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
-import android.view.Gravity
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
-import androidx.fragment.app.DialogFragment
+import androidx.appcompat.app.AppCompatDialogFragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java8.nio.file.Path
 import java8.nio.file.Paths
 import me.zhanghai.android.files.R
 import me.zhanghai.android.files.compat.isPrimaryCompat
 import me.zhanghai.android.files.compat.pathCompat
-import me.zhanghai.android.files.compat.themeResIdCompat
 import me.zhanghai.android.files.databinding.BookmarkRecentDirectoriesDialogFragmentBinding
 import me.zhanghai.android.files.filelist.FileListActivity
 import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.storage.StorageVolumeListLiveData
 import me.zhanghai.android.files.util.createIntent
 import me.zhanghai.android.files.util.fadeToVisibilityUnsafe
+import me.zhanghai.android.files.util.layoutInflater
 import me.zhanghai.android.files.util.putArgs
 import me.zhanghai.android.files.util.startActivitySafe
 import me.zhanghai.android.files.util.valueCompat
 
-class BookmarkRecentDirectoriesDialogFragment : DialogFragment(),
+class BookmarkRecentDirectoriesDialogFragment : AppCompatDialogFragment(),
     BookmarkRecentDirectoryAdapter.Listener {
+
     private lateinit var binding: BookmarkRecentDirectoriesDialogFragmentBinding
 
     private lateinit var adapter: BookmarkRecentDirectoryAdapter
@@ -45,51 +40,19 @@ class BookmarkRecentDirectoriesDialogFragment : DialogFragment(),
 
     private var currentTab = 0
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View =
-        BookmarkRecentDirectoriesDialogFragmentBinding.inflate(inflater, container, false)
-            .also { binding = it }
-            .root
-
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
-        // Use the activity's current theme (which may be a custom theme such as
-        // the pure black variant) for the centered dialog, so that all of its
-        // colors follow the app theme instead of the library default dialog
-        // theme overlay.
-        return Dialog(requireContext(), requireContext().themeResIdCompat)
-    }
-
-    override fun onStart() {
-        super.onStart()
-
-        val dialog = dialog ?: return
-        // Don't dim the window behind the dialog, so the main UI shows through.
-        dialog.window?.setDimAmount(0f)
-        // The activity theme used for this dialog (themeResIdCompat) has an opaque
-        // android:windowBackground (e.g. @android:color/black for the pure black theme),
-        // which would otherwise completely cover the main UI even with dim set to zero.
-        // Make the window background transparent so the main UI shows through around the
-        // dialog, and the user can tap it to dismiss the dialog.
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        // Center the dialog on screen, sized to the content. The content root has its own
-        // theme-colored background, so only the area around it stays transparent. Use a
-        // near-full width so the dialog fills the middle of the screen without awkward
-        // gaps on either side; a sliver stays outside for tap-to-dismiss.
-        val widthFraction = if (resources.configuration.orientation
-                == Configuration.ORIENTATION_LANDSCAPE
-        ) 0.96f else 0.98f
-        val width = (resources.displayMetrics.widthPixels * widthFraction).toInt()
-        dialog.window?.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT)
-        dialog.window?.setGravity(Gravity.CENTER)
-        // Tapping the transparent area outside the dialog content dismisses it.
-        dialog.setCanceledOnTouchOutside(true)
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
+        // Inflate the custom layout and set it as the dialog content, exactly
+        // like EditBookmarkDirectoryDialogFragment. This gives the dialog the
+        // standard Material card appearance (rounded corners, surface color,
+        // centered with a max width), matching the "Add storage" dialog, while
+        // keeping the toolbar/tabs/list content from the layout.
+        //
+        // Do NOT go back to an onCreateView()-based fragment view here: returning
+        // a plain MaterialAlertDialogBuilder(...).create() (without setView) makes
+        // DialogFragment race with AlertController over the content view, and the
+        // dialog ends up with a zero-height invisible content. Setting the view in
+        // onCreateDialog and doing all initialization here is the working pattern.
+        binding = BookmarkRecentDirectoriesDialogFragmentBinding.inflate(requireContext().layoutInflater)
 
         // Cap the list height so the dialog grows with its content but never
         // fills the whole screen; the list is scrollable past the cap.
@@ -131,14 +94,18 @@ class BookmarkRecentDirectoriesDialogFragment : DialogFragment(),
             ) 1 else 0
         )?.select()
 
-        Settings.BOOKMARK_DIRECTORIES.observe(viewLifecycleOwner) {
+        Settings.BOOKMARK_DIRECTORIES.observe(this) {
             bookmarkDirectories = it
             updateList()
         }
-        Settings.RECENT_DIRECTORIES.observe(viewLifecycleOwner) {
+        Settings.RECENT_DIRECTORIES.observe(this) {
             recentDirectories = it
             updateList()
         }
+
+        return MaterialAlertDialogBuilder(requireContext(), theme)
+            .setView(binding.root)
+            .create()
     }
 
     private fun onTabChanged(position: Int) {
