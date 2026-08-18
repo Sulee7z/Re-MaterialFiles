@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  ~ Material 3 style fast-scroll thumb: a thin, rounded, neutral-grey bar instead of
+  ~ the MD2 accent-colored (theme blue) thumb. M3 scrollbars use a neutral colour
+  ~ (not the brand/accent colour) so the thumb stays unobtrusive in the two-pane UI.
+  -->
+
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="2dp" />
+    <size android:width="4dp" android:height="52dp" />
+    <solid android:color="#61000000" />
+</shape>

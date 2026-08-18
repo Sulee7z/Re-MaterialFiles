@@ -8,7 +8,15 @@ package me.zhanghai.android.files.ui
 import android.view.ViewGroup
 import me.zhanghai.android.fastscroll.FastScroller
 import me.zhanghai.android.fastscroll.FastScrollerBuilder
+import me.zhanghai.android.files.R
+import me.zhanghai.android.files.compat.getDrawableCompat
 
 object ThemedFastScroller {
-    fun create(view: ViewGroup): FastScroller = FastScrollerBuilder(view).useMd2Style().build()
+    fun create(view: ViewGroup): FastScroller = FastScrollerBuilder(view)
+        .useMd2Style()
+        // Replace the MD2 accent-colored (theme blue) thumb with a Material 3
+        // neutral-grey thumb: M3 scrollbars use a neutral colour rather than the
+        // brand/accent colour, so the bar stays unobtrusive (esp. in two-pane UI).
+        .setThumbDrawable(view.context.getDrawableCompat(R.drawable.fast_scroll_thumb_m3))
+        .build()
 }
