@@ -42,8 +42,20 @@
     <dimen name="horizontal_divider_height">1dp</dimen>
     <dimen name="small_icon_size">18dp</dimen>
     <dimen name="icon_size">24dp</dimen>
+    <!-- Two-pane (MD2 dense) file list: about one and a half notches smaller than
+         the normal mode (16sp name / 14sp description), so more files fit per pane. -->
+    <dimen name="two_pane_file_name_text_size">14sp</dimen>
+    <dimen name="two_pane_file_description_text_size">13sp</dimen>
+    <!-- Two-pane file icons: one notch below the normal two-pane small size (18dp). -->
+    <dimen name="two_pane_icon_size">12dp</dimen>
+    <!-- Two-pane APK/grid overlay icons: well below large_icon_size (40dp). -->
+    <dimen name="two_pane_large_icon_size">24dp</dimen>
     <dimen name="large_icon_size">40dp</dimen>
     <dimen name="touch_target_size">48dp</dimen>
+    <!-- Two-pane file list: a smaller icon touch target so the name text starts
+         further left in the narrow panes. -->
+    <dimen name="two_pane_icon_layout_size">32dp</dimen>
+    <dimen name="two_pane_shadow_width">10dp</dimen>
     <dimen name="touch_target_icon_padding">12dp</dimen>
     <dimen name="touch_target_large_icon_padding">4dp</dimen>
     <dimen name="badge_size">18dp</dimen>

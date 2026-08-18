@@ -9,6 +9,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.SystemClock
 import android.text.TextUtils
+import android.util.TypedValue
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -81,6 +82,15 @@ class FileListAdapter(
 
     /** True when the two-pane small-icon layout is active (shows more filename text). */
     var useSmallIcons: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                notifyDataSetChanged()
+            }
+        }
+
+    /** True when the two-pane smaller-font layout is active (shows more filename text). */
+    var useSmallFont: Boolean = false
         set(value) {
             if (field != value) {
                 field = value
@@ -564,8 +574,26 @@ class FileListAdapter(
             setImageResource(iconRes)
             if (useSmallIcons) {
                 val size = holder.itemLayout.context.resources
-                    .getDimensionPixelSize(R.dimen.small_icon_size)
+                    .getDimensionPixelSize(R.dimen.two_pane_icon_size)
                 layoutParams = layoutParams.apply { width = size; height = size }
+            }
+        }
+        if (useSmallIcons) {
+            // Two-pane mode: shrink the icon touch target and its side margins so
+            // the name text starts further left in the narrow panes.
+            val context = holder.itemLayout.context
+            val layoutSize = context.resources
+                .getDimensionPixelSize(R.dimen.two_pane_icon_layout_size)
+            holder.iconLayout.layoutParams = holder.iconLayout.layoutParams.apply {
+                width = layoutSize
+                if (this is ViewGroup.MarginLayoutParams) {
+                    setMarginStart(
+                        context.resources.getDimensionPixelSize(R.dimen.screen_edge_margin_minus_8dp)
+                    )
+                    setMarginEnd(
+                        context.resources.getDimensionPixelSize(R.dimen.screen_edge_margin_minus_12dp)
+                    )
+                }
             }
         }
         holder.directoryThumbnailImage?.isVisible = isDirectory
@@ -581,6 +609,12 @@ class FileListAdapter(
             if (shouldLoadThumbnailIcon) {
                 load(path to attributes)
             }
+            if (useSmallIcons) {
+                // Two-pane mode: shrink the APK app icon overlay too, so it matches
+                // the smaller icon scale (one notch below the normal size).
+                val size = resources.getDimensionPixelSize(R.dimen.two_pane_large_icon_size)
+                layoutParams = layoutParams.apply { width = size; height = size }
+            }
         }
         holder.thumbnailImage.apply {
             dispose()
@@ -594,6 +628,12 @@ class FileListAdapter(
                         iconImage.isVisible = false
                     }
                 }
+            }
+            if (useSmallIcons && file.mimeType.isApk) {
+                // Two-pane mode: shrink the APK app icon (loaded here in the list view)
+                // so it matches the other small icons instead of staying large_icon_size.
+                val size = resources.getDimensionPixelSize(R.dimen.two_pane_icon_size)
+                layoutParams = layoutParams.apply { width = size; height = size }
             }
         }
         holder.appIconBadgeImage.apply {
@@ -627,7 +667,9 @@ class FileListAdapter(
             }
         }
         holder.nameText.text = file.name
-        holder.descriptionText?.text = if (isDirectory) {
+        holder.descriptionText?.text = if (isDirectory && wrapLongFileNames) {
+            // Folders get the date/size description in the empty space below the name
+            // only when long-name wrap is off; a wrapped name fills the row instead.
             null
         } else {
             val context = holder.descriptionText!!.context
@@ -636,6 +678,19 @@ class FileListAdapter(
             val size = attributes.fileSize.formatHumanReadable(context)
             val descriptionSeparator = context.getString(R.string.file_item_description_separator)
             listOf(lastModificationTime, size).joinToString(descriptionSeparator)
+        }
+        if (useSmallFont) {
+            // Two-pane mode: use the smaller name/description font (about one and a
+            // half notches below the normal size) so more files fit per pane.
+            val scaledDensity = holder.nameText.resources.displayMetrics.scaledDensity
+            holder.nameText.setTextSize(
+                TypedValue.COMPLEX_UNIT_SP,
+                holder.nameText.resources.getDimension(R.dimen.two_pane_file_name_text_size) / scaledDensity
+            )
+            holder.descriptionText?.setTextSize(
+                TypedValue.COMPLEX_UNIT_SP,
+                holder.nameText.resources.getDimension(R.dimen.two_pane_file_description_text_size) / scaledDensity
+            )
         }
         val isArchivePath = path.isArchivePath
         menu.findItem(R.id.action_copy)

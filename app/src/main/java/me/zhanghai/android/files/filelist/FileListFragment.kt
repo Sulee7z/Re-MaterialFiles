@@ -371,8 +371,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             // The shared breadcrumb bar (MT Manager style) replaces the per-pane bars.
             binding.breadcrumbLayout.isVisible = false
             applyTwoPaneSmallIcons()
-            adapter.hideFolderIcons = true
             adapter.hideMenuButtons = true
+            // Two-pane mode also uses a smaller default font (~1.5 notches below
+            // normal) so more files fit per pane.
+            adapter.useSmallFont = true
         }
         if (!isTwoPaneMode) {
             binding.speedDialView.inflate(R.menu.file_list_speed_dial)
