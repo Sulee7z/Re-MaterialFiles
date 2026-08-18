@@ -67,4 +67,21 @@
         <item name="colorControlNormal">?android:textColorSecondary</item>
         <item name="searchViewStyle">@style/Widget.AppCompat.SearchView</item>
     </style>
+
+    <!-- Flat text key for the terminal extra-keys row, like Termux: no filled
+         background, no elevation, compact padding, tinted text. -->
+    <style name="Widget.MaterialFiles.TerminalKeyButton" parent="Widget.AppCompat.Button.Borderless">
+        <item name="android:minWidth">0dp</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="android:paddingStart">14dp</item>
+        <item name="android:paddingEnd">14dp</item>
+        <item name="android:paddingTop">8dp</item>
+        <item name="android:paddingBottom">8dp</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="android:textColor">@color/terminal_key_text_selector</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+    </style>
 </resources>

@@ -368,6 +368,8 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             // per-item three-dot buttons.
             binding.toolbar.isVisible = false
             binding.speedDialView.isVisible = false
+            // The shared breadcrumb bar (MT Manager style) replaces the per-pane bars.
+            binding.breadcrumbLayout.isVisible = false
             applyTwoPaneSmallIcons()
             adapter.hideFolderIcons = true
             adapter.hideMenuButtons = true
@@ -481,7 +483,14 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             onSearchViewExpandedChanged(it)
         }
         viewModel.breadcrumbLiveData.observe(viewLifecycleOwner) {
-            binding.breadcrumbLayout.setData(it)
+            if (isTwoPaneMode) {
+                // Two-pane mode: the shared breadcrumb bar in the Activity shows the
+                // ACTIVE pane's path, so report our data up (it only renders when this
+                // pane is the active one).
+                (activity as? FileListActivity)?.onPaneBreadcrumbChanged(this, it)
+            } else {
+                binding.breadcrumbLayout.setData(it)
+            }
         }
         viewModel.viewTypeLiveData.observe(viewLifecycleOwner) { onViewTypeChanged(it) }
         // Live data only calls observeForever() on its sources when it is active, so we have to
@@ -1734,6 +1743,9 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     private fun onWrapLongFileNamesChanged(wrapLongFileNames: Boolean) {
         adapter.wrapLongFileNames = wrapLongFileNames
+        // Re-set the adapter so RecyclerView re-measures the (now content-sized) item
+        // heights; notifyDataSetChanged() alone reuses the old measured heights.
+        binding.recyclerView.adapter = adapter
     }
 
     override fun clearSelectedFiles() {

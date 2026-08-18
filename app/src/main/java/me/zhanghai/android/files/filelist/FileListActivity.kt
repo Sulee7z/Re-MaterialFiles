@@ -42,6 +42,10 @@ class FileListActivity : AppActivity() {
     /** The single shared multi-select action bar rendered over the shared top bar. */
     private lateinit var sharedOverlayActionMode: OverlayToolbarActionMode
 
+    /** The shared breadcrumb bar (MT Manager style): fixed under the top bar, it always
+     *  shows the path of the active pane and follows the active-pane switches. */
+    private lateinit var sharedBreadcrumbLayout: BreadcrumbLayout
+
     /** The two-pane value this Activity was created with; used to rebuild only on change.
      *  Computed in onCreate() because it reads intent, which is only set after attach(). */
     private var twoPaneAtCreation: Boolean = false
@@ -146,6 +150,23 @@ class FileListActivity : AppActivity() {
             onBackPressedDispatcher.addCallback(
                 this, sharedOverlayActionMode.onBackPressedCallback
             )
+            // The shared breadcrumb bar always reflects the active pane: taps are routed
+            // to the active pane's FileListFragment, and its path is shown here.
+            sharedBreadcrumbLayout = findViewById(R.id.sharedBreadcrumbLayout)
+            sharedBreadcrumbLayout.setListener(object : BreadcrumbLayout.Listener {
+                override fun navigateTo(path: Path) {
+                    activeFileListFragmentOrNull()?.navigateTo(path)
+                }
+                override fun copyPath(path: Path) {
+                    activeFileListFragmentOrNull()?.copyPath(path)
+                }
+                override fun openInNewTask(path: Path) {
+                    activeFileListFragmentOrNull()?.openInNewTask(path)
+                }
+                override fun navigateToPath() {
+                    activeFileListFragmentOrNull()?.navigateToPath()
+                }
+            })
             // The FAB is fixed at the bottom-right; its create actions run in the ACTIVE
             // pane (the pane the user last touched), like Amaze's FAB acting on
             // getCurrentMainFragment() / Ghost Commander's current panel. A "paste here"
@@ -376,7 +397,12 @@ class FileListActivity : AppActivity() {
                 val topBar = findViewById<View>(R.id.sharedToolbar)
                 val topBarTouched = topBar != null && topBar.isShown &&
                     ev.rawY >= topBar.top && ev.rawY <= topBar.bottom
-                if (!fabTouched && !topBarTouched) {
+                // The shared breadcrumb bar is global UI too (it reflects the active pane,
+                // it does not switch it), so touches on it must not flip the active pane.
+                val breadcrumb = findViewById<View>(R.id.sharedBreadcrumbLayout)
+                val breadcrumbTouched = breadcrumb != null && breadcrumb.isShown &&
+                    ev.rawY >= breadcrumb.top && ev.rawY <= breadcrumb.bottom
+                if (!fabTouched && !topBarTouched && !breadcrumbTouched) {
                     TwoPaneState.setActivePaneSecondary(ev.rawX > divider.x)
                 }
             }
@@ -445,6 +471,36 @@ class FileListActivity : AppActivity() {
         val rightContent = findViewById<View>(R.id.rightPaneContent)
         leftContent.alpha = if (TwoPaneState.activePaneSecondary) 0.6f else 1f
         rightContent.alpha = if (TwoPaneState.activePaneSecondary) 1f else 0.6f
+        // The shared breadcrumb bar follows the active pane.
+        refreshSharedBreadcrumb()
+    }
+
+    /**
+     * Refreshes the shared breadcrumb bar to show the active pane's current path.
+     * Called when the active pane switches and when a pane's path changes.
+     */
+    fun refreshSharedBreadcrumb() {
+        if (!twoPaneAtCreation || !::sharedBreadcrumbLayout.isInitialized) {
+            return
+        }
+        val activeFragment = activeFileListFragmentOrNull() ?: return
+        val data = activeFragment.viewModel.breadcrumbLiveData.valueCompat ?: return
+        sharedBreadcrumbLayout.setData(data)
+    }
+
+    /**
+     * Called by a pane's FileListFragment when its breadcrumb data changes, so the
+     * shared bar updates when the ACTIVE pane navigates. Also marks the (new) active
+     * pane if this fragment is the active one.
+     */
+    fun onPaneBreadcrumbChanged(fragment: FileListFragment, data: BreadcrumbData) {
+        if (!twoPaneAtCreation || !::sharedBreadcrumbLayout.isInitialized) {
+            return
+        }
+        // Only the active pane's path is shown in the shared bar.
+        if (fragment === activeFileListFragmentOrNull()) {
+            sharedBreadcrumbLayout.setData(data)
+        }
     }
 
     private fun currentFragment(): FileListFragment? =

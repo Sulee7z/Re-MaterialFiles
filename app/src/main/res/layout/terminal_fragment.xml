@@ -25,174 +25,6 @@
             app:popupTheme="?actionBarPopupTheme" />
     </me.zhanghai.android.files.ui.CoordinatorAppBarLayout>
 
-    <HorizontalScrollView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:scrollbars="none"
-        android:fillViewport="true">
-
-        <LinearLayout
-            android:id="@+id/extraKeysRow"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:paddingStart="4dp"
-            android:paddingEnd="4dp">
-
-            <Button
-                android:id="@+id/escKey"
-                style="?attr/buttonBarButtonStyle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="0dp"
-                android:minHeight="0dp"
-                android:paddingStart="12dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="12dp"
-                android:paddingBottom="6dp"
-                android:text="@string/terminal_key_esc" />
-
-            <Button
-                android:id="@+id/tabKey"
-                style="?attr/buttonBarButtonStyle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="0dp"
-                android:minHeight="0dp"
-                android:paddingStart="12dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="12dp"
-                android:paddingBottom="6dp"
-                android:text="@string/terminal_key_tab" />
-
-            <Button
-                android:id="@+id/ctrlKey"
-                style="?attr/buttonBarButtonStyle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="0dp"
-                android:minHeight="0dp"
-                android:backgroundTint="@color/terminal_modifier_key_background"
-                android:paddingStart="12dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="12dp"
-                android:paddingBottom="6dp"
-                android:text="@string/terminal_key_ctrl" />
-
-            <Button
-                android:id="@+id/altKey"
-                style="?attr/buttonBarButtonStyle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="0dp"
-                android:minHeight="0dp"
-                android:backgroundTint="@color/terminal_modifier_key_background"
-                android:paddingStart="12dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="12dp"
-                android:paddingBottom="6dp"
-                android:text="@string/terminal_key_alt" />
-
-            <Button
-                android:id="@+id/shiftKey"
-                style="?attr/buttonBarButtonStyle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="0dp"
-                android:minHeight="0dp"
-                android:backgroundTint="@color/terminal_modifier_key_background"
-                android:paddingStart="12dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="12dp"
-                android:paddingBottom="6dp"
-                android:text="@string/terminal_key_shift" />
-
-            <Button
-                android:id="@+id/minusKey"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="0dp"
-                android:minHeight="0dp"
-                android:paddingStart="12dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="12dp"
-                android:paddingBottom="6dp"
-                android:text="@string/terminal_key_minus" />
-
-            <Button
-                android:id="@+id/slashKey"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="0dp"
-                android:minHeight="0dp"
-                android:paddingStart="12dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="12dp"
-                android:paddingBottom="6dp"
-                android:text="@string/terminal_key_slash" />
-
-            <Button
-                android:id="@+id/pipeKey"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="0dp"
-                android:minHeight="0dp"
-                android:paddingStart="12dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="12dp"
-                android:paddingBottom="6dp"
-                android:text="@string/terminal_key_pipe" />
-
-            <Button
-                android:id="@+id/upKey"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="0dp"
-                android:minHeight="0dp"
-                android:paddingStart="12dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="12dp"
-                android:paddingBottom="6dp"
-                android:text="@string/terminal_key_up" />
-
-            <Button
-                android:id="@+id/downKey"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="0dp"
-                android:minHeight="0dp"
-                android:paddingStart="12dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="12dp"
-                android:paddingBottom="6dp"
-                android:text="@string/terminal_key_down" />
-
-            <Button
-                android:id="@+id/leftKey"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="0dp"
-                android:minHeight="0dp"
-                android:paddingStart="12dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="12dp"
-                android:paddingBottom="6dp"
-                android:text="@string/terminal_key_left" />
-
-            <Button
-                android:id="@+id/rightKey"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="0dp"
-                android:minHeight="0dp"
-                android:paddingStart="12dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="12dp"
-                android:paddingBottom="6dp"
-                android:text="@string/terminal_key_right" />
-        </LinearLayout>
-    </HorizontalScrollView>
-
     <com.termux.view.TerminalView
         android:id="@+id/terminalView"
         android:layout_width="match_parent"
@@ -202,4 +34,120 @@
         android:focusable="true"
         android:focusableInTouchMode="true"
         android:clickable="true" />
+
+    <!-- Extra keys as a two-row grid, like Termux: the grid fills the width and
+         each key stretches evenly. -->
+    <GridLayout
+        android:id="@+id/extraKeysGrid"
+        xmlns:android="http://schemas.android.com/apk/res/android"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/terminal_toolbar_background"
+        android:columnCount="7"
+        android:useDefaultMargins="false">
+
+        <Button
+            android:id="@+id/escKey"
+            style="@style/Widget.MaterialFiles.TerminalKeyButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:text="@string/terminal_key_esc" />
+
+        <Button
+            android:id="@+id/tabKey"
+            style="@style/Widget.MaterialFiles.TerminalKeyButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:text="@string/terminal_key_tab" />
+
+        <Button
+            android:id="@+id/ctrlKey"
+            style="@style/Widget.MaterialFiles.TerminalKeyButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:text="@string/terminal_key_ctrl" />
+
+        <Button
+            android:id="@+id/altKey"
+            style="@style/Widget.MaterialFiles.TerminalKeyButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:text="@string/terminal_key_alt" />
+
+        <Button
+            android:id="@+id/shiftKey"
+            style="@style/Widget.MaterialFiles.TerminalKeyButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:text="@string/terminal_key_shift" />
+
+        <Button
+            android:id="@+id/minusKey"
+            style="@style/Widget.MaterialFiles.TerminalKeyButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:text="@string/terminal_key_minus" />
+
+        <Button
+            android:id="@+id/slashKey"
+            style="@style/Widget.MaterialFiles.TerminalKeyButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:text="@string/terminal_key_slash" />
+
+        <Button
+            android:id="@+id/pipeKey"
+            style="@style/Widget.MaterialFiles.TerminalKeyButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:text="@string/terminal_key_pipe" />
+
+        <Button
+            android:id="@+id/upKey"
+            style="@style/Widget.MaterialFiles.TerminalKeyButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:text="@string/terminal_key_up" />
+
+        <Button
+            android:id="@+id/downKey"
+            style="@style/Widget.MaterialFiles.TerminalKeyButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:text="@string/terminal_key_down" />
+
+        <Button
+            android:id="@+id/leftKey"
+            style="@style/Widget.MaterialFiles.TerminalKeyButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:text="@string/terminal_key_left" />
+
+        <Button
+            android:id="@+id/rightKey"
+            style="@style/Widget.MaterialFiles.TerminalKeyButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:text="@string/terminal_key_right" />
+
+        <Button
+            android:id="@+id/collapseKey"
+            style="@style/Widget.MaterialFiles.TerminalKeyButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:text="@string/terminal_key_collapse" />
+    </GridLayout>
 </LinearLayout>

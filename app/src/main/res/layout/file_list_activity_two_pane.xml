@@ -61,6 +61,20 @@
                     app:popupTheme="?actionBarPopupTheme" />
             </FrameLayout>
 
+            <!--
+              ~ The shared breadcrumb bar, MT Manager style: fixed directly under the top
+              ~ bar (never scrolls away), it always shows the path of the ACTIVE pane and
+              ~ switches together with the active pane. The per-pane breadcrumb bars are
+              ~ hidden in two-pane mode.
+              -->
+            <me.zhanghai.android.files.filelist.BreadcrumbLayout
+                android:id="@+id/sharedBreadcrumbLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?colorAppBarSurface"
+                android:paddingStart="@dimen/content_start_margin_minus_12dp"
+                android:paddingEnd="@dimen/screen_edge_margin_minus_12dp" />
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="0dp"

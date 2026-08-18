@@ -383,7 +383,8 @@
             android:exported="true"
             android:label="@string/terminal_title"
             android:taskAffinity=""
-            android:theme="@style/Theme.MaterialFiles" />
+            android:theme="@style/Theme.MaterialFiles"
+            android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name="me.zhanghai.android.files.activitylauncher.ActivityLauncherActivity"

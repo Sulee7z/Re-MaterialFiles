@@ -449,10 +449,14 @@ class FileListAdapter(
         menu.findItem(R.id.action_copy).isVisible = !hasPickOptions
         val checked = file in selectedFiles
         holder.itemLayout.isChecked = checked
+        val isListRow = holder.descriptionText != null
+        val itemContext = holder.itemLayout.context
         holder.nameText.apply {
             if (wrapLongFileNames) {
-                // Wrap mode: let the name take as many lines as it needs (the item
-                // height becomes content-driven, see below), so the full name shows.
+                // Wrap mode: let the name take as many lines as it needs (two if it
+                // doesn't fit, three if that's not enough...), and let the row grow
+                // with it, so the full name always shows and the description is
+                // never clipped.
                 setSingleLine(false)
                 maxLines = Int.MAX_VALUE
                 ellipsize = null
@@ -468,20 +472,34 @@ class FileListAdapter(
                 ellipsize = TextUtils.TruncateAt.END
             }
         }
-        val isList = holder.descriptionText != null
-        val itemContext = holder.itemLayout.context
         holder.itemLayout.layoutParams = holder.itemLayout.layoutParams.apply {
             height = if (wrapLongFileNames) {
+                // Wrap mode: let the row grow with the wrapped name, but never below
+                // the original compact row height for the current density, so short
+                // names keep the original look and only long ones grow taller.
                 ViewGroup.LayoutParams.WRAP_CONTENT
-            } else if (isList && denseLayout) {
+            } else if (isListRow && denseLayout) {
                 itemContext.resources.getDimensionPixelSize(R.dimen.dense_two_line_list_item_height)
-            } else if (isList) {
+            } else if (isListRow) {
                 itemContext.resources.getDimensionPixelSize(R.dimen.two_line_list_item_height)
             } else {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             }
         }
-        if (!isList) {
+        // Keep the original compact row height as the minimum when wrapping, so the
+        // normal list still looks as compact as the original for short file names.
+        holder.itemLayout.minimumHeight = if (wrapLongFileNames && isListRow) {
+            itemContext.resources.getDimensionPixelSize(
+                if (denseLayout) {
+                    R.dimen.dense_two_line_list_item_height
+                } else {
+                    R.dimen.two_line_list_item_height
+                }
+            )
+        } else {
+            0
+        }
+        if (!isListRow) {
             // Grid item: the text row (icon + name + menu) has a fixed single-line
             // height by default; grow it with the wrapped name and restore it back.
             (holder.nameText.parent as? ViewGroup)?.layoutParams =

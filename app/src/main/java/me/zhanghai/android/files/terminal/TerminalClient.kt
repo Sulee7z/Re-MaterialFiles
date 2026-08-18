@@ -28,39 +28,89 @@ class TerminalClient(
 ) : TerminalViewClient, TerminalSessionClient {
 
     // Extra keys row modifier toggle states, read back by TerminalView during key handling.
+    // A modifier is "temporary" when tapped once (it is auto-cleared after the next key event),
+    // and "locked" when long-pressed (it stays active until toggled again), like Termux.
     @Volatile
-    var ctrlKey: Boolean = false
-        private set
+    private var ctrlKeyState: Boolean = false
     @Volatile
-    var altKey: Boolean = false
-        private set
+    private var ctrlKeyLocked: Boolean = false
     @Volatile
-    var shiftKey: Boolean = false
-        private set
+    private var altKeyState: Boolean = false
     @Volatile
-    var fnKey: Boolean = false
-        private set
+    private var altKeyLocked: Boolean = false
+    @Volatile
+    private var shiftKeyState: Boolean = false
+    @Volatile
+    private var shiftKeyLocked: Boolean = false
+    @Volatile
+    private var fnKeyState: Boolean = false
+    @Volatile
+    private var fnKeyLocked: Boolean = false
+
+    val ctrlKey: Boolean get() = ctrlKeyState
+    val altKey: Boolean get() = altKeyState
+    val shiftKey: Boolean get() = shiftKeyState
+    val fnKey: Boolean get() = fnKeyState
+
+    /** The currently active state of a modifier key (used to highlight it in the UI). */
+    fun isModifierActive(key: ModifierKey): Boolean = when (key) {
+        ModifierKey.CTRL -> ctrlKeyState
+        ModifierKey.ALT -> altKeyState
+        ModifierKey.SHIFT -> shiftKeyState
+        ModifierKey.FN -> fnKeyState
+    }
+
+    enum class ModifierKey { CTRL, ALT, SHIFT, FN }
+
+    /** Toggle a modifier on/off. Toggling off also clears any lock. */
+    fun toggleModifier(key: ModifierKey) {
+        when (key) {
+            ModifierKey.CTRL -> {
+                ctrlKeyState = !ctrlKeyState
+                if (!ctrlKeyState) ctrlKeyLocked = false
+            }
+            ModifierKey.ALT -> {
+                altKeyState = !altKeyState
+                if (!altKeyState) altKeyLocked = false
+            }
+            ModifierKey.SHIFT -> {
+                shiftKeyState = !shiftKeyState
+                if (!shiftKeyState) shiftKeyLocked = false
+            }
+            ModifierKey.FN -> {
+                fnKeyState = !fnKeyState
+                if (!fnKeyState) fnKeyLocked = false
+            }
+        }
+    }
+
+    /** Turn a modifier on and lock it (long press). */
+    fun lockModifier(key: ModifierKey) {
+        when (key) {
+            ModifierKey.CTRL -> { ctrlKeyState = true; ctrlKeyLocked = true }
+            ModifierKey.ALT -> { altKeyState = true; altKeyLocked = true }
+            ModifierKey.SHIFT -> { shiftKeyState = true; shiftKeyLocked = true }
+            ModifierKey.FN -> { fnKeyState = true; fnKeyLocked = true }
+        }
+    }
+
+    /** Clear every modifier (used when a non-modifier key is pressed). */
+    fun clearModifiers() {
+        if (!ctrlKeyLocked) ctrlKeyState = false
+        if (!altKeyLocked) altKeyState = false
+        if (!shiftKeyLocked) shiftKeyState = false
+        if (!fnKeyLocked) fnKeyState = false
+    }
 
     /** Whether the shell process under the session is still running. */
     @Volatile
     var isSessionAlive: Boolean = true
         private set
 
-    fun toggleCtrl() {
-        ctrlKey = !ctrlKey
-    }
-
-    fun toggleAlt() {
-        altKey = !altKey
-    }
-
-    fun toggleShift() {
-        shiftKey = !shiftKey
-    }
-
-    fun toggleFn() {
-        fnKey = !fnKey
-    }
+    fun toggleCtrl() = toggleModifier(ModifierKey.CTRL)
+    fun toggleAlt() = toggleModifier(ModifierKey.ALT)
+    fun toggleShift() = toggleModifier(ModifierKey.SHIFT)
+    fun toggleFn() = toggleModifier(ModifierKey.FN)
 
     // TerminalViewClient
 
@@ -102,13 +152,31 @@ class TerminalClient(
         return false
     }
 
-    override fun readControlKey() = ctrlKey
+    override fun readControlKey(): Boolean {
+        // A temporary (non-locked) modifier applies to the next key event only and is
+        // auto-cleared after being read, exactly like Termux's readSpecialButton(..., true).
+        val active = ctrlKeyState
+        if (active && !ctrlKeyLocked) ctrlKeyState = false
+        return active
+    }
 
-    override fun readAltKey() = altKey
+    override fun readAltKey(): Boolean {
+        val active = altKeyState
+        if (active && !altKeyLocked) altKeyState = false
+        return active
+    }
 
-    override fun readShiftKey() = shiftKey
+    override fun readShiftKey(): Boolean {
+        val active = shiftKeyState
+        if (active && !shiftKeyLocked) shiftKeyState = false
+        return active
+    }
 
-    override fun readFnKey() = fnKey
+    override fun readFnKey(): Boolean {
+        val active = fnKeyState
+        if (active && !fnKeyLocked) fnKeyState = false
+        return active
+    }
 
     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession?): Boolean {
         // Forward codepoints handled by the view; return false to continue default handling.

@@ -804,6 +804,8 @@
     <string name="terminal_key_down" translatable="false">▼</string>
     <string name="terminal_key_left" translatable="false">◀</string>
     <string name="terminal_key_right" translatable="false">▶</string>
+    <string name="terminal_key_collapse" translatable="false">▾</string>
+    <string name="terminal_key_expand" translatable="false">▴</string>
 
     <string name="activity_launcher_title">Activity launcher</string>
     <string name="activity_launcher_search_apps">Search apps</string>
