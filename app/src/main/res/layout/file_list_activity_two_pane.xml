@@ -79,12 +79,14 @@
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_weight="1"
+                android:clipChildren="false"
                 android:orientation="horizontal">
 
                 <!--
                   ~ Each pane is a file-list container. The per-pane path display is the
                   ~ fragment's own breadcrumb bar (same component as single-pane mode); the
-                  ~ active pane is marked by a highlight border + dimmed inactive pane.
+                  ~ active pane is marked by a raised elevation shadow overlaying the divider
+                  ~ and the dimmed inactive pane.
                   ~ Fixed ids so FragmentManager can restore the two FileListFragments across
                   ~ Activity recreation. Pane widths are set in code (no layout weights):
                   ~ DrawerLayout (the FileListFragment root) crashes when a weight-based
@@ -100,6 +102,16 @@
                         android:id="@+id/leftPaneContent"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent" />
+
+                    <!-- Shadow cast by the ACTIVE (right) pane onto the inactive left
+                         pane's divider side; fades out to the left, MT Manager style. -->
+                    <View
+                        android:id="@+id/leftPaneShadow"
+                        android:layout_width="@dimen/two_pane_shadow_width"
+                        android:layout_height="match_parent"
+                        android:layout_gravity="end"
+                        android:background="@drawable/two_pane_shadow_right_to_left"
+                        android:visibility="gone" />
                 </FrameLayout>
 
                 <View
@@ -118,6 +130,16 @@
                         android:id="@+id/rightPaneContent"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent" />
+
+                    <!-- Shadow cast by the ACTIVE (left) pane onto the inactive right
+                         pane's divider side; fades out to the right, MT Manager style. -->
+                    <View
+                        android:id="@+id/rightPaneShadow"
+                        android:layout_width="@dimen/two_pane_shadow_width"
+                        android:layout_height="match_parent"
+                        android:layout_gravity="start"
+                        android:background="@drawable/two_pane_shadow_left_to_right"
+                        android:visibility="gone" />
                 </FrameLayout>
             </LinearLayout>
         </LinearLayout>

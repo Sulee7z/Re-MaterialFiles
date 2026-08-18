@@ -439,33 +439,16 @@ class FileListActivity : AppActivity() {
         leftPane.isVisible = true
         rightPane.isVisible = true
         divider.isVisible = true
-        // Active-pane marker: a highlight border around the active pane container plus a
-        // dimmed (alpha 0.6) inactive pane, MT Manager style. The border color resolves
-        // from the theme so it matches whatever theme (MD2/MD3) is active.
-        fun resolveColor(attrRes: Int, fallbackRes: Int): Int {
-            val typedValue = android.util.TypedValue()
-            return if (theme.resolveAttribute(attrRes, typedValue, true)) {
-                typedValue.data
-            } else {
-                getColor(fallbackRes)
-            }
-        }
-        val borderColor = resolveColor(
-            android.R.attr.colorAccent,
-            android.R.color.holo_blue_light
-        )
-        val paneStroke = android.util.TypedValue.applyDimension(
-            android.util.TypedValue.COMPLEX_UNIT_DIP, 2f, resources.displayMetrics
-        ).toInt()
-        fun applyPaneHighlight(pane: View, active: Boolean) {
-            val border = android.graphics.drawable.GradientDrawable()
-            if (active) {
-                border.setStroke(paneStroke, borderColor)
-            }
-            pane.background = border
-        }
-        applyPaneHighlight(leftPane, !TwoPaneState.activePaneSecondary)
-        applyPaneHighlight(rightPane, TwoPaneState.activePaneSecondary)
+        // Active-pane marker, MT Manager style: the ACTIVE pane casts a soft shadow
+        // gradient onto the INACTIVE pane's divider-facing edge, fading out horizontally
+        // toward the pane's outer edge (no blue border / no box elevation).
+        val leftActive = !TwoPaneState.activePaneSecondary
+        val leftShadow = findViewById<View>(R.id.leftPaneShadow)
+        val rightShadow = findViewById<View>(R.id.rightPaneShadow)
+        // Shadow falls on the inactive pane's divider side: when the right pane is
+        // active it shadows the left pane's right edge, and vice versa.
+        leftShadow.isVisible = !leftActive
+        rightShadow.isVisible = leftActive
         // Dim the inactive pane's content.
         val leftContent = findViewById<View>(R.id.leftPaneContent)
         val rightContent = findViewById<View>(R.id.rightPaneContent)
