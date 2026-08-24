@@ -12,6 +12,8 @@ import androidx.lifecycle.viewModelScope
 import java8.nio.file.Path
 import java8.nio.file.Paths
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -29,12 +31,19 @@ class SearchIndexViewModel : ViewModel() {
     val indexInfoLiveData: LiveData<Pair<Long, Long>>
         get() = _indexInfoLiveData
 
+    private var searchJob: Job? = null
+
     fun search(query: String) {
+        // Cancel the in-flight query and debounce: one SQLite search per settled input
+        // instead of one per keystroke, and a slow older query can never land after a
+        // newer one and overwrite its results with stale rows.
+        searchJob?.cancel()
         if (query.isBlank()) {
             _resultsLiveData.value = emptyList()
             return
         }
-        viewModelScope.launch {
+        searchJob = viewModelScope.launch {
+            delay(SEARCH_DEBOUNCE_MILLIS)
             val results = withContext(Dispatchers.IO) {
                 SearchIndexDb.search(query)
             }
@@ -46,6 +55,11 @@ class SearchIndexViewModel : ViewModel() {
         _indexInfoLiveData.postValue(
             FileIndexer.lastIndexedEntryCount to FileIndexer.lastIndexedTimeMillis
         )
+    }
+
+    /** Publishes index info restored from the database by the fragment. */
+    fun postIndexInfo(count: Long, timeMillis: Long) {
+        _indexInfoLiveData.value = count to timeMillis
     }
 
     fun rebuildIndex(roots: List<Path>) {
@@ -64,4 +78,8 @@ class SearchIndexViewModel : ViewModel() {
     }
 
     fun getIndexRoots(): List<Path> = FileIndexer.getIndexRoots()
+
+    private companion object {
+        const val SEARCH_DEBOUNCE_MILLIS = 200L
+    }
 }

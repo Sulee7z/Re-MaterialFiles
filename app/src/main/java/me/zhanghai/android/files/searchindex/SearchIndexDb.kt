@@ -18,8 +18,9 @@ import java.io.File
 object SearchIndexDb {
 
     private const val DATABASE_NAME = "search_index.db"
-    private const val DATABASE_VERSION = 1
+    private const val DATABASE_VERSION = 2
     private const val TABLE = "files"
+    private const val META_TABLE = "meta"
 
     private const val COL_PATH = "path"
     private const val COL_NAME = "name"
@@ -49,10 +50,13 @@ object SearchIndexDb {
     @Synchronized
     fun hasEntriesUnder(pathPrefix: String): Boolean {
         val normalizedPrefix = pathPrefix.trimEnd('/')
-        val escapedPrefix = escapeLike(normalizedPrefix)
         return helper.readableDatabase.rawQuery(
-            "SELECT 1 FROM $TABLE WHERE $COL_PATH = ? OR $COL_PATH LIKE ? ESCAPE '\\' LIMIT 1",
-            arrayOf(normalizedPrefix, "$escapedPrefix/%")
+            // Byte-range form of "path = prefix OR path starts with prefix/", which the
+            // path primary-key index can serve directly ('/' is the only character in
+            // the ['/', '0') byte range, so [prefix/, prefix0) is exactly the subtree).
+            "SELECT 1 FROM $TABLE WHERE $COL_PATH = ? OR ($COL_PATH >= ? AND $COL_PATH < ?)" +
+                " LIMIT 1",
+            arrayOf(normalizedPrefix, "$normalizedPrefix/", "${normalizedPrefix}0")
         ).use { cursor -> cursor.moveToFirst() }
     }
 
@@ -120,6 +124,25 @@ object SearchIndexDb {
         helper.writableDatabase.delete(TABLE, null, null)
     }
 
+    /** Persists a long value (e.g. the last index completion time) next to the index. */
+    @Synchronized
+    fun putMetaLong(key: String, value: Long) {
+        helper.writableDatabase.insertWithOnConflict(
+            META_TABLE, null,
+            ContentValues().apply {
+                put("key", key)
+                put("value", value)
+            },
+            SQLiteDatabase.CONFLICT_REPLACE
+        )
+    }
+
+    @Synchronized
+    fun getMetaLong(key: String): Long? =
+        helper.readableDatabase.query(
+            META_TABLE, arrayOf("value"), "key = ?", arrayOf(key), null, null, null
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else null }
+
     /**
      * Searches the index with an Everything-style query: space-separated AND terms, `|` OR
      * alternatives, `!` exclusions, `"..."` exact phrases, `file:`/`folder:`/`doc:`/`pic:`/
@@ -131,9 +154,9 @@ object SearchIndexDb {
         // Each OR subgroup contributes its own conjunction of AND terms; empty subgroups
         // (pure-filter queries like "size:>10mb") are treated as matching everything.
         val nonEmptySubgroups = query.subgroups.filter { it.isNotEmpty() }
-        val groupSql = nonEmptySubgroups.joinToString(" OR ") { groupTerms ->
-            val (conds, args) = nameConditions(groupTerms)
-            "(${conds.joinToString(" AND ")})"
+        val subgroupConditions = nonEmptySubgroups.map { nameConditions(it) }
+        val groupSql = subgroupConditions.joinToString(" OR ") { (conditions, _) ->
+            "(${conditions.joinToString(" AND ")})"
         }
         val commonConditions = mutableListOf<String>()
         val commonArgs = mutableListOf<Any>()
@@ -182,19 +205,23 @@ object SearchIndexDb {
         }
         query.pathPrefix?.let { prefix ->
             val normalizedPrefix = prefix.trimEnd('/')
-            // Exact match takes the raw prefix (LIKE escaping would corrupt names containing
-            // underscores/percent signs); only the LIKE variant needs escaping.
-            commonConditions += "($COL_PATH = ? OR $COL_PATH LIKE ? ESCAPE '\\')"
+            // Byte-range form of "path = prefix OR path starts with prefix/" so scoped
+            // searches are served by the path primary-key index instead of forcing a
+            // full-table LIKE scan ('/' is the only character in ['/', '0'), so the
+            // range [prefix/, prefix0) is exactly the prefix subtree). Binary collation
+            // (the default for these columns) makes the byte bounds exact.
+            commonConditions += "($COL_PATH = ? OR ($COL_PATH >= ? AND $COL_PATH < ?))"
             commonArgs += normalizedPrefix
-            commonArgs += "${escapeLike(normalizedPrefix)}/%"
+            commonArgs += "$normalizedPrefix/"
+            commonArgs += "${normalizedPrefix}0"
         }
 
         val selectionParts = mutableListOf<String>()
         val allArgs = mutableListOf<Any>()
-        if (groupSql.isNotEmpty()) {
+        if (subgroupConditions.isNotEmpty()) {
             selectionParts += "($groupSql)"
-            nonEmptySubgroups.forEach { groupTerms ->
-                allArgs.addAll(nameConditions(groupTerms).second)
+            subgroupConditions.forEach { (_, args) ->
+                allArgs.addAll(args)
             }
         }
         selectionParts.addAll(commonConditions)
@@ -289,6 +316,7 @@ object SearchIndexDb {
                     "$COL_SIZE INTEGER, $COL_MTIME INTEGER, $COL_IS_DIR INTEGER)"
             )
             db.execSQL("CREATE INDEX idx_name ON $TABLE ($COL_NAME)")
+            db.execSQL("CREATE TABLE $META_TABLE (key TEXT PRIMARY KEY, value INTEGER)")
         }
 
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {

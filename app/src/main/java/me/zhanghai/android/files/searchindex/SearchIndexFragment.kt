@@ -122,9 +122,19 @@ class SearchIndexFragment : Fragment() {
             }
         }
 
-        viewModel.refreshIndexInfo()
-        if (!FileIndexer.isIndexed()) {
-            rebuildIndex()
+        // Restore the previous index state from the database (off the main thread) before
+        // deciding whether a build is needed: an existing index must stay valid and
+        // searchable right away, instead of a cold start mistaking it for "not indexed"
+        // and forcing a full (clearing!) rebuild on the first entry.
+        val appContext = requireContext().applicationContext
+        lifecycleScope.launch {
+            val (count, timeMillis) = withContext(Dispatchers.IO) {
+                FileIndexer.restoreStateFromDatabase(appContext)
+            }
+            viewModel.postIndexInfo(count, timeMillis)
+            if (!FileIndexer.isIndexed()) {
+                rebuildIndex()
+            }
         }
     }
 

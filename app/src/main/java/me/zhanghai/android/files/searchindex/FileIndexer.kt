@@ -7,7 +7,6 @@ package me.zhanghai.android.files.searchindex
 
 import me.zhanghai.android.files.compat.directoryCompat
 import me.zhanghai.android.files.compat.stateCompat
-import me.zhanghai.android.files.provider.common.isDirectory
 import me.zhanghai.android.files.storage.StorageVolumeListLiveData
 import android.os.Environment
 import java8.nio.file.Files
@@ -69,6 +68,40 @@ object FileIndexer {
         private set
 
     fun isIndexed(): Boolean = lastIndexedEntryCount > 0
+
+    private const val META_LAST_INDEX_TIME = "last_indexed_time_millis"
+
+    @Volatile
+    private var stateRestoredFromDatabase = false
+
+    /**
+     * Restores the in-memory index state from the database, so a previously built index
+     * survives process death: without this the entry count starts at 0 on every cold
+     * start, the search screen mistook that for "not indexed" and forced a full (clearing)
+     * rebuild before searching worked again. Idempotent and safe to call repeatedly; the
+     * COUNT(*) probe runs on the calling thread, so invoke it off the main thread.
+     */
+    @Synchronized
+    fun restoreStateFromDatabase(context: android.content.Context): Pair<Long, Long> {
+        SearchIndexDb.initialize(context.applicationContext)
+        if (!stateRestoredFromDatabase) {
+            stateRestoredFromDatabase = true
+            val count = try {
+                SearchIndexDb.count()
+            } catch (e: Exception) {
+                0L
+            }
+            if (count > 0) {
+                lastIndexedEntryCount = count
+                lastIndexedTimeMillis = try {
+                    SearchIndexDb.getMetaLong(META_LAST_INDEX_TIME) ?: 0L
+                } catch (e: Exception) {
+                    0L
+                }
+            }
+        }
+        return lastIndexedEntryCount to lastIndexedTimeMillis
+    }
 
     /**
      * Computes the directories to index: every mounted storage volume, plus the system data
@@ -153,11 +186,10 @@ object FileIndexer {
                         if (entry.toString() in visited) {
                             continue
                         }
-                        val isDirectory = try {
-                            entry.isDirectory()
-                        } catch (e: Exception) {
-                            continue
-                        }
+                        // One attribute read per entry: isDirectory comes from the same
+                        // attributes instead of a second stat round trip, halving the
+                        // file-system traffic (the dominant cost over the root/Shizuku
+                        // Binder file service on restricted paths).
                         val attributes = try {
                             Files.readAttributes(
                                 entry, java8.nio.file.attribute.BasicFileAttributes::class.java
@@ -165,6 +197,7 @@ object FileIndexer {
                         } catch (e: Exception) {
                             continue
                         }
+                        val isDirectory = attributes.isDirectory
                         val fileName = entry.fileName?.toString() ?: continue
                         batch.add(
                             SearchIndexDb.IndexedFileInsert(
@@ -199,6 +232,13 @@ object FileIndexer {
                 }
                 lastIndexedEntryCount = count
                 lastIndexedTimeMillis = System.currentTimeMillis()
+                // Persist the completion time so it survives process death along with the
+                // index rows themselves.
+                try {
+                    SearchIndexDb.putMetaLong(META_LAST_INDEX_TIME, lastIndexedTimeMillis)
+                } catch (e: Exception) {
+                    // Non-fatal: only the displayed "indexed at" timestamp is affected.
+                }
                 onProgress(count)
                 onDone(null)
             } catch (e: Throwable) {
