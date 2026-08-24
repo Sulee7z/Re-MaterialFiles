@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (c) 2018 Hai Zhang <dreaming.in.code.zh@gmail.com>
  * All Rights Reserved.
  */
@@ -98,6 +98,7 @@ import me.zhanghai.android.files.databinding.FileListFragmentIncludeBinding
 import me.zhanghai.android.files.databinding.FileListFragmentSpeedDialIncludeBinding
 import me.zhanghai.android.files.file.FileItem
 import me.zhanghai.android.files.file.MimeType
+import me.zhanghai.android.files.file.asMimeType
 import me.zhanghai.android.files.file.asMimeTypeOrNull
 import me.zhanghai.android.files.file.extension
 import me.zhanghai.android.files.file.fileProviderUri
@@ -385,6 +386,9 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             // Two-pane mode also uses a smaller default font (~1.5 notches below
             // normal) so more files fit per pane.
             adapter.useSmallFont = true
+            // Horizontal drag on a row starts a cross-pane drag-and-drop (drop on the
+            // other pane moves the files there).
+            adapter.isCrossPaneDragEnabled = true
         }
         if (!isTwoPaneMode) {
             binding.speedDialView.inflate(R.menu.file_list_speed_dial)
@@ -643,6 +647,14 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         }
         return this
     }
+
+    /**
+     * The view model the shared top-bar menu reflects and acts on: in two-pane mode the
+     * menu (check states for sort/view type, search state) follows the ACTIVE pane, in
+     * single-pane mode it is this fragment's own.
+     */
+    private val menuViewModel: FileListViewModel
+        get() = if (isTwoPaneMode) activePaneFragment().viewModel else viewModel
 
     override fun onPrepareOptionsMenu(menu: Menu) {
         super.onPrepareOptionsMenu(menu)
@@ -966,18 +978,18 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         if (!this::menuBinding.isInitialized) {
             return
         }
-        val searchViewExpanded = viewModel.isSearchViewExpanded
+        val searchViewExpanded = menuViewModel.isSearchViewExpanded
         menuBinding.viewSortItem.isVisible = !searchViewExpanded
         if (searchViewExpanded) {
             return
         }
-        val viewType = viewModel.viewType
+        val viewType = menuViewModel.viewType
         val checkedViewTypeItem = when (viewType) {
             FileViewType.LIST -> menuBinding.viewListItem
             FileViewType.GRID -> menuBinding.viewGridItem
         }
         checkedViewTypeItem.isChecked = true
-        val sortOptions = viewModel.sortOptions
+        val sortOptions = menuViewModel.sortOptions
         val checkedSortByItem = when (sortOptions.by) {
             By.NAME -> menuBinding.sortByNameItem
             By.TYPE -> menuBinding.sortByTypeItem
@@ -1108,7 +1120,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         if (!this::menuBinding.isInitialized) {
             return
         }
-        val pickOptions = viewModel.pickOptions
+        val pickOptions = menuViewModel.pickOptions
         menuBinding.selectAllItem.isVisible = pickOptions == null || pickOptions.allowMultiple
     }
 
@@ -1584,6 +1596,9 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     private fun extractFiles(files: FileItemSet) {
+        // Copying an archive's root extracts it; the job targets a subfolder named after
+        // the archive (extension stripped), so top-level entries don't spray into the
+        // current directory. The bottom paste bar shows "extract here" for the paste.
         copyFiles(files.mapTo(fileItemSetOf()) { it.createDummyArchiveRoot() })
         viewModel.selectFiles(files, false)
     }
@@ -1624,12 +1639,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     private fun updateBottomToolbar() {
-        // Two-pane mode hides the bottom paste bar entirely: it would sit behind the FAB
-        // at the bottom-right (ugly), and cross-pane transfers are done differently.
         if (isTwoPaneMode) {
-            if (bottomActionMode.isActive) {
-                bottomActionMode.finish()
-            }
+            // Two-pane mode hosts the paste bar at the Activity level (it spans both
+            // panes); its paste action targets the ACTIVE pane's current directory.
+            (requireActivity() as FileListActivity).updateTwoPaneBottomToolbar()
             return
         }
         val pickOptions = viewModel.pickOptions
@@ -1845,6 +1858,26 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         if (openWithBuiltInViewer(file)) {
             return
         }
+        if (file.mimeType == MimeType.GENERIC) {
+            // No extension or an unrecognized one: sniff the file header and route by
+            // content (ELF/DEX analyzers, images, text) instead of always asking. When
+            // the content is an unknown binary, fall through with the sniffed MIME so
+            // the system intent still reaches handlers that filter by type.
+            viewLifecycleOwner.lifecycleScope.launch {
+                val contentIntent: Intent?
+                val sniffedMime: MimeType?
+                withContext(Dispatchers.IO) {
+                    contentIntent = BuiltInFileOpeners.createOpenIntentForContent(file.path)
+                    sniffedMime = BuiltInFileOpeners.sniffMimeType(file.path)?.asMimeType()
+                }
+                if (contentIntent != null) {
+                    startActivitySafe(contentIntent)
+                } else {
+                    openFileWithIntent(file, false, sniffedMime)
+                }
+            }
+            return
+        }
         openFileWithIntent(file, false)
     }
 
@@ -1880,6 +1913,17 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     override fun openFileWith(file: FileItem) {
+        if (file.mimeType == MimeType.GENERIC) {
+            // No extension / unrecognized extension: sniff the content so the system
+            // chooser is filtered by the real type instead of the generic octet-stream.
+            viewLifecycleOwner.lifecycleScope.launch {
+                val sniffedMime: MimeType? = withContext(Dispatchers.IO) {
+                    BuiltInFileOpeners.sniffMimeType(file.path)?.asMimeType()
+                }
+                openFileWithIntent(file, true, sniffedMime)
+            }
+            return
+        }
         openFileWithIntent(file, true)
     }
 
@@ -1902,9 +1946,13 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         return true
     }
 
-    private fun openFileWithIntent(file: FileItem, withChooser: Boolean) {
+    private fun openFileWithIntent(
+        file: FileItem,
+        withChooser: Boolean,
+        mimeTypeOverride: MimeType? = null
+    ) {
         val path = file.path
-        val mimeType = file.mimeType
+        val mimeType = mimeTypeOverride ?: file.mimeType
         if (path.isArchivePath) {
             FileJobService.open(path, mimeType, withChooser, requireContext())
         } else {

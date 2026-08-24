@@ -3,6 +3,9 @@
 <!--
   ~ Copyright (c) 2018 Hai Zhang <dreaming.in.code.zh@gmail.com>
   ~ All Rights Reserved.
+  ~
+  ~ Overflow order puts the frequent list actions (refresh, select all, hidden files)
+  ~ right after the always-shown search/sort items; navigation and tool entries follow.
   -->
 
 <menu
@@ -68,25 +71,6 @@
     </item>
 
     <item
-        android:id="@+id/action_new_task"
-        android:orderInCategory="100"
-        android:title="@string/file_list_action_new_task"
-        app:showAsAction="never" />
-
-    <item
-        android:id="@+id/action_navigate_up"
-        android:orderInCategory="100"
-        android:title="@string/file_list_action_navigate_up"
-        app:showAsAction="never" />
-
-    <item
-        android:id="@+id/action_navigate_to"
-        android:alphabeticShortcut="l"
-        android:orderInCategory="100"
-        android:title="@string/file_list_action_navigate_to"
-        app:showAsAction="never" />
-
-    <item
         android:id="@+id/action_refresh"
         android:alphabeticShortcut="r"
         android:orderInCategory="100"
@@ -106,6 +90,25 @@
         android:orderInCategory="100"
         android:title="@string/file_list_action_show_hidden_files"
         android:checkable="true"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_new_task"
+        android:orderInCategory="100"
+        android:title="@string/file_list_action_new_task"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_navigate_up"
+        android:orderInCategory="100"
+        android:title="@string/file_list_action_navigate_up"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_navigate_to"
+        android:alphabeticShortcut="l"
+        android:orderInCategory="100"
+        android:title="@string/file_list_action_navigate_to"
         app:showAsAction="never" />
 
     <item
@@ -162,4 +165,3 @@
         android:title="@string/file_list_action_create_shortcut"
         app:showAsAction="never" />
 </menu>
-

@@ -76,6 +76,7 @@
                 android:paddingEnd="@dimen/screen_edge_margin_minus_12dp" />
 
             <LinearLayout
+                android:id="@+id/paneRow"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_weight="1"
@@ -143,6 +144,23 @@
                 </FrameLayout>
             </LinearLayout>
         </LinearLayout>
+
+        <!-- Paste bar (two-pane): shown when the shared clipboard holds entries; its
+             paste action targets the ACTIVE pane. The FAB shifts up above it while it
+             is visible. -->
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/bottomToolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?actionBarSize"
+            android:layout_gravity="bottom"
+            android:background="?colorSurface"
+            android:elevation="@dimen/design_appbar_elevation"
+            android:fitsSystemWindows="true"
+            android:theme="?actionBarTheme"
+            android:visibility="gone"
+            app:navigationIcon="@drawable/close_icon_control_normal_24dp"
+            app:navigationContentDescription="@string/close"
+            app:popupTheme="?actionBarPopupTheme" />
 
         <com.leinardi.android.speeddial.SpeedDialOverlayLayout
             android:id="@+id/fabBgView"

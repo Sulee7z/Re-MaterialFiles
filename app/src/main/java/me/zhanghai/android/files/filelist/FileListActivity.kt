@@ -13,10 +13,12 @@ import android.view.KeyEvent
 import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.core.view.GravityCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.isVisible
+import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePaddingRelative
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.fragment.app.commit
@@ -29,6 +31,8 @@ import me.zhanghai.android.files.file.MimeType
 import me.zhanghai.android.files.navigation.NavigationFragment
 import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.ui.OverlayToolbarActionMode
+import me.zhanghai.android.files.ui.ToolbarActionMode
+import me.zhanghai.android.files.provider.archive.isArchivePath
 import me.zhanghai.android.files.util.createIntent
 import me.zhanghai.android.files.util.extraPath
 import me.zhanghai.android.files.util.putArgs
@@ -44,6 +48,18 @@ class FileListActivity : AppActivity() {
     /** The shared breadcrumb bar (MT Manager style): fixed under the top bar, it always
      *  shows the path of the active pane and follows the active-pane switches. */
     private lateinit var sharedBreadcrumbLayout: BreadcrumbLayout
+
+    /** The two-pane paste bar (bottom): its paste action targets the active pane. */
+    private lateinit var twoPaneBottomToolbar: androidx.appcompat.widget.Toolbar
+
+    private lateinit var twoPaneBottomActionMode: ToolbarActionMode
+
+    private var actionBarSizePx: Int = 0
+
+    // Two-pane back-chain callbacks: they disable themselves while falling through (e.g.
+    // back at a pane's root), and must be re-enabled or every later back would exit.
+    private lateinit var twoPaneDrawerCloseCallback: androidx.activity.OnBackPressedCallback
+    private lateinit var twoPanePaneBackCallback: androidx.activity.OnBackPressedCallback
 
     /** The two-pane value this Activity was created with; used to rebuild only on change.
      *  Computed in onCreate() because it reads intent, which is only set after attach(). */
@@ -121,7 +137,7 @@ class FileListActivity : AppActivity() {
             // and grow the top bar by the status-bar height so its background extends
             // under the status bar while its content keeps the full action-bar size.
             val topBarFrame = findViewById<View>(R.id.sharedTopBarFrame)
-            val actionBarSize = TypedValue().let { typedValue ->
+            actionBarSizePx = TypedValue().let { typedValue ->
                 if (theme.resolveAttribute(android.R.attr.actionBarSize, typedValue, true)) {
                     resources.getDimensionPixelSize(typedValue.resourceId)
                 } else {
@@ -134,10 +150,15 @@ class FileListActivity : AppActivity() {
                 val top = insets.systemWindowInsetTop
                 if (topBarFrame.paddingTop != top) {
                     topBarFrame.updatePaddingRelative(top = top)
-                    topBarFrame.layoutParams.height = actionBarSize + top
+                    topBarFrame.layoutParams.height = actionBarSizePx + top
                 }
                 insets
             }
+            // The two-pane paste bar (bottom): its paste action targets the active pane.
+            twoPaneBottomToolbar = findViewById(R.id.bottomToolbar)
+            twoPaneBottomActionMode = TwoPaneBottomToolbarActionMode(
+                twoPaneBottomToolbar, twoPaneBottomToolbar
+            )
             // The shared top bar spans both panes and hosts the activity action bar
             // (search/sort/three dots); the per-pane toolbars stay hidden. The multi-select
             // action bar renders in the SAME top bar layer (sharedOverlayToolbar), so
@@ -218,9 +239,14 @@ class FileListActivity : AppActivity() {
             val drawerPanelWidth = (resources.displayMetrics.widthPixels * 0.65f).toInt()
             findViewById<View>(R.id.activityNavigationFragment).layoutParams.width =
                 drawerPanelWidth
+            // Lock the drawer's edge-swipe gesture in two-pane mode: the left edge opens
+            // the LEFT pane's own back swipe instead (the drawer still opens via the
+            // hamburger button).
+            findViewById<DrawerLayout>(R.id.activityDrawerLayout).setDrawerLockMode(
+                DrawerLayout.LOCK_MODE_LOCKED_CLOSED, GravityCompat.START
+            )
             // Back key closes the navigation drawer first.
-            onBackPressedDispatcher.addCallback(
-                this,
+            twoPaneDrawerCloseCallback =
                 object : androidx.activity.OnBackPressedCallback(true) {
                     override fun handleOnBackPressed() {
                         val drawerLayout =
@@ -233,7 +259,7 @@ class FileListActivity : AppActivity() {
                         }
                     }
                 }
-            )
+            onBackPressedDispatcher.addCallback(this, twoPaneDrawerCloseCallback)
             supportActionBar?.setDisplayHomeAsUpEnabled(true)
             supportActionBar?.setHomeAsUpIndicator(R.drawable.menu_icon_control_normal_24dp)
             supportActionBar?.setDisplayShowTitleEnabled(false)
@@ -249,8 +275,7 @@ class FileListActivity : AppActivity() {
             // would wrongly mark the right pane as active and break "create in active pane".
             // The RecyclerView listeners are set up in FileListFragment; the back key and
             // the FAB both read TwoPaneState.activePaneSecondary.
-            onBackPressedDispatcher.addCallback(
-                this,
+            twoPanePaneBackCallback =
                 object : androidx.activity.OnBackPressedCallback(true) {
                     override fun handleOnBackPressed() {
                         val activeFragment = if (TwoPaneState.activePaneSecondary) {
@@ -270,7 +295,7 @@ class FileListActivity : AppActivity() {
                         }
                     }
                 }
-            )
+            onBackPressedDispatcher.addCallback(this, twoPanePaneBackCallback)
             if (savedInstanceState == null) {
                 val leftFragment = FileListFragment().putArgs(FileListFragment.Args(intent))
                 supportFragmentManager.commit { add(R.id.leftPaneContent, leftFragment) }
@@ -284,6 +309,10 @@ class FileListActivity : AppActivity() {
             // The pane fragments are (or will be) available now; apply the responsive
             // layout and wire the switch bar / highlight.
             setupResponsivePanes()
+            // Cross-pane drag-and-drop: dropping files over the OTHER pane's container
+            // moves them into that pane's current directory.
+            installPaneDropTarget(findViewById(R.id.leftPaneContent), isSecondaryPane = false)
+            installPaneDropTarget(findViewById(R.id.rightPaneContent), isSecondaryPane = true)
             // Create the drawer AFTER the panes so its listener can always find a pane
             // fragment (NavigationFragment.onActivityCreated immediately observes the path).
             if (savedInstanceState == null) {
@@ -337,6 +366,13 @@ class FileListActivity : AppActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Re-arm the two-pane back chain: its callbacks disable themselves while falling
+        // through (back at a pane's root), and without this a home -> return round trip
+        // would leave every later back gesture exiting to the desktop.
+        if (twoPaneAtCreation && ::twoPanePaneBackCallback.isInitialized) {
+            twoPanePaneBackCallback.isEnabled = true
+            twoPaneDrawerCloseCallback.isEnabled = true
+        }
         // Apply two-pane setting changes when returning from the settings screen: the
         // Activity is stopped while the setting screen is on top. Recreate() would restore
         // the old fragment hierarchy into containers that no longer match the new pane
@@ -407,8 +443,14 @@ class FileListActivity : AppActivity() {
                 // the active pane either (a resize is not "operating" either pane).
                 val dividerTouched = ev.rawX >= divider.x &&
                     ev.rawX <= divider.x + divider.width
-                if (!fabTouched && !topBarTouched && !breadcrumbTouched && !drawerTouched &&
-                    !dividerTouched
+                // Touches in the system back-gesture zones (screen edges) must not flip
+                // the active pane or evaluate the FAB: a horizontal swipe there is the
+                // system back gesture and has to pass through untouched.
+                val gestureZonePx = SYSTEM_GESTURE_ZONE_DP * resources.displayMetrics.density
+                val inSystemGestureZone = ev.rawX <= gestureZonePx ||
+                    ev.rawX >= resources.displayMetrics.widthPixels - gestureZonePx
+                if (!inSystemGestureZone && !fabTouched && !topBarTouched &&
+                    !breadcrumbTouched && !drawerTouched && !dividerTouched
                 ) {
                     TwoPaneState.setActivePaneSecondary(ev.rawX > divider.x)
                 }
@@ -416,6 +458,7 @@ class FileListActivity : AppActivity() {
         }
         return super.dispatchTouchEvent(ev)
     }
+
 
     /**
      * MT Manager style: the two panes are ALWAYS shown side by side, each exactly half
@@ -426,7 +469,15 @@ class FileListActivity : AppActivity() {
      */
     private fun setupResponsivePanes() {
         // Listen for active-pane changes to keep the highlight in sync.
-        TwoPaneState.activePaneSecondaryListener = { updateResponsivePanes() }
+        TwoPaneState.activePaneSecondaryListener = {
+            updateResponsivePanes()
+            // Refresh the shared top-bar menu so its check states (sort, view type,
+            // show-hidden) follow the newly active pane. onCreateOptionsMenu re-expands
+            // the search view with the active pane's query, so an open search survives.
+            invalidateOptionsMenu()
+            // The paste bar's enabled state depends on the active pane's path.
+            updateTwoPaneBottomToolbar()
+        }
         setupDividerDrag()
         updateResponsivePanes()
     }
@@ -524,6 +575,167 @@ class FileListActivity : AppActivity() {
     }
 
     /**
+     * Updates the two-pane paste bar from the shared clipboard state. Called by both
+     * pane fragments (the clipboard is shared) and on active-pane switches, because the
+     * paste action targets the ACTIVE pane's current directory.
+     */
+    fun updateTwoPaneBottomToolbar() {
+        if (!twoPaneAtCreation || !::twoPaneBottomActionMode.isInitialized) {
+            return
+        }
+        val fragment = activeFileListFragmentOrNull() ?: return
+        val pasteState = fragment.viewModel.pasteState
+        val files = pasteState.files
+        if (files.isEmpty()) {
+            if (twoPaneBottomActionMode.isActive) {
+                twoPaneBottomActionMode.finish()
+            }
+            applyTwoPaneBottomBarLayout(visible = false)
+            return
+        }
+        val areAllFilesArchivePaths = files.all { it.path.isArchivePath }
+        twoPaneBottomActionMode.title = getString(
+            if (pasteState.copy) {
+                if (areAllFilesArchivePaths) {
+                    R.string.file_list_paste_extract_title_format
+                } else {
+                    R.string.file_list_paste_copy_title_format
+                }
+            } else {
+                R.string.file_list_paste_move_title_format
+            },
+            files.size
+        )
+        twoPaneBottomActionMode.setMenuResource(R.menu.file_list_paste)
+        val isCurrentPathReadOnly = fragment.viewModel.currentPath.fileSystem.isReadOnly
+        twoPaneBottomActionMode.menu.findItem(R.id.action_paste)
+            .setTitle(
+                if (areAllFilesArchivePaths) {
+                    R.string.file_list_paste_action_extract_here
+                } else {
+                    R.string.paste
+                }
+            )
+            .isEnabled = !isCurrentPathReadOnly
+        if (!twoPaneBottomActionMode.isActive) {
+            twoPaneBottomActionMode.start(object : ToolbarActionMode.Callback {
+                override fun onToolbarNavigationIconClicked(
+                    toolbarActionMode: ToolbarActionMode
+                ) {
+                    toolbarActionMode.finish()
+                }
+
+                override fun onToolbarActionModeMenuItemClicked(
+                    toolbarActionMode: ToolbarActionMode,
+                    item: android.view.MenuItem
+                ): Boolean {
+                    if (item.itemId == R.id.action_paste) {
+                        activeFileListFragment()?.pasteFilesToCurrentPane()
+                        return true
+                    }
+                    return false
+                }
+
+                override fun onToolbarActionModeFinished(
+                    toolbarActionMode: ToolbarActionMode
+                ) {
+                    // Mirrors the single-pane paste bar: finishing clears the clipboard.
+                    activeFileListFragmentOrNull()?.viewModel?.clearPasteState()
+                    applyTwoPaneBottomBarLayout(visible = false)
+                }
+            })
+        }
+        applyTwoPaneBottomBarLayout(visible = true)
+    }
+
+    /**
+     * While the paste bar is visible the pane row gives up its height (so list content
+     * is not covered) and the FAB shifts up above the bar.
+     */
+    private fun applyTwoPaneBottomBarLayout(visible: Boolean) {
+        val barHeight = if (visible) actionBarSizePx else 0
+        findViewById<com.leinardi.android.speeddial.SpeedDialView>(
+            R.id.floatingActionButton
+        ).translationY = -barHeight.toFloat()
+        findViewById<View>(R.id.paneRow).updateLayoutParams<android.widget.LinearLayout.LayoutParams> {
+            bottomMargin = barHeight
+        }
+    }
+
+    private class TwoPaneBottomToolbarActionMode(
+        bar: ViewGroup,
+        toolbar: androidx.appcompat.widget.Toolbar
+    ) : ToolbarActionMode(bar, toolbar) {
+        override fun show(bar: ViewGroup, animate: Boolean) {
+            bar.isVisible = true
+        }
+
+        override fun hide(bar: ViewGroup, animate: Boolean) {
+            bar.isVisible = false
+        }
+    }
+
+    /**
+     * Drop target for the two-pane cross-pane drag-and-drop: dropping files over the
+     * other pane's container moves them into that pane's current directory. Same-pane
+     * drops are rejected (the drag simply cancels). The pane is outlined with an accent
+     * stroke while a foreign drag hovers over it.
+     */
+    private fun installPaneDropTarget(paneContent: View, isSecondaryPane: Boolean) {
+        paneContent.setOnDragListener { view, event ->
+            val payload = event.localState as? CrossPaneDragPayload
+            fun setHighlight(highlighted: Boolean) {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    (view as? ViewGroup)?.foreground =
+                        if (highlighted) {
+                            getDrawable(R.drawable.two_pane_drop_target)
+                        } else {
+                            null
+                        }
+                }
+            }
+            when (event.action) {
+                android.view.DragEvent.ACTION_DRAG_STARTED ->
+                    payload != null && payload.sourceIsSecondaryPane != isSecondaryPane
+
+                android.view.DragEvent.ACTION_DRAG_ENTERED,
+                android.view.DragEvent.ACTION_DRAG_LOCATION -> {
+                    setHighlight(true)
+                    true
+                }
+
+                android.view.DragEvent.ACTION_DRAG_EXITED -> {
+                    setHighlight(false)
+                    true
+                }
+
+                android.view.DragEvent.ACTION_DROP -> {
+                    setHighlight(false)
+                    val targetFragment = findFileListFragment(isSecondaryPane)
+                    if (payload == null || targetFragment == null ||
+                        payload.sourceIsSecondaryPane == isSecondaryPane
+                    ) {
+                        return@setOnDragListener false
+                    }
+                    me.zhanghai.android.files.filejob.FileJobService.move(
+                        payload.paths, targetFragment.viewModel.currentPath, applicationContext
+                    )
+                    findFileListFragment(payload.sourceIsSecondaryPane)
+                        ?.viewModel?.clearSelectedFiles()
+                    true
+                }
+
+                android.view.DragEvent.ACTION_DRAG_ENDED -> {
+                    setHighlight(false)
+                    true
+                }
+
+                else -> false
+            }
+        }
+    }
+
+    /**
      * Called by a pane's FileListFragment when its breadcrumb data changes, so the
      * shared bar updates when the ACTIVE pane navigates. Also marks the (new) active
      * pane if this fragment is the active one.
@@ -531,6 +743,12 @@ class FileListActivity : AppActivity() {
     fun onPaneBreadcrumbChanged(fragment: FileListFragment, data: BreadcrumbData) {
         if (!twoPaneAtCreation || !::sharedBreadcrumbLayout.isInitialized) {
             return
+        }
+        // Re-arm the back chain: navigating INTO a directory must make back work for the
+        // panes again (the callbacks self-disable when a pane at its root falls through).
+        if (::twoPanePaneBackCallback.isInitialized) {
+            twoPanePaneBackCallback.isEnabled = true
+            twoPaneDrawerCloseCallback.isEnabled = true
         }
         // Only the active pane's path is shown in the shared bar.
         if (fragment === activeFileListFragmentOrNull()) {
@@ -609,6 +827,9 @@ class FileListActivity : AppActivity() {
 
     companion object {
         const val STATE_ACTIVE_PANE_SECONDARY = "state_active_pane_secondary"
+
+        /** The system back-gesture zone width at each screen edge (approximate). */
+        private const val SYSTEM_GESTURE_ZONE_DP = 24
 
         /** True for picker intents (open file / directory / create), which must run in
          *  single-pane mode: two-pane mode hides the per-pane toolbar that carries the

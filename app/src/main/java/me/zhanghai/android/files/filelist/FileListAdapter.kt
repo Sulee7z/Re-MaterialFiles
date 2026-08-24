@@ -6,6 +6,7 @@
 package me.zhanghai.android.files.filelist
 
 import android.annotation.SuppressLint
+import android.content.ClipData
 import android.content.Context
 import android.os.SystemClock
 import android.text.TextUtils
@@ -80,6 +81,9 @@ class FileListAdapter(
     private var isSearching = false
     /** True when this list is the secondary (right) pane of two-pane browsing. */
     var isSecondaryPane: Boolean = false
+
+    /** True when the two-pane cross-pane drag-and-drop is active. */
+    var isCrossPaneDragEnabled: Boolean = false
 
     /** True when the two-pane small-icon layout is active (shows more filename text). */
     var useSmallIcons: Boolean = false
@@ -406,6 +410,18 @@ class FileListAdapter(
                         _touchData.isGestureHorizontal = true
                         view.parent.requestDisallowInterceptTouchEvent(false)
                     }
+                    if (isCrossPaneDragEnabled && !_touchData.isCrossPaneDragStarted) {
+                        // Two-pane mode: a horizontal drag well past the gesture
+                        // threshold starts a cross-pane drag-and-drop (drop on the other
+                        // pane moves the file). The vertical multi-select slide is a
+                        // different gesture and never reaches here once it started.
+                        val dragThreshold =
+                            64f * view.resources.displayMetrics.density
+                        if (abs(event.x - _touchData.startTouchPosX) > dragThreshold) {
+                            _touchData.isCrossPaneDragStarted = true
+                            startCrossPaneDrag(view, file)
+                        }
+                    }
                 }
                 _touchData.prevDeltaPos = deltaPos
             }
@@ -630,7 +646,12 @@ class FileListAdapter(
                     }
                 }
             }
-            if (useSmallIcons && file.mimeType.isApk) {
+            if (useSmallIcons && shouldLoadThumbnail) {
+                // Two-pane mode: shrink image/video thumbnails so every row shares the
+                // same compact icon scale (previews stay recognizable at this size).
+                val size = resources.getDimensionPixelSize(R.dimen.two_pane_thumbnail_size)
+                layoutParams = layoutParams.apply { width = size; height = size }
+            } else if (useSmallIcons && file.mimeType.isApk) {
                 // Two-pane mode: shrink the APK app icon (loaded here in the list view)
                 // so it matches the other small icons instead of staying large_icon_size.
                 val size = resources.getDimensionPixelSize(R.dimen.two_pane_icon_size)
@@ -645,6 +666,11 @@ class FileListAdapter(
             isVisible = hasAppIconBadge
             if (hasAppIconBadge) {
                 load(AppIconPackageName(appDirectoryPackageName!!))
+            }
+            if (useSmallIcons) {
+                // Two-pane mode: match the badge scale to the small icons.
+                val size = resources.getDimensionPixelSize(R.dimen.two_pane_badge_size)
+                layoutParams = layoutParams.apply { width = size; height = size }
             }
         }
         holder.badgeImage.apply {
@@ -665,6 +691,11 @@ class FileListAdapter(
                 setImageResource(badgeIconRes!!)
             } else {
                 setImageDrawable(null)
+            }
+            if (useSmallIcons) {
+                // Two-pane mode: match the badge scale to the small icons.
+                val size = resources.getDimensionPixelSize(R.dimen.two_pane_badge_size)
+                layoutParams = layoutParams.apply { width = size; height = size }
             }
         }
         holder.nameText.text = file.name
@@ -958,6 +989,22 @@ class FileListAdapter(
         lateinit var popupMenu: PopupMenu
     }
 
+    /**
+     * Starts a system drag-and-drop carrying the dragged file (or the whole selection
+     * when the grabbed row is part of it). The other pane's drop target moves the files
+     * on drop.
+     */
+    private fun startCrossPaneDrag(view: View, file: FileItem) {
+        val paths = if (file in selectedFiles) {
+            selectedFiles.map { it.path }
+        } else {
+            listOf(file.path)
+        }
+        val payload = CrossPaneDragPayload(paths, isSecondaryPane)
+        val clipData = ClipData.newPlainText("files", "")
+        view.startDragAndDrop(clipData, View.DragShadowBuilder(view), payload, 0)
+    }
+
     interface Listener {
         fun clearSelectedFiles()
         fun selectFile(file: FileItem, selected: Boolean)
@@ -1002,6 +1049,7 @@ private data class TouchData(
     var isDuringClick: Boolean = false,
     var isMultipleSelectionStarted: Boolean = false,
     var isGestureHorizontal: Boolean = false,
+    var isCrossPaneDragStarted: Boolean = false,
     var lastPosSelected: Int = -1,
     var clickedLineAnchorY: Float = 0f,
     var actionIdentifier: Long = 0L
@@ -1031,6 +1079,7 @@ private data class TouchData(
         isDuringClick = false
         isGestureHorizontal = false
         isMultipleSelectionStarted = false
+        isCrossPaneDragStarted = false
         isDeltaPosSet = false
         isDeltaPosGrowing = false
         prevDeltaPos = 0
@@ -1047,3 +1096,10 @@ private data class TouchData(
         }
     }
 }
+
+/** Payload carried by a two-pane cross-pane drag-and-drop: the dragged file paths and
+ *  the source pane, so the drop target can reject same-pane drops. */
+class CrossPaneDragPayload(
+    val paths: List<Path>,
+    val sourceIsSecondaryPane: Boolean
+)
