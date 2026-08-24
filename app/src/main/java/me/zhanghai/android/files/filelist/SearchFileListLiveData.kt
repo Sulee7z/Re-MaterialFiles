@@ -94,11 +94,15 @@ class SearchFileListLiveData(
                     fileList += fileItems
                     postValue(Success(fileList))
                 } else {
-                    // Search the scope with a tree walk. When the scope is the "/" root, skip
-                    // the huge system sub-trees (they are either not indexed or irrelevant) so
-                    // the fallback returns quickly; /data and /storage are still descended.
+                    // Search the scope with a tree walk. When the scope is the LOCAL "/" root,
+                    // skip the huge system sub-trees (they are either not indexed or
+                    // irrelevant) so the fallback returns quickly; /data and /storage are
+                    // still descended. The toString()=="==" check must be limited to the
+                    // local Linux root: remote paths (e.g. an FTP/Everything storage root)
+                    // also stringify as "/" and must go through their provider's own
+                    // search (Everything HTTP, etc.) instead of a local tree walk.
                     val walk = { listener: (List<Path>) -> Unit ->
-                        if (scopedPath.toString() == "/") {
+                        if (scopedPath.toString() == "/" && scopedPath.isLinuxPath) {
                             WalkFileTreeSearchable.search(
                                 directory = scopedPath,
                                 query = searchQuery.simpleKeywords,
