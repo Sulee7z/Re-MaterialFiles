@@ -601,7 +601,7 @@
         <item>Passive</item>
     </string-array>
     <string name="storage_edit_ftp_server_encoding">Encoding</string>
-    <string name="storage_edit_ftp_server_everything_root">Everything index root (e.g. C:\share, optional)</string>
+    <string name="storage_edit_ftp_server_everything_root">Everything index root (e.g. C:\\share, required)</string>
     <string name="storage_edit_ftp_server_everything_http_port">Everything HTTP port (used for search)</string>
     <string name="storage_edit_ftp_server_everything_http_port_placeholder">80</string>
     <string name="storage_edit_ftp_server_connect_and_add">Connect and add</string>

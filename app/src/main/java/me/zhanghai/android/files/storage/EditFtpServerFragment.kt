@@ -198,6 +198,16 @@ class EditFtpServerFragment : Fragment() {
             args.everything || ftpServer?.authority?.everythingWindowsRoot?.isNotEmpty() == true
         binding.everythingRootLayout.isVisible = isEverythingServer
         binding.everythingHttpPortLayout.isVisible = isEverythingServer
+        if (isEverythingServer) {
+            // Everything storages are served entirely by the Everything HTTP server
+            // (browse, search and download); the FTP transport fields are unused and only
+            // confuse the setup, so hide them.
+            binding.portLayout.isVisible = false
+            binding.pathEdit.isVisible = false
+            binding.protocolLayout.isVisible = false
+            binding.modeLayout.isVisible = false
+            binding.encodingLayout.isVisible = false
+        }
     }
 
     private fun updateNamePlaceholder() {
