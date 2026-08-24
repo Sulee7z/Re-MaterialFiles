@@ -8,6 +8,7 @@
 <resources>
 
     <string name="app_name">质感文件</string>
+    <string name="documents_provider_root_title">设备根目录 (Material Files)</string>
 
     <string name="close">关闭</string>
     <string name="copy">复制</string>

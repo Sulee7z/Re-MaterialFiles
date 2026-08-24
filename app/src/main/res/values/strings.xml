@@ -8,6 +8,7 @@
 <resources>
 
     <string name="app_name">Material Files</string>
+    <string name="documents_provider_root_title">Device root (Material Files)</string>
 
     <string name="close">Close</string>
     <string name="copy">Copy</string>
