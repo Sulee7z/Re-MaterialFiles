@@ -34,6 +34,7 @@ import me.zhanghai.android.files.compat.isSingleLineCompat
 import me.zhanghai.android.files.databinding.FileItemGridBinding
 import me.zhanghai.android.files.databinding.FileItemListBinding
 import me.zhanghai.android.files.file.FileItem
+import me.zhanghai.android.files.file.asFileSize
 import me.zhanghai.android.files.file.fileSize
 import me.zhanghai.android.files.file.formatShort
 import me.zhanghai.android.files.file.iconRes
@@ -675,9 +676,21 @@ class FileListAdapter(
             val context = holder.descriptionText!!.context
             val lastModificationTime = attributes.lastModifiedTime().toInstant()
                 .formatShort(context)
-            val size = attributes.fileSize.formatHumanReadable(context)
-            val descriptionSeparator = context.getString(R.string.file_item_description_separator)
-            listOf(lastModificationTime, size).joinToString(descriptionSeparator)
+            // Show the total content size for folders instead of the meaningless
+            // directory entry size; it is computed in the background, so until it is
+            // ready only the date shows and the row refreshes when it arrives.
+            val sizeText = if (!isDirectory) {
+                attributes.fileSize.formatHumanReadable(context)
+            } else {
+                getOrRequestDirectoryContentSize(file, context)
+            }
+            if (sizeText != null) {
+                val descriptionSeparator =
+                    context.getString(R.string.file_item_description_separator)
+                listOf(lastModificationTime, sizeText).joinToString(descriptionSeparator)
+            } else {
+                lastModificationTime
+            }
         }
         if (useSmallFont) {
             // Two-pane mode: use the smaller name/description font (about one and a
@@ -834,6 +847,39 @@ class FileListAdapter(
         }
     }
 
+    /**
+     * Returns the human-readable content size for a directory (the sum of the sizes of
+     * everything inside it, recursively), or null while it is still being computed in
+     * the background - the row is refreshed once the value is ready. Remote/archive
+     * directories fall back to the directory entry size, because walking them would be
+     * far too slow to do implicitly for every visible row.
+     */
+    private fun getOrRequestDirectoryContentSize(file: FileItem, context: Context): String? {
+        val path = file.path
+        val attributes = file.attributes
+        val contentSize = DirectoryContentSizes.get(path, attributes)
+        if (contentSize != null) {
+            return if (contentSize >= 0L) {
+                contentSize.asFileSize().formatHumanReadable(context)
+            } else {
+                // A previous walk failed; keep showing the entry size instead.
+                attributes.fileSize.formatHumanReadable(context)
+            }
+        }
+        if (path.fileSystem.provider().scheme != SCHEME_FILE) {
+            return attributes.fileSize.formatHumanReadable(context)
+        }
+        DirectoryContentSizes.request(path, attributes) { onDirectoryContentSizeLoaded(path) }
+        return null
+    }
+
+    private fun onDirectoryContentSizeLoaded(path: Path) {
+        val position = filePositionMap[path] ?: return
+        if (position < itemCount && getItem(position).path == path) {
+            notifyItemChanged(position)
+        }
+    }
+
     override fun getPopupText(view: View, position: Int): CharSequence {
         val file = getItem(position)
         return when (sortOptions.by) {
@@ -850,6 +896,8 @@ class FileListAdapter(
 
     companion object {
         private val PAYLOAD_STATE_CHANGED = Any()
+
+        private const val SCHEME_FILE = "file"
 
         private val CALLBACK = object : DiffUtil.ItemCallback<FileItem>() {
             override fun areItemsTheSame(oldItem: FileItem, newItem: FileItem): Boolean =
