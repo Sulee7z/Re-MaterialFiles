@@ -8,7 +8,6 @@ package me.zhanghai.android.files.filelist
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.MenuItem
@@ -254,10 +253,6 @@ class FileListActivity : AppActivity() {
                 this,
                 object : androidx.activity.OnBackPressedCallback(true) {
                     override fun handleOnBackPressed() {
-                        Log.i(
-                            "TwoPaneDebug",
-                            "back pressed: activePaneSecondary=${TwoPaneState.activePaneSecondary}"
-                        )
                         val activeFragment = if (TwoPaneState.activePaneSecondary) {
                             supportFragmentManager
                                 .findFragmentById(R.id.rightPaneContent) as? FileListFragment
@@ -266,19 +261,12 @@ class FileListActivity : AppActivity() {
                                 .findFragmentById(R.id.leftPaneContent) as? FileListFragment
                         }
                         if (activeFragment == null || !activeFragment.performBack()) {
-                            // The touched pane cannot navigate up (e.g. it is at its root):
-                            // try the other pane before falling through to the default exit.
-                            val otherFragment = if (TwoPaneState.activePaneSecondary) {
-                                supportFragmentManager
-                                    .findFragmentById(R.id.leftPaneContent) as? FileListFragment
-                            } else {
-                                supportFragmentManager
-                                    .findFragmentById(R.id.rightPaneContent) as? FileListFragment
-                            }
-                            if (otherFragment == null || !otherFragment.performBack()) {
-                                isEnabled = false
-                                onBackPressedDispatcher.onBackPressed()
-                            }
+                            // The active pane is at its root: exit (standard back
+                            // behavior). Silently navigating the OTHER pane from the back
+                            // key would destroy its navigation state behind the user's
+                            // back.
+                            isEnabled = false
+                            onBackPressedDispatcher.onBackPressed()
                         }
                     }
                 }
@@ -356,8 +344,11 @@ class FileListActivity : AppActivity() {
         // always run single-pane regardless of the setting, so they must NOT be restarted
         // here (that would close the picker and relaunch a plain file list).
         if (!isPickMode(intent) && Settings.FILE_LIST_TWO_PANE.valueCompat != twoPaneAtCreation) {
+            // Restart with a copy of the ORIGINAL intent, so the action/path the activity
+            // was launched with (e.g. a VIEW intent for a specific directory) survives the
+            // single-pane <-> two-pane switch instead of resetting to the default.
             finish()
-            startActivity(Intent(this, FileListActivity::class.java))
+            startActivity(Intent(intent))
         }
     }
 
@@ -412,7 +403,13 @@ class FileListActivity : AppActivity() {
                 val navigationView = findViewById<View>(R.id.activityNavigationFragment)
                 val drawerTouched = drawerLayout != null && navigationView != null &&
                     drawerLayout.isDrawerOpen(navigationView)
-                if (!fabTouched && !topBarTouched && !breadcrumbTouched && !drawerTouched) {
+                // The divider is the pane-resize drag handle: grabbing it must not flip
+                // the active pane either (a resize is not "operating" either pane).
+                val dividerTouched = ev.rawX >= divider.x &&
+                    ev.rawX <= divider.x + divider.width
+                if (!fabTouched && !topBarTouched && !breadcrumbTouched && !drawerTouched &&
+                    !dividerTouched
+                ) {
                     TwoPaneState.setActivePaneSecondary(ev.rawX > divider.x)
                 }
             }
@@ -430,7 +427,45 @@ class FileListActivity : AppActivity() {
     private fun setupResponsivePanes() {
         // Listen for active-pane changes to keep the highlight in sync.
         TwoPaneState.activePaneSecondaryListener = { updateResponsivePanes() }
+        setupDividerDrag()
         updateResponsivePanes()
+    }
+
+    /**
+     * Draggable divider: dragging it resizes the two panes live (the ratio is kept in
+     * [TwoPaneState.paneWidthRatio], so it survives pane switches and Activity
+     * recreation). The divider view is 10dp wide, which is the drag touch target. While
+     * the drag is in progress the center line grows and takes the accent color, so the
+     * user can see the handle is grabbed.
+     */
+    private fun setupDividerDrag() {
+        val divider = findViewById<View>(R.id.divider)
+        divider.isClickable = true
+        divider.setOnTouchListener { view, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    view.setBackgroundResource(R.drawable.two_pane_divider_active)
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val ratio = (event.rawX / resources.displayMetrics.widthPixels)
+                        .coerceIn(
+                            TwoPaneState.PANE_WIDTH_MIN_RATIO,
+                            TwoPaneState.PANE_WIDTH_MAX_RATIO
+                        )
+                    if (kotlin.math.abs(ratio - TwoPaneState.paneWidthRatio) >= 0.001f) {
+                        TwoPaneState.paneWidthRatio = ratio
+                        updateResponsivePanes()
+                    }
+                    true
+                }
+                else -> {
+                    // ACTION_UP / ACTION_CANCEL: the drag ended, restore the idle line.
+                    view.setBackgroundResource(R.drawable.two_pane_divider)
+                    false
+                }
+            }
+        }
     }
 
     /** Applies the active-pane state to the pane containers (always side by side). */
@@ -442,10 +477,17 @@ class FileListActivity : AppActivity() {
         val rightPane = findViewById<View>(R.id.rightPane)
         val divider = findViewById<View>(R.id.divider)
         val screenWidth = resources.displayMetrics.widthPixels
-        // Both panes side by side, each exactly half the width (minus the divider).
-        val paneWidth = (screenWidth - 1) / 2
-        leftPane.layoutParams.width = paneWidth
-        rightPane.layoutParams.width = screenWidth - paneWidth - 1
+        // Both panes side by side; the divider is draggable, so the split follows the
+        // user's ratio. Reassigning layoutParams (instead of mutating the field) triggers
+        // requestLayout, which the live divider drag relies on.
+        val dividerWidth = maxOf(divider.layoutParams.width, 1)
+        val paneWidth = ((screenWidth - dividerWidth) * TwoPaneState.paneWidthRatio)
+            .toInt()
+            .coerceIn(1, screenWidth - dividerWidth - 1)
+        leftPane.layoutParams = leftPane.layoutParams.apply { width = paneWidth }
+        rightPane.layoutParams = rightPane.layoutParams.apply {
+            width = screenWidth - paneWidth - dividerWidth
+        }
         leftPane.isVisible = true
         rightPane.isVisible = true
         divider.isVisible = true
@@ -498,7 +540,9 @@ class FileListActivity : AppActivity() {
 
     private fun currentFragment(): FileListFragment? =
         if (twoPaneAtCreation) {
-            supportFragmentManager.findFragmentById(R.id.leftPaneContent) as? FileListFragment
+            // Keyboard shortcuts act on the pane the user last touched, like every other
+            // shared action (FAB, search, back key).
+            activeFileListFragmentOrNull()
         } else {
             fragment
         }

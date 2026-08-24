@@ -116,9 +116,9 @@
 
                 <View
                     android:id="@+id/divider"
-                    android:layout_width="1dp"
+                    android:layout_width="10dp"
                     android:layout_height="match_parent"
-                    android:background="?attr/colorOutline" />
+                    android:background="@drawable/two_pane_divider" />
 
                 <FrameLayout
                     android:id="@+id/rightPane"
@@ -150,7 +150,7 @@
             android:layout_height="match_parent"
             android:fitsSystemWindows="true" />
 
-        <com.leinardi.android.speeddial.SpeedDialView
+        <me.zhanghai.android.files.ui.ThemedSpeedDialView
             android:id="@+id/floatingActionButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

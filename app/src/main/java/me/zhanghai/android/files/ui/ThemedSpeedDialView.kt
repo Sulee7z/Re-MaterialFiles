@@ -168,8 +168,9 @@ class ThemedSpeedDialView : SpeedDialView {
         }
         val actionItem = SpeedDialActionItem.Builder(
             actionItem.id,
-            // Should not be a resource, pass null to fail fast.
-            actionItem.getFabImageDrawable(null)
+            // Resolve here with this view's (themed) context: items built with a drawable
+            // resource (e.g. the two-pane FAB's paste action) fail with a null context.
+            actionItem.getFabImageDrawable(context)
         )
             .setLabel(actionItem.getLabel(context))
             .setFabImageTintColor(fabImageTintColor)

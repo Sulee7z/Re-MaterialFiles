@@ -25,6 +25,10 @@ import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
+import me.zhanghai.android.fastscroll.FastScroller
+import me.zhanghai.android.fastscroll.FastScrollerBuilder
+import me.zhanghai.android.fastscroll.PopupTextProvider
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -130,6 +134,7 @@ import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.terminal.TerminalActivity
 import me.zhanghai.android.files.terminal.TerminalArgs
 import me.zhanghai.android.files.ui.AppBarLayoutExpandHackListener
+import me.zhanghai.android.files.compat.getDrawableCompat
 import me.zhanghai.android.files.ui.CoordinatorAppBarLayout
 import me.zhanghai.android.files.ui.DrawerLayoutOnBackPressedCallback
 import me.zhanghai.android.files.ui.FixQueryChangeSearchView
@@ -137,6 +142,7 @@ import me.zhanghai.android.files.ui.OverlayToolbarActionMode
 import me.zhanghai.android.files.ui.PersistentBarLayout
 import me.zhanghai.android.files.ui.PersistentBarLayoutToolbarActionMode
 import me.zhanghai.android.files.ui.PersistentDrawerLayout
+import me.zhanghai.android.files.ui.RecyclerViewFastScrollerViewHelper
 import me.zhanghai.android.files.ui.ScrollingViewOnApplyWindowInsetsListener
 import me.zhanghai.android.files.ui.SpeedDialViewOnBackPressedCallback
 import me.zhanghai.android.files.ui.ThemedFastScroller
@@ -355,7 +361,11 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         // pane. Tracking is centralized in FileListActivity.dispatchTouchEvent() using the
         // touch X coordinate (each pane is exactly half the screen), which cannot miss any
         // touch anywhere in the pane (items, breadcrumb, empty state, toolbar, …).
-        val fastScroller = ThemedFastScroller.create(binding.recyclerView)
+        val fastScroller = if (isTwoPaneMode && isSecondaryPane.not()) {
+            createLeftPaneFastScroller()
+        } else {
+            ThemedFastScroller.create(binding.recyclerView)
+        }
         binding.recyclerView.setOnApplyWindowInsetsListener(
             ScrollingViewOnApplyWindowInsetsListener(binding.recyclerView, fastScroller)
         )
@@ -927,6 +937,12 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             FileViewType.LIST -> 1
             FileViewType.GRID -> {
                 var widthDp = resources.configuration.screenWidthDp
+                if (isTwoPaneMode) {
+                    // Each pane is half the screen: compute the span count from the PANE
+                    // width, or a wide screen would cram a 4-column grid into a
+                    // half-width pane.
+                    widthDp /= 2
+                }
                 val persistentDrawerLayout = binding.persistentDrawerLayout
                 if (persistentDrawerLayout != null &&
                     persistentDrawerLayout.isDrawerOpen(GravityCompat.START)) {
@@ -1156,6 +1172,46 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     /** Switches list item icons to the small size so filenames get more room. */
     private fun applyTwoPaneSmallIcons() {
         adapter.useSmallIcons = true
+    }
+
+    /**
+     * Left-pane fast scrollbar on the LEFT edge (two-pane left pane only, mirroring the
+     * classic dual-pane layout): AndroidFastScroll positions the bar by layout direction,
+     * so the RecyclerView is re-parented into an RTL wrapper (the bar draws at the
+     * wrapper's left edge) while the list itself stays LTR. Scrolling and touches still
+     * go through the RecyclerView via the custom view helper.
+     */
+    private fun createLeftPaneFastScroller(): FastScroller {
+        val recyclerView = binding.recyclerView
+        val parent = recyclerView.parent as? ViewGroup
+            ?: return ThemedFastScroller.create(recyclerView)
+        val index = parent.indexOfChild(recyclerView)
+        val layoutParams = recyclerView.layoutParams
+        parent.removeView(recyclerView)
+        val rtlWrapper = FrameLayout(requireContext()).apply {
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        rtlWrapper.addView(
+            recyclerView,
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+        // The wrapper is RTL ONLY for the scrollbar positioning; layout direction is
+        // inherited, so force the list back to LTR or its icons/text would mirror.
+        recyclerView.layoutDirection = View.LAYOUT_DIRECTION_LTR
+        parent.addView(rtlWrapper, index, layoutParams)
+        val viewHelper = RecyclerViewFastScrollerViewHelper(
+            recyclerView, adapter as? PopupTextProvider
+        )
+        return FastScrollerBuilder(rtlWrapper)
+            .useMd2Style()
+            .setThumbDrawable(
+                requireContext().getDrawableCompat(R.drawable.fast_scroll_thumb_m3)
+            )
+            .setViewHelper(viewHelper)
+            .build()
     }
 
     /**
@@ -3198,6 +3254,17 @@ object TwoPaneState {
 
     @Volatile
     var secondaryPanePath: java8.nio.file.Path? = null
+
+    /**
+     * The primary (left) pane's share of the available width, draggable via the divider
+     * like a classic dual-pane file manager. In-memory only: it survives Activity
+     * recreation but resets to an even split on process death.
+     */
+    @Volatile
+    var paneWidthRatio: Float = 0.5f
+
+    const val PANE_WIDTH_MIN_RATIO = 0.25f
+    const val PANE_WIDTH_MAX_RATIO = 0.75f
 
     private val _activePaneSecondary = java.util.concurrent.atomic.AtomicBoolean(false)
 
