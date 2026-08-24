@@ -402,7 +402,17 @@ class FileListActivity : AppActivity() {
                 val breadcrumb = findViewById<View>(R.id.sharedBreadcrumbLayout)
                 val breadcrumbTouched = breadcrumb != null && breadcrumb.isShown &&
                     ev.rawY >= breadcrumb.top && ev.rawY <= breadcrumb.bottom
-                if (!fabTouched && !topBarTouched && !breadcrumbTouched) {
+                // Navigation drawer touches must not flip the active pane either: the drawer
+                // sits over the left pane, so tapping a storage/bookmark in it would flip the
+                // active pane to the left and drawer navigations would always land there
+                // instead of following the pane that was active before it opened.
+                val drawerLayout = findViewById<androidx.drawerlayout.widget.DrawerLayout>(
+                    R.id.activityDrawerLayout
+                )
+                val navigationView = findViewById<View>(R.id.activityNavigationFragment)
+                val drawerTouched = drawerLayout != null && navigationView != null &&
+                    drawerLayout.isDrawerOpen(navigationView)
+                if (!fabTouched && !topBarTouched && !breadcrumbTouched && !drawerTouched) {
                     TwoPaneState.setActivePaneSecondary(ev.rawX > divider.x)
                 }
             }
