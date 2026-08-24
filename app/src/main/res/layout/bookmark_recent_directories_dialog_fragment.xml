@@ -42,7 +42,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:clipToPadding="false"
-            android:paddingBottom="@dimen/list_bottom_padding_with_fab"
+            android:paddingBottom="@dimen/list_vertical_padding"
             android:scrollbars="vertical" />
     </FrameLayout>
 </LinearLayout>

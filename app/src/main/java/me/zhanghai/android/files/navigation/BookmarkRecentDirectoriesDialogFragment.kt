@@ -152,7 +152,14 @@ class BookmarkRecentDirectoriesDialogFragment : AppCompatDialogFragment(),
     override fun onItemClick(item: BookmarkRecentDirectoryAdapter.Item) {
         // Tap on a bookmark/recent folder opens its folder.
         dismiss()
-        startActivitySafe(FileListActivity.createViewIntent(item.path))
+        val navigationFragment = parentFragment as? NavigationFragment
+        if (navigationFragment != null) {
+            // Open in place (single-pane: the current list; two-pane: the active pane)
+            // instead of stacking a new FileListActivity on top of the current one.
+            navigationFragment.listener?.navigateTo(item.path)
+        } else {
+            startActivitySafe(FileListActivity.createViewIntent(item.path))
+        }
     }
 
     override fun onItemLongClick(item: BookmarkRecentDirectoryAdapter.Item) {
