@@ -61,7 +61,11 @@ private fun disableHiddenApiChecks() {
 
 private fun initializeWebViewDebugging() {
     if (BuildConfig.DEBUG) {
-        WebView.setWebContentsDebuggingEnabled(true)
+        // Debug-only, and not needed until a WebView is actually created (which never
+        // happens during cold start); keep the WebView class load off the critical path.
+        AsyncTask.THREAD_POOL_EXECUTOR.execute {
+            WebView.setWebContentsDebuggingEnabled(true)
+        }
     }
 }
 
@@ -77,6 +81,24 @@ private fun initializeFileSystemProviders() {
             }
         )
     }
+    // The SFTP provider drags in the SSHJ + BouncyCastle class graph (~1s of class
+    // loading/verification). Warming it concurrently with the launch window still steals
+    // CPU/dex-I/O and class-loader locks from the main thread, so delay it until the app
+    // has settled (like the search-index preload), then register on the main thread: the
+    // provider registry is only ever mutated from the main thread, so concurrent readers
+    // of installedProviders() can never race an install.
+    Thread {
+        try {
+            Thread.sleep(SFTP_WARM_UP_DELAY_MILLIS)
+        } catch (e: InterruptedException) {
+            return@Thread
+        }
+        FileSystemProviders.warmUpSftpClass()
+        mainExecutor.execute { FileSystemProviders.installSftp() }
+    }.apply {
+        name = "SftpProviderWarmUp"
+        priority = Thread.MIN_PRIORITY
+    }.start()
     FtpClient.authenticator = FtpServerAuthenticator
     SftpClient.authenticator = SftpServerAuthenticator
     SmbClient.authenticator = SmbServerAuthenticator
@@ -111,16 +133,19 @@ private fun initializeSearchIndexDb() = SearchIndexDb.initialize(application)
  * manually from the index search screen if it goes stale.
  */
 private fun preloadSearchIndexIfNeeded() {
-    val hasIndex = try {
-        SearchIndexDb.count() > 0
-    } catch (e: Exception) {
-        e.printStackTrace()
-        true
-    }
-    if (hasIndex) {
-        return
-    }
     Thread {
+        // The COUNT(*) probe runs on a full-table index scan, so keep it off the main
+        // thread; it runs before the delay because it is cheap and decides whether the
+        // whole preload is needed at all.
+        val hasIndex = try {
+            SearchIndexDb.count() > 0
+        } catch (e: Exception) {
+            e.printStackTrace()
+            true
+        }
+        if (hasIndex) {
+            return@Thread
+        }
         // Let the app finish launching before hammering the storage.
         try {
             Thread.sleep(3000)
@@ -146,6 +171,8 @@ private fun initializeCustomTheme() {
 private fun initializeNightMode() {
     NightModeHelper.initialize(application)
 }
+
+private const val SFTP_WARM_UP_DELAY_MILLIS = 4000L
 
 private fun createNotificationChannels() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

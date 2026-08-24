@@ -34,21 +34,81 @@ object FileSystemProviders {
     var overflowWatchEvents = false
 
     fun install() {
-        FileSystemProvider.installDefaultProvider(LinuxFileSystemProvider)
-        FileSystemProvider.installProvider(ArchiveFileSystemProvider)
+        // Runs on the cold-start critical path; log slow providers (see `adb logcat -s
+        // AppStart`) so native-library loading regressions are easy to spot.
+        fun installProvider(name: String, install: () -> Unit) {
+            val startUptimeMillis = android.os.SystemClock.uptimeMillis()
+            install()
+            val durationMillis = android.os.SystemClock.uptimeMillis() - startUptimeMillis
+            if (durationMillis >= SLOW_PROVIDER_LOG_THRESHOLD_MILLIS) {
+                android.util.Log.i("AppStart", "install $name took ${durationMillis}ms")
+            }
+        }
+        installProvider("Linux") {
+            FileSystemProvider.installDefaultProvider(LinuxFileSystemProvider)
+        }
+        installProvider("Archive") {
+            FileSystemProvider.installProvider(ArchiveFileSystemProvider)
+        }
         if (!isRunningAsRoot) {
-            FileSystemProvider.installProvider(ContentFileSystemProvider)
-            FileSystemProvider.installProvider(DocumentFileSystemProvider)
-            FileSystemProvider.installProvider(FtpFileSystemProvider)
-            FileSystemProvider.installProvider(FtpsFileSystemProvider)
-            FileSystemProvider.installProvider(FtpesFileSystemProvider)
-            FileSystemProvider.installProvider(SftpFileSystemProvider)
-            FileSystemProvider.installProvider(SmbFileSystemProvider)
-            FileSystemProvider.installProvider(WebDavFileSystemProvider)
-            FileSystemProvider.installProvider(WebDavsFileSystemProvider)
+            installProvider("Content") {
+                FileSystemProvider.installProvider(ContentFileSystemProvider)
+            }
+            installProvider("Document") {
+                FileSystemProvider.installProvider(DocumentFileSystemProvider)
+            }
+            installProvider("Ftp") {
+                FileSystemProvider.installProvider(FtpFileSystemProvider)
+            }
+            installProvider("Ftps") {
+                FileSystemProvider.installProvider(FtpsFileSystemProvider)
+            }
+            installProvider("Ftpes") {
+                FileSystemProvider.installProvider(FtpesFileSystemProvider)
+            }
+            installProvider("Smb") {
+                FileSystemProvider.installProvider(SmbFileSystemProvider)
+            }
+            installProvider("WebDav") {
+                FileSystemProvider.installProvider(WebDavFileSystemProvider)
+            }
+            installProvider("WebDavs") {
+                FileSystemProvider.installProvider(WebDavsFileSystemProvider)
+            }
         }
         Files.installFileTypeDetector(AndroidFileTypeDetector)
     }
+
+    /**
+     * Loads the SFTP provider's class graph (SSHJ + BouncyCastle, roughly a second of
+     * class loading/verification) without registering anything. Call it on a background
+     * thread before [installSftp] so the cost stays off the cold-start critical path.
+     */
+    fun warmUpSftpClass() {
+        Class.forName(SFTP_PROVIDER_CLASS_NAME, true, java8.nio.file.spi.FileSystemProvider::class.java.classLoader)
+    }
+
+    /**
+     * Registers the SFTP provider. Must be called on the main thread after
+     * [warmUpSftpClass]: the provider registry is only ever mutated from the main
+     * thread, so concurrent readers of installedProviders() never race an install.
+     */
+    fun installSftp() {
+        if (isRunningAsRoot) {
+            return
+        }
+        val startUptimeMillis = android.os.SystemClock.uptimeMillis()
+        FileSystemProvider.installProvider(SftpFileSystemProvider)
+        val durationMillis = android.os.SystemClock.uptimeMillis() - startUptimeMillis
+        if (durationMillis >= SLOW_PROVIDER_LOG_THRESHOLD_MILLIS) {
+            android.util.Log.i("AppStart", "install Sftp took ${durationMillis}ms")
+        }
+    }
+
+    private const val SFTP_PROVIDER_CLASS_NAME =
+        "me.zhanghai.android.files.provider.sftp.SftpFileSystemProvider"
+
+    private const val SLOW_PROVIDER_LOG_THRESHOLD_MILLIS = 5L
 
     operator fun get(scheme: String): FileSystemProvider {
         for (provider in FileSystemProvider.installedProviders()) {
