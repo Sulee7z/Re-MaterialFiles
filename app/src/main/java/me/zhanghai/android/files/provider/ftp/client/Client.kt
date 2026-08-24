@@ -163,6 +163,9 @@ object Client {
 
     @Throws(IOException::class)
     fun createDirectory(path: Path) {
+        if (path.isEverythingServer) {
+            EverythingClient.denyWrite(path, "Creating directories")
+        }
         useClient(path.authority) { client ->
             if (!client.makeDirectory(path.remotePath)) {
                 client.throwNegativeReplyCodeException()
@@ -194,6 +197,9 @@ object Client {
 
     @Throws(IOException::class)
     fun deleteFile(path: Path) {
+        if (path.isEverythingServer) {
+            EverythingClient.denyWrite(path, "Deleting")
+        }
         useClient(path.authority) { client ->
             if (!client.deleteFile(path.remotePath)) {
                 client.throwNegativeReplyCodeException()
@@ -205,6 +211,9 @@ object Client {
 
     @Throws(IOException::class)
     fun deleteDirectory(path: Path) {
+        if (path.isEverythingServer) {
+            EverythingClient.denyWrite(path, "Deleting")
+        }
         useClient(path.authority) { client ->
             if (!client.removeDirectory(path.remotePath)) {
                 client.throwNegativeReplyCodeException()
@@ -219,6 +228,9 @@ object Client {
         if (source.authority != target.authority) {
             throw IOException("Paths aren't on the same authority")
         }
+        if (source.isEverythingServer) {
+            EverythingClient.denyWrite(source, "Renaming")
+        }
         useClient(source.authority) { client ->
             if (!client.rename(source.remotePath, target.remotePath)) {
                 client.throwNegativeReplyCodeException()
@@ -232,6 +244,9 @@ object Client {
 
     @Throws(IOException::class)
     fun retrieveFile(path: Path): InputStream {
+        if (path.isEverythingServer) {
+            return EverythingClient.retrieveFile(path)
+        }
         val authority = path.authority
         val client = acquireClient(authority)
         val inputStream = try {
@@ -245,6 +260,16 @@ object Client {
 
     @Throws(IOException::class)
     fun listDirectory(path: Path): List<Path> {
+        if (path.isEverythingServer) {
+            // Everything HTTP backend: browse via the `parent:` search operator instead of
+            // the (optional, finicky) ETP/FTP server, so the storage works with just the
+            // Everything HTTP server enabled.
+            val (childPaths, filesByName) = EverythingClient.listDirectory(path)
+            filesByName.forEach { (name, file) ->
+                directoryFilesCache[path.resolve(name)] = file
+            }
+            return childPaths
+        }
         useClient(path.authority) { client ->
             // Whether MLSD returns dot files is entirely up to the server; the app's
             // "show hidden files" setting is only honored by the traditional LIST path
@@ -293,6 +318,11 @@ object Client {
                 return it
             }
         }
+        if (path.isEverythingServer) {
+            // Everything HTTP backend: stat via the parent's `parent:` listing (served
+            // from the listing cache right after a directory listing).
+            return EverythingClient.listFile(path)
+        }
         useClient(path.authority) { client ->
             return client.mlistFileCompat(path.remotePath)
                 ?: client.throwNegativeReplyCodeException()
@@ -301,6 +331,12 @@ object Client {
 
     @Throws(IOException::class)
     fun openByteChannel(path: Path, isAppend: Boolean, truncate: Boolean): SeekableByteChannel {
+        if (path.isEverythingServer) {
+            if (isAppend || truncate) {
+                EverythingClient.denyWrite(path, "Writing")
+            }
+            return EverythingClient.openByteChannel(path)
+        }
         val authority = path.authority
         val client = acquireClient(authority)
         if (!client.hasFeature(FTPCmd.REST)) {
@@ -336,6 +372,9 @@ object Client {
 
     @Throws(IOException::class)
     fun setLastModifiedTime(path: Path, lastModifiedTime: Instant) {
+        if (path.isEverythingServer) {
+            EverythingClient.denyWrite(path, "Setting the modification time")
+        }
         val lastModifiedTimeString = TIMESTAMP_FORMATTER.format(lastModifiedTime)
         useClient(path.authority) { client ->
             if (!client.setModificationTimeCompat(path.remotePath, lastModifiedTimeString)) {
@@ -347,6 +386,9 @@ object Client {
 
     @Throws(IOException::class)
     fun storeFile(path: Path): OutputStream {
+        if (path.isEverythingServer) {
+            EverythingClient.denyWrite(path, "Writing")
+        }
         val authority = path.authority
         val client = acquireClient(authority)
         val outputStream = try {

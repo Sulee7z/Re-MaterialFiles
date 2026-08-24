@@ -481,6 +481,11 @@ object FtpFileSystemProvider : FileSystemProvider(), PathObservableProvider, Sea
                 EverythingHttpClient.searchEverything(
                     authority, scopedQuery, intervalMillis
                 ) { windowsPaths ->
+                    // The server filters by the search terms, but re-filter here so even a
+                    // quirky server cannot leak non-matches: every space-separated term
+                    // must appear in the entry name (Everything's default AND semantics,
+                    // mirroring what the tree-walk fallback guarantees).
+                    val terms = query.split(' ').map { it.trim() }.filter { it.isNotEmpty() }
                     val paths = windowsPaths.mapNotNull { windowsPath ->
                         val remotePath =
                             mapEverythingPathToRemotePath(windowsPath, windowsRoot)
@@ -499,11 +504,21 @@ object FtpFileSystemProvider : FileSystemProvider(), PathObservableProvider, Sea
                         }
                         val relative = remotePath.removePrefix(directoryRemotePath)
                             .trimStart('/')
-                        if (relative.isEmpty()) {
+                        val childPath = if (relative.isEmpty()) {
                             directory
                         } else {
                             directory.resolve(relative)
                         }
+                        if (terms.isNotEmpty()) {
+                            val name = childPath.fileName?.toString() ?: relative
+                            val allTermsMatch = terms.all { term ->
+                                name.contains(term, ignoreCase = true)
+                            }
+                            if (!allTermsMatch) {
+                                return@mapNotNull null
+                            }
+                        }
+                        childPath
                     }
                     if (paths.isNotEmpty()) {
                         listener(paths)
