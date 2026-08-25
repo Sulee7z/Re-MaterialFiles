@@ -300,6 +300,7 @@
     <string name="file_item_description_separator">"    "</string>
     <string name="file_item_action_open_with">打开方式</string>
     <string name="file_item_action_extract">提取</string>
+    <string name="file_extract_to_hint">目标文件夹</string>
     <string name="file_item_action_archive">压缩</string>
     <string name="file_item_action_properties">属性</string>
 

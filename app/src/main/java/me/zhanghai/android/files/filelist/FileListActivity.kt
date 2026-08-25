@@ -32,6 +32,7 @@ import me.zhanghai.android.files.navigation.NavigationFragment
 import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.ui.OverlayToolbarActionMode
 import me.zhanghai.android.files.ui.ToolbarActionMode
+import me.zhanghai.android.files.provider.archive.archiveFile
 import me.zhanghai.android.files.provider.archive.isArchivePath
 import me.zhanghai.android.files.util.createIntent
 import me.zhanghai.android.files.util.extraPath
@@ -179,6 +180,11 @@ class FileListActivity : AppActivity() {
                 }
                 override fun copyPath(path: Path) {
                     activeFileListFragmentOrNull()?.copyPath(path)
+                }
+                override fun movePathsTo(paths: List<Path>, directory: Path) {
+                    me.zhanghai.android.files.filejob.FileJobService.move(
+                        paths, directory, applicationContext
+                    )
                 }
                 override fun openInNewTask(path: Path) {
                     activeFileListFragmentOrNull()?.openInNewTask(path)
@@ -475,8 +481,8 @@ class FileListActivity : AppActivity() {
             // show-hidden) follow the newly active pane. onCreateOptionsMenu re-expands
             // the search view with the active pane's query, so an open search survives.
             invalidateOptionsMenu()
-            // The paste bar's enabled state depends on the active pane's path.
-            updateTwoPaneBottomToolbar()
+            // The paste bar (and its extraction destination) follows the active pane.
+            updateTwoPaneBottomToolbar(refreshDestination = true)
         }
         setupDividerDrag()
         updateResponsivePanes()
@@ -577,9 +583,11 @@ class FileListActivity : AppActivity() {
     /**
      * Updates the two-pane paste bar from the shared clipboard state. Called by both
      * pane fragments (the clipboard is shared) and on active-pane switches, because the
-     * paste action targets the ACTIVE pane's current directory.
+     * paste action targets the ACTIVE pane's current directory. With
+     * [refreshDestination], the editable extraction destination follows the newly
+     * active pane (like the FAB).
      */
-    fun updateTwoPaneBottomToolbar() {
+    fun updateTwoPaneBottomToolbar(refreshDestination: Boolean = false) {
         if (!twoPaneAtCreation || !::twoPaneBottomActionMode.isInitialized) {
             return
         }
@@ -606,6 +614,13 @@ class FileListActivity : AppActivity() {
             },
             files.size
         )
+        val extractDestinationEdit =
+            twoPaneBottomToolbar.findViewById<android.widget.EditText>(
+                R.id.extractDestinationEdit
+            )
+        // Extract mode (clipboard holds archive roots): show the editable extraction
+        // destination, prefilled with the active pane's current directory.
+        extractDestinationEdit.isVisible = areAllFilesArchivePaths
         twoPaneBottomActionMode.setMenuResource(R.menu.file_list_paste)
         val isCurrentPathReadOnly = fragment.viewModel.currentPath.fileSystem.isReadOnly
         twoPaneBottomActionMode.menu.findItem(R.id.action_paste)
@@ -618,6 +633,19 @@ class FileListActivity : AppActivity() {
             )
             .isEnabled = !isCurrentPathReadOnly
         if (!twoPaneBottomActionMode.isActive) {
+            if (areAllFilesArchivePaths) {
+                // Archive sources: default to the archive file's own directory (the
+                // archive-internal path string must never leak into the destination).
+                val firstSource = files.first().path
+                val defaultDirectory = if (firstSource.isArchivePath) {
+                    firstSource.archiveFile.parent?.toString()
+                } else {
+                    fragment.viewModel.currentPath.toString()
+                }
+                extractDestinationEdit.setText(
+                    defaultDirectory ?: fragment.viewModel.currentPath.toString()
+                )
+            }
             twoPaneBottomActionMode.start(object : ToolbarActionMode.Callback {
                 override fun onToolbarNavigationIconClicked(
                     toolbarActionMode: ToolbarActionMode
@@ -630,7 +658,22 @@ class FileListActivity : AppActivity() {
                     item: android.view.MenuItem
                 ): Boolean {
                     if (item.itemId == R.id.action_paste) {
-                        activeFileListFragment()?.pasteFilesToCurrentPane()
+                        // Resolve the ACTIVE pane FRESH at click time: the callback
+                        // object outlives active-pane switches, and a captured fragment
+                        // would paste into a stale pane's directory.
+                        val activeFragment = activeFileListFragmentOrNull()
+                            ?: return false
+                        val targetDirectory = if (extractDestinationEdit.isVisible) {
+                            val text = extractDestinationEdit.text.toString().trim()
+                            if (text.isEmpty()) {
+                                activeFragment.viewModel.currentPath
+                            } else {
+                                java8.nio.file.Paths.get(text)
+                            }
+                        } else {
+                            activeFragment.viewModel.currentPath
+                        }
+                        activeFragment.pasteFilesToCurrentPane(targetDirectory)
                         return true
                     }
                     return false
@@ -644,19 +687,28 @@ class FileListActivity : AppActivity() {
                     applyTwoPaneBottomBarLayout(visible = false)
                 }
             })
+        } else if (refreshDestination && areAllFilesArchivePaths &&
+            extractDestinationEdit.isVisible
+        ) {
+            // The active pane switched while the bar is open: the extraction destination
+            // follows the newly active pane (like the FAB).
+            extractDestinationEdit.setText(fragment.viewModel.currentPath.toString())
         }
         applyTwoPaneBottomBarLayout(visible = true)
     }
 
     /**
      * While the paste bar is visible the pane row gives up its height (so list content
-     * is not covered) and the FAB shifts up above the bar.
+     * is not covered) and the FAB sits above the bar via its bottom margin (layout-based
+     * so it cannot conflict with the SpeedDial library's own translations).
      */
     private fun applyTwoPaneBottomBarLayout(visible: Boolean) {
         val barHeight = if (visible) actionBarSizePx else 0
         findViewById<com.leinardi.android.speeddial.SpeedDialView>(
             R.id.floatingActionButton
-        ).translationY = -barHeight.toFloat()
+        ).updateLayoutParams<android.widget.FrameLayout.LayoutParams> {
+            bottomMargin = barHeight
+        }
         findViewById<View>(R.id.paneRow).updateLayoutParams<android.widget.LinearLayout.LayoutParams> {
             bottomMargin = barHeight
         }

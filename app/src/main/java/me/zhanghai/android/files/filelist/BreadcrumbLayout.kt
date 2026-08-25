@@ -7,7 +7,9 @@ package me.zhanghai.android.files.filelist
 
 import android.content.Context
 import android.content.res.ColorStateList
+import android.graphics.Color
 import android.util.AttributeSet
+import android.view.DragEvent
 import android.view.View
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
@@ -210,6 +212,54 @@ class BreadcrumbLayout : HorizontalScrollView {
                     else -> false
                 }
             }
+            // Drop target while a cross-pane drag is in flight: dropping files on this
+            // segment moves them into the segment's directory.
+            binding.root.setOnDragListener { view, event ->
+                val payload = event.localState as? CrossPaneDragPayload
+                fun setHighlight(highlighted: Boolean) {
+                    view.setBackgroundColor(
+                        if (highlighted) {
+                            context.getColorByAttr(android.R.attr.colorControlHighlight)
+                        } else {
+                            Color.TRANSPARENT
+                        }
+                    )
+                }
+                when (event.action) {
+                    android.view.DragEvent.ACTION_DRAG_STARTED -> {
+                        setHighlight(false)
+                        payload != null
+                    }
+
+                    android.view.DragEvent.ACTION_DRAG_ENTERED,
+                    android.view.DragEvent.ACTION_DRAG_LOCATION -> {
+                        setHighlight(true)
+                        true
+                    }
+
+                    android.view.DragEvent.ACTION_DRAG_EXITED -> {
+                        setHighlight(false)
+                        true
+                    }
+
+                    android.view.DragEvent.ACTION_DROP -> {
+                        setHighlight(false)
+                        if (payload != null) {
+                            listener.movePathsTo(payload.paths, path)
+                            true
+                        } else {
+                            false
+                        }
+                    }
+
+                    android.view.DragEvent.ACTION_DRAG_ENDED -> {
+                        setHighlight(false)
+                        true
+                    }
+
+                    else -> false
+                }
+            }
         }
     }
 
@@ -219,5 +269,8 @@ class BreadcrumbLayout : HorizontalScrollView {
         fun openInNewTask(path: Path)
         /** Opens the jump-to-path dialog (long-press on the breadcrumb bar). */
         fun navigateToPath()
+
+        /** Cross-pane drag-and-drop: moves [paths] into [directory] (drop on a segment). */
+        fun movePathsTo(paths: List<Path>, directory: Path)
     }
 }

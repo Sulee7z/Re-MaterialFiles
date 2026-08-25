@@ -160,7 +160,19 @@
             android:visibility="gone"
             app:navigationIcon="@drawable/close_icon_control_normal_24dp"
             app:navigationContentDescription="@string/close"
-            app:popupTheme="?actionBarPopupTheme" />
+            app:popupTheme="?actionBarPopupTheme">
+
+            <EditText
+                android:id="@+id/extractDestinationEdit"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@null"
+                android:hint="@string/file_extract_to_hint"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:maxLines="1"
+                android:visibility="gone" />
+        </androidx.appcompat.widget.Toolbar>
 
         <com.leinardi.android.speeddial.SpeedDialOverlayLayout
             android:id="@+id/fabBgView"

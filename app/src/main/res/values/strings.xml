@@ -261,6 +261,7 @@
     <string name="file_create_archive_title">Create archive</string>
     <string name="file_create_archive_type_zip">.zip</string>
     <string name="file_create_archive_type_tar_xz">.tar.xz</string>
+    <string name="file_create_archive_type_tar_gz">.tar.gz</string>
     <string name="file_create_archive_type_7z">.7z</string>
     <string name="file_create_archive_password">Password (optional)</string>
     <string name="file_add_bookmark_success">Bookmark added</string>
@@ -322,6 +323,7 @@
     <string name="file_list_breadcrumb_action_open_in_new_task">Open in new window</string>
     <string name="file_list_select_title_format">%1$,d</string>
     <string name="file_list_select_action_extract" translatable="false">@string/file_item_action_extract</string>
+    <string name="file_extract_to_hint">Destination folder</string>
     <string name="file_list_select_action_archive" translatable="false">@string/file_item_action_archive</string>
     <string name="file_list_create_file_name_hint">File name</string>
     <string name="file_list_create_file_name_error_empty" translatable="false">@string/file_name_error_empty</string>

@@ -743,6 +743,7 @@ class FileListAdapter(
         menu.findItem(R.id.action_rename).isVisible = !isReadOnly
         menu.findItem(R.id.action_hide).isVisible = !isReadOnly
         menu.findItem(R.id.action_extract).isVisible = file.isArchiveFile
+        menu.findItem(R.id.action_extract_here).isVisible = file.isArchiveFile
         menu.findItem(R.id.action_dex_analyze).isVisible =
             file.name.endsWith(".dex", ignoreCase = true) || file.mimeType.isApk
         menu.findItem(R.id.action_install).isVisible = file.mimeType.isApk
@@ -791,6 +792,10 @@ class FileListAdapter(
                 }
                 R.id.action_extract -> {
                     listener.extractFile(file)
+                    true
+                }
+                R.id.action_extract_here -> {
+                    listener.extractFilesHere(file)
                     true
                 }
                 R.id.action_dex_analyze -> {
@@ -1017,6 +1022,9 @@ class FileListAdapter(
         fun showRenameFileDialog(file: FileItem)
         fun hideFile(file: FileItem)
         fun extractFile(file: FileItem)
+
+        /** Extracts [file] into the current directory (a subfolder named after it). */
+        fun extractFilesHere(file: FileItem)
         fun showDexAnalyzer(file: FileItem)
         fun installFile(file: FileItem)
         fun showApkStringSearch(file: FileItem)

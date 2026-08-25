@@ -36,6 +36,10 @@
         android:title="@string/file_item_action_extract" />
 
     <item
+        android:id="@+id/action_extract_here"
+        android:title="@string/file_list_paste_action_extract_here" />
+
+    <item
         android:id="@+id/action_dex_analyze"
         android:title="@string/file_item_action_dex_analyze" />
 

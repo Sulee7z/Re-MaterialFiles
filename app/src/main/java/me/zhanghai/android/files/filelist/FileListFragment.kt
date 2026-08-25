@@ -125,6 +125,7 @@ import me.zhanghai.android.files.navigation.BookmarkDirectory
 import me.zhanghai.android.files.navigation.NavigationFragment
 import me.zhanghai.android.files.navigation.NavigationRootMapLiveData
 import me.zhanghai.android.files.navigation.RecentDirectories
+import me.zhanghai.android.files.provider.archive.archiveFile
 import me.zhanghai.android.files.provider.archive.createArchiveRootPath
 import me.zhanghai.android.files.provider.archive.isArchivePath
 import com.topjohnwu.superuser.Shell
@@ -176,6 +177,7 @@ import me.zhanghai.android.files.util.isOrientationLandscape
 import me.zhanghai.android.files.util.putArgs
 import me.zhanghai.android.files.util.setOnEditorConfirmActionListener
 import me.zhanghai.android.files.util.showToast
+import me.zhanghai.android.files.util.show
 import me.zhanghai.android.files.util.startActivitySafe
 import me.zhanghai.android.files.util.supportsExternalStorageManager
 import me.zhanghai.android.files.util.takeIfNotEmpty
@@ -1090,6 +1092,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         clipboardManager.copyText(path.toUserFriendlyString(), requireContext())
     }
 
+    override fun movePathsTo(paths: List<Path>, directory: Path) {
+        FileJobService.move(paths, directory, requireContext())
+    }
+
     override fun openInNewTask(path: Path) {
         val intent = FileListActivity.createViewIntent(path)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
@@ -1291,6 +1297,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             menu.findItem(R.id.action_delete).isVisible = !isAnyFileReadOnly
             val areAllFilesArchiveFiles = files.all { it.isArchiveFile }
             menu.findItem(R.id.action_extract).isVisible = areAllFilesArchiveFiles
+            menu.findItem(R.id.action_extract_here).isVisible = areAllFilesArchiveFiles
             val isCurrentPathReadOnly = viewModel.currentPath.fileSystem.isReadOnly
             menu.findItem(R.id.action_archive).isVisible = !isCurrentPathReadOnly
             menu.findItem(R.id.action_batch_rename).isVisible = !isCurrentPathReadOnly
@@ -1421,6 +1428,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             }
             R.id.action_extract -> {
                 extractFiles(viewModel.selectedFiles)
+                true
+            }
+            R.id.action_extract_here -> {
+                extractFilesHere(viewModel.selectedFiles)
                 true
             }
             R.id.action_archive -> {
@@ -1596,10 +1607,37 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     private fun extractFiles(files: FileItemSet) {
-        // Copying an archive's root extracts it; the job targets a subfolder named after
-        // the archive (extension stripped), so top-level entries don't spray into the
-        // current directory. The bottom paste bar shows "extract here" for the paste.
+        // Copying an archive's root extracts it; the bottom paste bar shows the
+        // editable destination (defaulting to the current directory) and the job
+        // appends each archive's base name so archives never merge into one folder.
         copyFiles(files.mapTo(fileItemSetOf()) { it.createDummyArchiveRoot() })
+        viewModel.selectFiles(files, false)
+    }
+
+    /** Extracts immediately into the current directory (no destination dialog). */
+    private fun extractFilesHere(files: FileItemSet) {
+        extractTo(files, viewModel.currentPath)
+    }
+
+    override fun extractFilesHere(file: FileItem) {
+        extractFilesHere(fileItemSetOf(file))
+    }
+
+    private fun extractTo(files: FileItemSet, targetDirectory: Path) {
+        // An entry selected INSIDE an opened archive is copied as itself (just that
+        // entry); an archive FILE is copied as its root (the job appends the archive's
+        // base name so multiple archives never merge into one folder).
+        FileJobService.copy(
+            files.mapTo(mutableListOf()) { file ->
+                if (file.path.isArchivePath) {
+                    file.path
+                } else {
+                    file.createDummyArchiveRoot().path
+                }
+            },
+            targetDirectory,
+            requireContext()
+        )
         viewModel.selectFiles(files, false)
     }
 
@@ -1708,6 +1746,9 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 }, files.size
             )
             binding.bottomCreateFileNameEdit.isVisible = false
+            // Extract mode (clipboard holds archive roots): show the editable extraction
+            // destination, prefilled with the current directory.
+            binding.extractDestinationEdit.isVisible = areAllFilesArchivePaths
             bottomActionMode.setMenuResource(R.menu.file_list_paste)
             val isCurrentPathReadOnly = viewModel.currentPath.fileSystem.isReadOnly
             bottomActionMode.menu.findItem(R.id.action_paste)
@@ -1717,6 +1758,19 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 .isEnabled = !isCurrentPathReadOnly
         }
         if (!bottomActionMode.isActive) {
+            if (binding.extractDestinationEdit.isVisible) {
+                // Archive sources: default to the archive file's own directory (the
+                // archive-internal path string must never leak into the destination).
+                val firstSource = viewModel.pasteState.files.first().path
+                val defaultDirectory = if (firstSource.isArchivePath) {
+                    firstSource.archiveFile.parent?.toString()
+                } else {
+                    viewModel.currentPath.toString()
+                }
+                binding.extractDestinationEdit.setText(
+                    defaultDirectory ?: viewModel.currentPath.toString()
+                )
+            }
             bottomActionMode.start(object : ToolbarActionMode.Callback {
                 override fun onToolbarNavigationIconClicked(toolbarActionMode: ToolbarActionMode) {
                     onBottomToolbarNavigationIconClicked()
@@ -1767,7 +1821,15 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 true
             }
             R.id.action_paste -> {
-                pasteFiles(currentPath)
+                // Extract mode (clipboard holds archive roots) honors the editable
+                // destination; a plain paste always goes to the current directory.
+                val targetDirectory = if (binding.extractDestinationEdit.isVisible) {
+                    val text = binding.extractDestinationEdit.text.toString().trim()
+                    if (text.isEmpty()) viewModel.currentPath else Paths.get(text)
+                } else {
+                    viewModel.currentPath
+                }
+                pasteFiles(targetDirectory)
                 true
             }
             else -> false
@@ -1794,12 +1856,14 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         viewModel.clearPasteState()
     }
 
-    /** Public wrapper for the FAB's "paste to this pane" action (MT Manager style). */
-    fun pasteFilesToCurrentPane() {
+    /** Public wrapper for the FAB's "paste to this pane" action (MT Manager style).
+     *  An optional [targetDirectory] overrides the pane's current directory (used by the
+     *  two-pane paste bar's editable extraction destination). */
+    fun pasteFilesToCurrentPane(targetDirectory: Path? = null) {
         if (viewModel.pasteState.files.isEmpty()) {
             return
         }
-        pasteFiles(viewModel.currentPath)
+        pasteFiles(targetDirectory ?: viewModel.currentPath)
     }
 
     /** Whether this pane has pending clipboard content that can be pasted here. */
@@ -3219,6 +3283,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         val bottomBarLayout: ViewGroup,
         val bottomToolbar: Toolbar,
         val bottomCreateFileNameEdit: EditText,
+        val extractDestinationEdit: EditText,
         val speedDialView: SpeedDialView
     ) {
         companion object {
@@ -3242,7 +3307,8 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                     contentBinding.progress, contentBinding.errorText, contentBinding.emptyView,
                     contentBinding.swipeRefreshLayout, contentBinding.recyclerView,
                     bottomBarBinding.bottomBarLayout, bottomBarBinding.bottomToolbar,
-                    bottomBarBinding.bottomCreateFileNameEdit, speedDialBinding.speedDialView
+                    bottomBarBinding.bottomCreateFileNameEdit,
+                    bottomBarBinding.extractDestinationEdit, speedDialBinding.speedDialView
                 )
             }
         }

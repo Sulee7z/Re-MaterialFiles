@@ -41,7 +41,13 @@
     <item
         android:id="@+id/action_extract"
         android:orderInCategory="200"
-        android:title="@string/file_list_select_action_extract"
+        android:title="@string/file_item_action_extract"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_extract_here"
+        android:orderInCategory="200"
+        android:title="@string/file_list_paste_action_extract_here"
         app:showAsAction="never" />
 
     <item
