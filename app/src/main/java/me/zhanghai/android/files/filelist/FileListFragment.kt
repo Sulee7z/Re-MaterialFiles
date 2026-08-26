@@ -391,6 +391,76 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             // Horizontal drag on a row starts a cross-pane drag-and-drop (drop on the
             // other pane moves the files there).
             adapter.isCrossPaneDragEnabled = true
+            // Long-press on empty space (below the last item or in gaps) creates a
+            // folder here. A strict stationary press is required: the finger must
+            // stay put (24dp tolerance) for 550ms away from the pane edges, so
+            // scrolls, flings and full-screen back swipes never pop up the dialog.
+            val density = resources.displayMetrics.density
+            var longPressPending = false
+            var downX = 0f
+            var downY = 0f
+            val handler = android.os.Handler(android.os.Looper.getMainLooper())
+            val longPressRunnable = Runnable {
+                val pending = longPressPending
+                longPressPending = false
+                if (!pending || !isAdded) {
+                    return@Runnable
+                }
+                // Re-check with the original down point: only blank space triggers.
+                val loc = IntArray(2)
+                binding.recyclerView.getLocationOnScreen(loc)
+                val localX = downX - loc[0]
+                val localY = downY - loc[1]
+                if (binding.recyclerView.findChildViewUnder(localX, localY) != null) {
+                    return@Runnable
+                }
+                showCreateDirectoryDialog()
+            }
+            val cancelLongPress = {
+                longPressPending = false
+                handler.removeCallbacks(longPressRunnable)
+            }
+            binding.recyclerView.addOnItemTouchListener(
+                object :
+                    androidx.recyclerview.widget.RecyclerView.SimpleOnItemTouchListener() {
+                    override fun onInterceptTouchEvent(
+                        rv: androidx.recyclerview.widget.RecyclerView,
+                        e: android.view.MotionEvent
+                    ): Boolean {
+                        when (e.actionMasked) {
+                            android.view.MotionEvent.ACTION_DOWN -> {
+                                // Skip touches near the pane edges so full-screen
+                                // back gestures and divider drags never trigger.
+                                val loc = IntArray(2)
+                                rv.getLocationOnScreen(loc)
+                                val edge = 32 * density
+                                if (e.rawX < loc[0] + edge ||
+                                    e.rawX > loc[0] + rv.width - edge
+                                ) {
+                                    cancelLongPress()
+                                } else {
+                                    longPressPending = true
+                                    downX = e.rawX
+                                    downY = e.rawY
+                                    handler.postDelayed(longPressRunnable, 550)
+                                }
+                            }
+                            android.view.MotionEvent.ACTION_MOVE -> {
+                                if (longPressPending) {
+                                    val dx = e.rawX - downX
+                                    val dy = e.rawY - downY
+                                    val maxDist = 24 * density
+                                    if (dx * dx + dy * dy > maxDist * maxDist) {
+                                        cancelLongPress()
+                                    }
+                                }
+                            }
+                            else -> cancelLongPress()
+                        }
+                        return false
+                    }
+                }
+            )
         }
         if (!isTwoPaneMode) {
             binding.speedDialView.inflate(R.menu.file_list_speed_dial)

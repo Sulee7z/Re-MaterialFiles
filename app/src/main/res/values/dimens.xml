@@ -47,7 +47,7 @@
     <dimen name="two_pane_file_name_text_size">14sp</dimen>
     <dimen name="two_pane_file_description_text_size">13sp</dimen>
     <!-- Two-pane file icons: one notch below the normal two-pane small size (18dp). -->
-    <dimen name="two_pane_icon_size">12dp</dimen>
+    <dimen name="two_pane_icon_size">20dp</dimen>
     <!-- Two-pane image/video thumbnails: larger than the plain icons so previews stay
          recognizable, but well below large_icon_size (40dp). -->
     <dimen name="two_pane_thumbnail_size">24dp</dimen>
