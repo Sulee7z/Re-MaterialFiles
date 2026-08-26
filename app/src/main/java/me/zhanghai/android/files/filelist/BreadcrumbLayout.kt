@@ -20,10 +20,13 @@ import androidx.core.view.isVisible
 import java8.nio.file.Path
 import me.zhanghai.android.files.R
 import me.zhanghai.android.files.databinding.BreadcrumbItemBinding
+import me.zhanghai.android.files.provider.archive.isArchivePath
 import me.zhanghai.android.files.util.getColorByAttr
 import me.zhanghai.android.files.util.getDimensionPixelSize
 import me.zhanghai.android.files.util.getResourceIdByAttr
 import me.zhanghai.android.files.util.layoutInflater
+import me.zhanghai.android.files.provider.archive.archiveFile
+import me.zhanghai.android.files.provider.archive.isArchivePath
 import me.zhanghai.android.files.util.withTheme
 
 class BreadcrumbLayout : HorizontalScrollView {
@@ -46,6 +49,13 @@ class BreadcrumbLayout : HorizontalScrollView {
 
     private lateinit var listener: Listener
     private lateinit var data: BreadcrumbData
+
+    /** Callback for cross-pane drag-and-drop: moving files to a breadcrumb segment's directory. */
+    private var dropTargetListener: ((List<Path>, Path) -> Unit)? = null
+
+    fun setDropTargetListener(listener: (List<Path>, Path) -> Unit) {
+        dropTargetListener = listener
+    }
 
     private var isLayoutDirty = true
     private var isScrollToSelectedItemPending = false
@@ -245,7 +255,7 @@ class BreadcrumbLayout : HorizontalScrollView {
                     android.view.DragEvent.ACTION_DROP -> {
                         setHighlight(false)
                         if (payload != null) {
-                            listener.movePathsTo(payload.paths, path)
+                            dropTargetListener?.invoke(payload.paths, path)
                             true
                         } else {
                             false
@@ -261,6 +271,38 @@ class BreadcrumbLayout : HorizontalScrollView {
                 }
             }
         }
+    }
+
+    /** The breadcrumb segment view under the window coordinates, or null. */
+    fun segmentViewUnder(x: Int, y: Int): View? {
+        for (index in 0 until itemsLayout.childCount) {
+            val child = itemsLayout.getChildAt(index)
+            val location = IntArray(2).also { child.getLocationOnScreen(it) }
+            if (x >= location[0] && x < location[0] + child.width &&
+                y >= location[1] && y < location[1] + child.height
+            ) {
+                return child
+            }
+        }
+        return null
+    }
+
+    /** Highlights (or clears) the given breadcrumb segment view. */
+    fun setSegmentHighlightUnder(x: Int, y: Int, highlighted: Boolean) {
+        val view = segmentViewUnder(x, y) ?: return
+        view.setBackgroundColor(
+            if (highlighted) {
+                context.getColorByAttr(android.R.attr.colorControlHighlight)
+            } else {
+                Color.TRANSPARENT
+            }
+        )
+    }
+
+    /** The path of the breadcrumb segment [view], from the current data. */
+    fun segmentPathOf(view: View): Path? {
+        val index = itemsLayout.indexOfChild(view)
+        return if (index in data.paths.indices) data.paths[index] else null
     }
 
     interface Listener {

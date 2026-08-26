@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (c) 2018 Hai Zhang <dreaming.in.code.zh@gmail.com>
  * All Rights Reserved.
  */
@@ -182,9 +182,17 @@ class FileListActivity : AppActivity() {
                     activeFileListFragmentOrNull()?.copyPath(path)
                 }
                 override fun movePathsTo(paths: List<Path>, directory: Path) {
-                    me.zhanghai.android.files.filejob.FileJobService.move(
-                        paths, directory, applicationContext
-                    )
+                    // Archive sources are read-only: dragging OUT of an archive is
+                    // always a copy (a move could never delete the sources).
+                    if (paths.first().isArchivePath) {
+                        me.zhanghai.android.files.filejob.FileJobService.copy(
+                            paths, directory, applicationContext
+                        )
+                    } else {
+                        me.zhanghai.android.files.filejob.FileJobService.move(
+                            paths, directory, applicationContext
+                        )
+                    }
                 }
                 override fun openInNewTask(path: Path) {
                     activeFileListFragmentOrNull()?.openInNewTask(path)
@@ -315,10 +323,6 @@ class FileListActivity : AppActivity() {
             // The pane fragments are (or will be) available now; apply the responsive
             // layout and wire the switch bar / highlight.
             setupResponsivePanes()
-            // Cross-pane drag-and-drop: dropping files over the OTHER pane's container
-            // moves them into that pane's current directory.
-            installPaneDropTarget(findViewById(R.id.leftPaneContent), isSecondaryPane = false)
-            installPaneDropTarget(findViewById(R.id.rightPaneContent), isSecondaryPane = true)
             // Create the drawer AFTER the panes so its listener can always find a pane
             // fragment (NavigationFragment.onActivityCreated immediately observes the path).
             if (savedInstanceState == null) {
@@ -485,6 +489,7 @@ class FileListActivity : AppActivity() {
             updateTwoPaneBottomToolbar(refreshDestination = true)
         }
         setupDividerDrag()
+        setupTwoPaneDragController()
         updateResponsivePanes()
     }
 
@@ -660,18 +665,25 @@ class FileListActivity : AppActivity() {
                     if (item.itemId == R.id.action_paste) {
                         // Resolve the ACTIVE pane FRESH at click time: the callback
                         // object outlives active-pane switches, and a captured fragment
-                        // would paste into a stale pane's directory.
+                        // would paste into a stale pane's directory. A bare name
+                        // resolves against the extraction base directory (the archive
+                        // file's own directory when the sources are archive entries;
+                        // the process CWD is "/", which would hit the read-only root).
                         val activeFragment = activeFileListFragmentOrNull()
                             ?: return false
-                        val targetDirectory = if (extractDestinationEdit.isVisible) {
-                            val text = extractDestinationEdit.text.toString().trim()
-                            if (text.isEmpty()) {
-                                activeFragment.viewModel.currentPath
-                            } else {
-                                java8.nio.file.Paths.get(text)
-                            }
+                        val firstSource = activeFragment.viewModel.pasteState.files
+                            .first().path
+                        val baseDirectory = if (firstSource.isArchivePath) {
+                            firstSource.archiveFile.parent
+                                ?: activeFragment.viewModel.currentPath
                         } else {
                             activeFragment.viewModel.currentPath
+                        }
+                        val text = extractDestinationEdit.text.toString().trim()
+                        val targetDirectory = when {
+                            text.isEmpty() -> baseDirectory
+                            text.startsWith("/") -> java8.nio.file.Paths.get(text)
+                            else -> baseDirectory.resolve(text)
                         }
                         activeFragment.pasteFilesToCurrentPane(targetDirectory)
                         return true
@@ -714,24 +726,24 @@ class FileListActivity : AppActivity() {
         }
     }
 
-    private class TwoPaneBottomToolbarActionMode(
-        bar: ViewGroup,
-        toolbar: androidx.appcompat.widget.Toolbar
-    ) : ToolbarActionMode(bar, toolbar) {
-        override fun show(bar: ViewGroup, animate: Boolean) {
-            bar.isVisible = true
-        }
-
-        override fun hide(bar: ViewGroup, animate: Boolean) {
-            bar.isVisible = false
-        }
+    /**
+     * Per-view drop targets for the two-pane cross-pane drag-and-drop. Each drop target
+     * has its own OnDragListener with clear boundaries:
+     * - Pane containers: move/copy to that pane's current directory.
+     * - Breadcrumb segments: move to the segment's directory.
+     * - Trash bar: delete the dragged files.
+     */
+    private fun setupTwoPaneDragController() {
+        installPaneDropTarget(findViewById(R.id.leftPaneContent), isSecondaryPane = false)
+        installPaneDropTarget(findViewById(R.id.rightPaneContent), isSecondaryPane = true)
+        installBreadcrumbDropTarget()
+        installTrashDropTarget()
     }
 
-    /**
-     * Drop target for the two-pane cross-pane drag-and-drop: dropping files over the
-     * other pane's container moves them into that pane's current directory. Same-pane
-     * drops are rejected (the drag simply cancels). The pane is outlined with an accent
-     * stroke while a foreign drag hovers over it.
+    /** Drop target for the two-pane cross-pane drag-and-drop: dropping files over the
+     *  other pane's container moves them into that pane's current directory. Same-pane
+     *  drops are rejected (the drag simply cancels). The pane is outlined with an accent
+     *  stroke while a foreign drag hovers over it.
      */
     private fun installPaneDropTarget(paneContent: View, isSecondaryPane: Boolean) {
         paneContent.setOnDragListener { view, event ->
@@ -747,8 +759,11 @@ class FileListActivity : AppActivity() {
                 }
             }
             when (event.action) {
-                android.view.DragEvent.ACTION_DRAG_STARTED ->
+                android.view.DragEvent.ACTION_DRAG_STARTED -> {
+                    // A cross-pane drag started: reveal the delete trash target.
+                    setDragDeleteTargetVisible(true)
                     payload != null && payload.sourceIsSecondaryPane != isSecondaryPane
+                }
 
                 android.view.DragEvent.ACTION_DRAG_ENTERED,
                 android.view.DragEvent.ACTION_DRAG_LOCATION -> {
@@ -769,8 +784,16 @@ class FileListActivity : AppActivity() {
                     ) {
                         return@setOnDragListener false
                     }
+                    // A pane browsing INSIDE an opened archive is read-only: redirect
+                    // the move next to the archive file instead.
+                    val currentDirectory = targetFragment.viewModel.currentPath
+                    val targetDirectory = if (currentDirectory.isArchivePath) {
+                        currentDirectory.archiveFile.parent ?: currentDirectory
+                    } else {
+                        currentDirectory
+                    }
                     me.zhanghai.android.files.filejob.FileJobService.move(
-                        payload.paths, targetFragment.viewModel.currentPath, applicationContext
+                        payload.paths, targetDirectory, applicationContext
                     )
                     findFileListFragment(payload.sourceIsSecondaryPane)
                         ?.viewModel?.clearSelectedFiles()
@@ -779,6 +802,7 @@ class FileListActivity : AppActivity() {
 
                 android.view.DragEvent.ACTION_DRAG_ENDED -> {
                     setHighlight(false)
+                    setDragDeleteTargetVisible(false)
                     true
                 }
 
@@ -787,6 +811,115 @@ class FileListActivity : AppActivity() {
         }
     }
 
+    /**
+     * Per-view drop targets for the two-pane cross-pane drag-and-drop. Each drop target
+     * has its own OnDragListener with clear boundaries:
+     * - Pane containers: move/copy to that pane's current directory.
+     * - Breadcrumb segments: move to the segment's directory.
+     * - Trash bar: delete the dragged files.
+     */
+
+    /** Drop target for breadcrumb segments: dropping files on a segment moves them to
+     *  the segment's directory. */
+    private fun installBreadcrumbDropTarget() {
+        sharedBreadcrumbLayout.setDropTargetListener { paths, directory ->
+            // Archive sources are read-only: dragging OUT of an archive is always a
+            // copy (a move could never delete the sources).
+            if (paths.first().isArchivePath) {
+                me.zhanghai.android.files.filejob.FileJobService.copy(
+                    paths, directory, applicationContext
+                )
+            } else {
+                me.zhanghai.android.files.filejob.FileJobService.move(
+                    paths, directory, applicationContext
+                )
+            }
+        }
+    }
+
+    /** Drop target for the trash bar: dropping files on it deletes them. */
+    private fun installTrashDropTarget() {
+        findViewById<View>(R.id.dragDeleteView).setOnDragListener { view, event ->
+            val payload = event.localState as? CrossPaneDragPayload
+                ?: return@setOnDragListener false
+            fun setHighlight(highlighted: Boolean) {
+                view.animate().scaleX(if (highlighted) 1.1f else 1f)
+                    .scaleY(if (highlighted) 1.1f else 1f)
+                    .setDuration(80)
+                    .start()
+            }
+            when (event.action) {
+                android.view.DragEvent.ACTION_DRAG_STARTED -> true
+
+                android.view.DragEvent.ACTION_DRAG_ENTERED,
+                android.view.DragEvent.ACTION_DRAG_LOCATION -> {
+                    setHighlight(true)
+                    true
+                }
+
+                android.view.DragEvent.ACTION_DRAG_EXITED -> {
+                    setHighlight(false)
+                    true
+                }
+
+                android.view.DragEvent.ACTION_DROP -> {
+                    setHighlight(false)
+                    view.isVisible = false
+                    // Same confirmation flow as normal delete: ask before destroying.
+                    com.google.android.material.dialog.MaterialAlertDialogBuilder(this@FileListActivity)
+                        .setTitle(getString(R.string.delete))
+                        .setPositiveButton(android.R.string.ok) { _, _ ->
+                            me.zhanghai.android.files.filejob.FileJobService.delete(
+                                payload.paths, applicationContext
+                            )
+                            findFileListFragment(payload.sourceIsSecondaryPane)
+                                ?.viewModel?.clearSelectedFiles()
+                        }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+                    true
+                }
+
+                android.view.DragEvent.ACTION_DRAG_ENDED -> {
+                    setHighlight(false)
+                    view.isVisible = false
+                    true
+                }
+
+                else -> false
+            }
+        }
+    }
+
+    private class TwoPaneBottomToolbarActionMode(
+        bar: ViewGroup,
+        toolbar: androidx.appcompat.widget.Toolbar
+    ) : ToolbarActionMode(bar, toolbar) {
+        override fun show(bar: ViewGroup, animate: Boolean) {
+            bar.isVisible = true
+        }
+
+        override fun hide(bar: ViewGroup, animate: Boolean) {
+            bar.isVisible = false
+        }
+    }
+
+    /**
+     * The drag-to-delete trash target at the top: shown while a cross-pane drag is in
+     * flight; dropping the dragged files on it deletes them. Highlighted (scaled up)
+     * while the drag hovers over it.
+     */
+
+    /** Shows or hides the drag-to-delete trash target during a cross-pane drag. */
+    fun setDragDeleteTargetVisible(visible: Boolean) {
+        findViewById<View>(R.id.dragDeleteView).isVisible = visible
+    }
+    /**
+     * Drop target for the two-pane cross-pane drag-and-drop: dropping files over the
+     * other pane's container moves them into that pane's current directory. Same-pane
+     * drops are rejected (the drag simply cancels). The pane is outlined with an accent
+     * stroke while a foreign drag hovers over it.
+     */
     /**
      * Called by a pane's FileListFragment when its breadcrumb data changes, so the
      * shared bar updates when the ACTIVE pane navigates. Also marks the (new) active

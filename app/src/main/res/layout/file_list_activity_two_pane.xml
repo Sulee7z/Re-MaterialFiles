@@ -22,6 +22,7 @@
       ~ full-screen DrawerLayout so it draws over the divider and the right pane.
       -->
     <FrameLayout
+        android:id="@+id/twoPaneDragRoot"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
@@ -143,6 +144,36 @@
                         android:visibility="gone" />
                 </FrameLayout>
             </LinearLayout>
+        </LinearLayout>
+
+        <!-- Drag-to-delete bar (two-pane): always in the hierarchy (invisible when
+             idle); becomes visible while a cross-pane drag is in flight. Dropping files
+             on it deletes them (with the standard delete confirmation). -->
+        <LinearLayout
+            android:id="@+id/dragDeleteView"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_gravity="top|fill_horizontal"
+            android:background="?attr/colorError"
+            android:elevation="16dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:visibility="invisible">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/delete_icon_control_normal_24dp"
+                app:tint="@android:color/white" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="@string/delete"
+                android:textAppearance="?textAppearanceLabelLarge"
+                android:textColor="@android:color/white" />
         </LinearLayout>
 
         <!-- Paste bar (two-pane): shown when the shared clipboard holds entries; its

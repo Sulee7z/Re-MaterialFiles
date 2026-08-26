@@ -1093,7 +1093,12 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     override fun movePathsTo(paths: List<Path>, directory: Path) {
-        FileJobService.move(paths, directory, requireContext())
+        // Archive sources are read-only: dragging OUT of an archive is always a copy.
+        if (paths.first().isArchivePath) {
+            FileJobService.copy(paths, directory, requireContext())
+        } else {
+            FileJobService.move(paths, directory, requireContext())
+        }
     }
 
     override fun openInNewTask(path: Path) {
@@ -1597,7 +1602,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         viewModel.selectFiles(files, false)
     }
 
-    private fun confirmDeleteFiles(files: FileItemSet) {
+    fun confirmDeleteFiles(files: FileItemSet) {
         ConfirmDeleteFilesDialogFragment.show(files, this)
     }
 
@@ -1614,13 +1619,28 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         viewModel.selectFiles(files, false)
     }
 
-    /** Extracts immediately into the current directory (no destination dialog). */
+    /** Extracts immediately into the current directory (no destination dialog). When
+     *  the current directory is inside an opened archive, lands next to the archive
+     *  file itself (the archive-internal tree is read-only). */
     private fun extractFilesHere(files: FileItemSet) {
-        extractTo(files, viewModel.currentPath)
+        extractTo(files, extractionBaseDirectory(files))
     }
 
     override fun extractFilesHere(file: FileItem) {
         extractFilesHere(fileItemSetOf(file))
+    }
+
+    /**
+     * The base directory for extraction destinations: the archive file's own directory
+     * when extracting out of an opened archive, otherwise the current directory.
+     */
+    private fun extractionBaseDirectory(files: FileItemSet): Path {
+        val firstSource = files.first().path
+        return if (firstSource.isArchivePath) {
+            firstSource.archiveFile.parent ?: viewModel.currentPath
+        } else {
+            viewModel.currentPath
+        }
     }
 
     private fun extractTo(files: FileItemSet, targetDirectory: Path) {
@@ -1821,13 +1841,14 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 true
             }
             R.id.action_paste -> {
-                // Extract mode (clipboard holds archive roots) honors the editable
-                // destination; a plain paste always goes to the current directory.
-                val targetDirectory = if (binding.extractDestinationEdit.isVisible) {
-                    val text = binding.extractDestinationEdit.text.toString().trim()
-                    if (text.isEmpty()) viewModel.currentPath else Paths.get(text)
-                } else {
-                    viewModel.currentPath
+                // A bare destination name resolves against the base directory (the
+                // process CWD is "/", which would hit the read-only root).
+                val baseDirectory = extractionBaseDirectory(viewModel.pasteState.files)
+                val text = binding.extractDestinationEdit.text.toString().trim()
+                val targetDirectory = when {
+                    text.isEmpty() -> baseDirectory
+                    text.startsWith("/") -> Paths.get(text)
+                    else -> baseDirectory.resolve(text)
                 }
                 pasteFiles(targetDirectory)
                 true
@@ -1844,7 +1865,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     private fun pasteFiles(targetDirectory: Path) {
         val pasteState = viewModel.pasteState
-        if (viewModel.pasteState.copy) {
+        // Archive sources are read-only: a "move" out of an opened archive could never
+        // delete the sources, so it degrades to a copy.
+        val sourcesInArchive = pasteState.files.all { it.path.isArchivePath }
+        if (pasteState.copy || sourcesInArchive) {
             FileJobService.copy(
                 makePathListForJob(pasteState.files), targetDirectory, requireContext()
             )

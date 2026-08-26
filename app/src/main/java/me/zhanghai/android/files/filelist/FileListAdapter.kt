@@ -405,22 +405,25 @@ class FileListAdapter(
                     }
                     _touchData.lastPosSelected = newPosition
                 } else {
+                    // Cross-pane drag: horizontal movement past the threshold starts the
+                    // DnD — even after the long-press selection (the grabbed row drags
+                    // Windows-style). Must run BEFORE the multi-select early-return, and
+                    // requires predominantly horizontal movement so the vertical
+                    // multi-select slide never hijacks it.
+                    val deltaX = event.x - _touchData.startTouchPosX
+                    val deltaY = event.y - _touchData.startTouchPosY
+                    val dragThreshold = 24f * view.resources.displayMetrics.density
+                    if (isCrossPaneDragEnabled && !_touchData.isCrossPaneDragStarted &&
+                        abs(deltaX) > dragThreshold && abs(deltaX) > abs(deltaY)
+                    ) {
+                        _touchData.isCrossPaneDragStarted = true
+                        startCrossPaneDrag(view, file)
+                        return
+                    }
                     if (_touchData.isMultipleSelectionStarted) return
                     if (abs(event.x - _touchData.startTouchPosX) > horizontalError) {
                         _touchData.isGestureHorizontal = true
                         view.parent.requestDisallowInterceptTouchEvent(false)
-                    }
-                    if (isCrossPaneDragEnabled && !_touchData.isCrossPaneDragStarted) {
-                        // Two-pane mode: a horizontal drag well past the gesture
-                        // threshold starts a cross-pane drag-and-drop (drop on the other
-                        // pane moves the file). The vertical multi-select slide is a
-                        // different gesture and never reaches here once it started.
-                        val dragThreshold =
-                            64f * view.resources.displayMetrics.density
-                        if (abs(event.x - _touchData.startTouchPosX) > dragThreshold) {
-                            _touchData.isCrossPaneDragStarted = true
-                            startCrossPaneDrag(view, file)
-                        }
                     }
                 }
                 _touchData.prevDeltaPos = deltaPos
