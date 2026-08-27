@@ -186,7 +186,6 @@
             android:layout_gravity="bottom"
             android:background="?colorSurface"
             android:elevation="@dimen/design_appbar_elevation"
-            android:fitsSystemWindows="true"
             android:theme="?actionBarTheme"
             android:visibility="gone"
             app:navigationIcon="@drawable/close_icon_control_normal_24dp"

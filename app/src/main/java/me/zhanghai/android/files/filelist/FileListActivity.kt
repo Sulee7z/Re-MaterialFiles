@@ -712,10 +712,12 @@ class FileListActivity : AppActivity() {
     /**
      * While the paste bar is visible the pane row gives up its height (so list content
      * is not covered) and the FAB sits above the bar via its bottom margin (layout-based
-     * so it cannot conflict with the SpeedDial library's own translations).
+     * so it cannot conflict with the SpeedDial library's own translations). The offset is
+     * taken from the bar's OWN resolved layout height (same source as its rendering), so
+     * the two can never drift apart.
      */
     private fun applyTwoPaneBottomBarLayout(visible: Boolean) {
-        val barHeight = if (visible) actionBarSizePx else 0
+        val barHeight = if (visible) twoPaneBottomToolbar.layoutParams.height else 0
         findViewById<com.leinardi.android.speeddial.SpeedDialView>(
             R.id.floatingActionButton
         ).updateLayoutParams<android.widget.FrameLayout.LayoutParams> {
