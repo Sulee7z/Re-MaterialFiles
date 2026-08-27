@@ -39,7 +39,7 @@ def appVersionName = "${versionMajor}.${versionMinor}.${versionPatch}"
 android {
     namespace = 'me.zhanghai.android.files'
     buildToolsVersion = '36.0.0'
-    compileSdk 36
+    compileSdk 37
     ndkVersion = '28.1.13356709'
     defaultConfig {
         applicationId 'me.zhanghai.android.files'

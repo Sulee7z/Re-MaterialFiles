@@ -64,20 +64,29 @@ class FileDocumentsProvider : DocumentsProvider() {
             } else {
                 volumeTitleFromPath(directory.absolutePath)
             }
+            val rootPath = Paths.get(path)
+            var rootFlags = Root.FLAG_LOCAL_ONLY or Root.FLAG_SUPPORTS_IS_CHILD
+            if (Files.isWritable(rootPath)) {
+                rootFlags = rootFlags or Root.FLAG_SUPPORTS_CREATE
+            }
             cursor.newRow()
                 .add(Root.COLUMN_ROOT_ID, ROOT_ID_PREFIX + path)
                 .add(Root.COLUMN_ICON, R.mipmap.launcher_icon)
                 .add(Root.COLUMN_TITLE, title)
-                .add(Root.COLUMN_FLAGS, Root.FLAG_LOCAL_ONLY)
+                .add(Root.COLUMN_FLAGS, rootFlags)
                 .add(Root.COLUMN_DOCUMENT_ID, path)
                 .add(Root.COLUMN_AVAILABLE_BYTES, directory.usableSpace)
         }
         if (isDirectoryReadable(Paths.get("/"))) {
+            var rootFlags = Root.FLAG_LOCAL_ONLY or Root.FLAG_SUPPORTS_IS_CHILD
+            if (Files.isWritable(Paths.get("/"))) {
+                rootFlags = rootFlags or Root.FLAG_SUPPORTS_CREATE
+            }
             cursor.newRow()
                 .add(Root.COLUMN_ROOT_ID, ROOT_ID_DEVICE_ROOT)
                 .add(Root.COLUMN_ICON, R.mipmap.launcher_icon)
                 .add(Root.COLUMN_TITLE, context.getString(R.string.documents_provider_root_title))
-                .add(Root.COLUMN_FLAGS, Root.FLAG_LOCAL_ONLY)
+                .add(Root.COLUMN_FLAGS, rootFlags)
                 .add(Root.COLUMN_DOCUMENT_ID, "/")
         }
         return cursor
@@ -120,7 +129,12 @@ class FileDocumentsProvider : DocumentsProvider() {
                 .thenBy { it.fileName.toString().lowercase() }
         )
         for (entry in sorted) {
-            includeDocument(cursor, entry)
+            try {
+                includeDocument(cursor, entry)
+            } catch (e: FileNotFoundException) {
+                // Skip entries that cannot be read (e.g. permission-restricted files)
+                // instead of failing the whole listing.
+            }
         }
         return cursor
     }
@@ -134,7 +148,9 @@ class FileDocumentsProvider : DocumentsProvider() {
         val isDirectory = attributes.isDirectory
         val displayName = path.fileName?.toString() ?: path.toString()
         var flags = 0
-        if (!isDirectory) {
+        if (isDirectory) {
+            flags = flags or Document.FLAG_DIR_SUPPORTS_CREATE
+        } else {
             flags = flags or Document.FLAG_SUPPORTS_WRITE
         }
         if (Files.isWritable(path)) {
@@ -157,6 +173,24 @@ class FileDocumentsProvider : DocumentsProvider() {
                 .getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase())
                 ?: "application/octet-stream"
         }
+
+    // ------------------------------------------------------------------- hierarchy
+
+    /**
+     * Required by the Root/Document FLAG_SUPPORTS_IS_CHILD flags and by tree navigation
+     * (ACTION_OPEN_DOCUMENT_TREE): tells DocumentsUI whether [childDocumentId] lives
+     * under [parentDocumentId]. Paths are compared segment-wise, so "/a/b" is NOT a
+     * child of "/a/bc".
+     */
+    @Throws(FileNotFoundException::class)
+    override fun isChildDocument(
+        parentDocumentId: String,
+        childDocumentId: String
+    ): Boolean {
+        val parent = pathForDocumentId(parentDocumentId).normalize()
+        val child = pathForDocumentId(childDocumentId).normalize()
+        return child != parent && child.startsWith(parent)
+    }
 
     // ---------------------------------------------------------------------- files
 

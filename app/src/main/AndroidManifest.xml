@@ -121,13 +121,13 @@
                 <category android:name="android.intent.category.OPENABLE" />
                 <data android:mimeType="*/*" />
             </intent-filter>
-            <!--
-              ~ Unusable until we implement DocumentsProvider.
+            <!-- Lets other apps ask the system picker to choose a FOLDER from our
+                 provider (DocumentsUI hosts the tree navigation; we appear as a root
+                 in its side menu). -->
             <intent-filter>
                 <action android:name="android.intent.action.OPEN_DOCUMENT_TREE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-            -->
             <intent-filter>
                 <action android:name="me.zhanghai.android.files.intent.action.VIEW_DOWNLOADS" />
                 <category android:name="android.intent.category.DEFAULT" />

@@ -164,7 +164,14 @@ object SuiFileServiceLauncher {
     @RequiresApi(Build.VERSION_CODES.M)
     @Throws(RemoteFileSystemException::class)
     private fun launchShizukuService(): IRemoteFileService {
-        if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+        val permissionGranted = try {
+            Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+        } catch (e: Throwable) {
+            // Shizuku was uninstalled (or its binder died) since the availability
+            // probe: surface a proper RemoteFileSystemException instead of crashing.
+            throw RemoteFileSystemException(e)
+        }
+        if (!permissionGranted) {
             val granted = try {
                 runBlocking<Boolean> {
                     suspendCancellableCoroutine { continuation ->
@@ -186,6 +193,10 @@ object SuiFileServiceLauncher {
                     }
                 }
             } catch (e: InterruptedException) {
+                throw RemoteFileSystemException(e)
+            } catch (e: Throwable) {
+                // The permission dialog cannot be shown (Shizuku gone mid-request):
+                // degrade gracefully.
                 throw RemoteFileSystemException(e)
             }
             if (!granted) {
@@ -252,13 +263,23 @@ object SuiFileServiceLauncher {
             }
         } catch (e: InterruptedException) {
             throw RemoteFileSystemException(e)
+        } catch (e: Throwable) {
+            // Shizuku went away while binding: degrade gracefully.
+            throw RemoteFileSystemException(e)
         }
     }
 
     @RequiresApi(Build.VERSION_CODES.M)
     @Throws(RemoteFileSystemException::class)
     private fun launchStellarService(): IRemoteFileService {
-        if (!Stellar.checkSelfPermission()) {
+        val permissionGranted = try {
+            Stellar.checkSelfPermission()
+        } catch (e: Throwable) {
+            // Stellar manager was uninstalled (or disconnected) since the availability
+            // probe: surface a proper RemoteFileSystemException instead of crashing.
+            throw RemoteFileSystemException(e)
+        }
+        if (!permissionGranted) {
             val granted = try {
                 runBlocking<Boolean> {
                     suspendCancellableCoroutine { continuation ->
@@ -278,6 +299,10 @@ object SuiFileServiceLauncher {
                     }
                 }
             } catch (e: InterruptedException) {
+                throw RemoteFileSystemException(e)
+            } catch (e: Throwable) {
+                // The permission dialog cannot be shown (Stellar gone mid-request):
+                // degrade gracefully.
                 throw RemoteFileSystemException(e)
             }
             if (!granted) {
@@ -350,6 +375,9 @@ object SuiFileServiceLauncher {
                 }
             }
         } catch (e: InterruptedException) {
+            throw RemoteFileSystemException(e)
+        } catch (e: Throwable) {
+            // Stellar went away while binding: degrade gracefully.
             throw RemoteFileSystemException(e)
         }
     }

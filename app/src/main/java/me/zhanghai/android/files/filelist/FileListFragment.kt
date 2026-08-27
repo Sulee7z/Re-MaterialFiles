@@ -383,18 +383,21 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             binding.speedDialView.isVisible = false
             // The shared breadcrumb bar (MT Manager style) replaces the per-pane bars.
             binding.breadcrumbLayout.isVisible = false
-            applyTwoPaneSmallIcons()
             adapter.hideMenuButtons = true
-            // Two-pane mode also uses a smaller default font (~1.5 notches below
-            // normal) so more files fit per pane.
-            adapter.useSmallFont = true
+            // Compactness (small font/icons/dense rows) is driven ENTIRELY by the
+            // FILE_LIST_TWO_PANE_DENSE switch via updateDenseLayout(), so the setting
+            // and the rendered list can never disagree (and toggling it takes effect
+            // immediately). The DENSE observers run on view creation, so this initial
+            // state is covered too.
             // Horizontal drag on a row starts a cross-pane drag-and-drop (drop on the
             // other pane moves the files there).
             adapter.isCrossPaneDragEnabled = true
             // Long-press on empty space (below the last item or in gaps) creates a
             // folder here. A strict stationary press is required: the finger must
-            // stay put (24dp tolerance) for 550ms away from the pane edges, so
-            // scrolls, flings and full-screen back swipes never pop up the dialog.
+            // stay put (24dp tolerance) for 550ms, and only the MIDDLE third of the
+            // pane width counts (a deliberate, centered gesture) — edge presses are
+            // where scrolls, flings, full-screen back swipes and the divider drag
+            // naturally start, so they must never pop up the dialog.
             val density = resources.displayMetrics.density
             var longPressPending = false
             var downX = 0f
@@ -429,14 +432,13 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                     ): Boolean {
                         when (e.actionMasked) {
                             android.view.MotionEvent.ACTION_DOWN -> {
-                                // Skip touches near the pane edges so full-screen
-                                // back gestures and divider drags never trigger.
+                                // Only a press in the middle third of the pane starts
+                                // the timer; presses near either edge are ignored.
                                 val loc = IntArray(2)
                                 rv.getLocationOnScreen(loc)
-                                val edge = 32 * density
-                                if (e.rawX < loc[0] + edge ||
-                                    e.rawX > loc[0] + rv.width - edge
-                                ) {
+                                val minX = loc[0] + rv.width / 3
+                                val maxX = loc[0] + rv.width * 2 / 3
+                                if (e.rawX < minX || e.rawX > maxX) {
                                     cancelLongPress()
                                 } else {
                                     longPressPending = true
@@ -1309,19 +1311,25 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     /**
      * Applies the dense-layout setting. In two-pane mode the dedicated two-pane dense
-     * switch takes precedence over the global one.
+     * switch takes precedence over the global one, and also controls the small-font and
+     * small-icon modes (so the setting and the rendered list can never disagree).
      */
-    private fun updateDenseLayout() {        onDenseLayoutChanged(
-            if (isTwoPaneMode) {
-                me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE_DENSE.valueCompat
-            } else {
-                me.zhanghai.android.files.settings.Settings.FILE_LIST_DENSE_LAYOUT.valueCompat
-            }
-        )
+    private fun updateDenseLayout() {
+        val twoPane = isTwoPaneMode
+        val dense = if (twoPane) {
+            me.zhanghai.android.files.settings.Settings.FILE_LIST_TWO_PANE_DENSE.valueCompat
+        } else {
+            me.zhanghai.android.files.settings.Settings.FILE_LIST_DENSE_LAYOUT.valueCompat
+        }
+        onDenseLayoutChanged(dense, twoPane)
     }
 
-    private fun onDenseLayoutChanged(denseLayout: Boolean) {
+    private fun onDenseLayoutChanged(denseLayout: Boolean, twoPaneMode: Boolean) {
         adapter.denseLayout = denseLayout
+        if (twoPaneMode) {
+            adapter.useSmallFont = denseLayout
+            adapter.useSmallIcons = denseLayout
+        }
         updateSpanCount()
         // re-set adapter to prevent RecyclerView from recycling views and reusing old padding
         // values on refresh. Neither notifyDataSetChanged() / notifyItemRangeChanged
