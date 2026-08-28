@@ -101,7 +101,14 @@ object Client {
     @Throws(DavException::class)
     fun delete(path: Path) {
         try {
-            DavResource(getClient(path.authority), path.url).delete {}
+            // nginx WebDAV requires a trailing slash when deleting a collection
+            // (RFC 4918 §5.2 recommends it). Try without first, then fall back.
+            try {
+                DavResource(getClient(path.authority), path.url).delete {}
+            } catch (e: DavException) {
+                val urlWithSlash = path.url.newBuilder().addPathSegment("").build()
+                DavResource(getClient(path.authority), urlWithSlash).delete {}
+            }
         } catch (e: IOException) {
             throw e.toDavException()
         }
