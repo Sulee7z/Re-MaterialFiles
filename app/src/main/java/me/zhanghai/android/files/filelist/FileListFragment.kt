@@ -35,6 +35,7 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.Spinner
 import android.widget.TextView
+import android.widget.Button
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
@@ -81,6 +82,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.zhanghai.android.files.app.packageManager
+import com.topjohnwu.superuser.Shell
 import me.zhanghai.android.files.compat.longVersionCodeCompat
 import me.zhanghai.android.files.util.getPackageArchiveInfoCompat
 import me.zhanghai.android.files.util.sha1Digest
@@ -128,7 +130,6 @@ import me.zhanghai.android.files.navigation.RecentDirectories
 import me.zhanghai.android.files.provider.archive.archiveFile
 import me.zhanghai.android.files.provider.archive.createArchiveRootPath
 import me.zhanghai.android.files.provider.archive.isArchivePath
-import com.topjohnwu.superuser.Shell
 import me.zhanghai.android.files.provider.linux.isLinuxPath
 import me.zhanghai.android.files.searchindex.FileIndexer
 import me.zhanghai.android.files.settings.HiddenPaths
@@ -140,6 +141,7 @@ import me.zhanghai.android.files.compat.getDrawableCompat
 import me.zhanghai.android.files.ui.CoordinatorAppBarLayout
 import me.zhanghai.android.files.ui.DrawerLayoutOnBackPressedCallback
 import me.zhanghai.android.files.ui.FixQueryChangeSearchView
+import me.zhanghai.android.files.ui.OverlayToolbar
 import me.zhanghai.android.files.ui.OverlayToolbarActionMode
 import me.zhanghai.android.files.ui.PersistentBarLayout
 import me.zhanghai.android.files.ui.PersistentBarLayoutToolbarActionMode
@@ -393,12 +395,15 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             // other pane moves the files there).
             adapter.isCrossPaneDragEnabled = true
             // Long-press on empty space (below the last item or in gaps) creates a
-            // folder here. A strict stationary press is required: the finger must
-            // stay put (24dp tolerance) for 550ms, and only the MIDDLE third of the
-            // pane width counts (a deliberate, centered gesture) — edge presses are
-            // where scrolls, flings, full-screen back swipes and the divider drag
-            // naturally start, so they must never pop up the dialog.
+            // folder here. A strict stationary press is required:
+            // - the press must land within the MIDDLE third of the pane width, and NOT
+            //   inside the system back-gesture zone (WindowInsets.getSystemGestureInsets);
+            // - the finger must stay within touch slop (~8dp) for 800ms. Any horizontal
+            //   intent (scroll/fling/back swipe, however the ROM starts it) moves past
+            //   slop immediately and cancels, so only a truly still press fires.
             val density = resources.displayMetrics.density
+            val touchSlop = android.view.ViewConfiguration.get(binding.recyclerView.context)
+                .scaledTouchSlop.toFloat()
             var longPressPending = false
             var downX = 0f
             var downY = 0f
@@ -432,26 +437,46 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                     ): Boolean {
                         when (e.actionMasked) {
                             android.view.MotionEvent.ACTION_DOWN -> {
-                                // Only a press in the middle third of the pane starts
-                                // the timer; presses near either edge are ignored.
+                                // A deliberate, centered gesture is required. The press
+                                // must land on BLANK space (not an item row), within the
+                                // middle third of the pane, and NOT inside the system
+                                // back-gesture zone (WindowInsets.getSystemGestureInsets).
+                                // Checking the item hit NOW (not after the delay) means a
+                                // tap on a file can never be misread as a long-press, even
+                                // when the list refreshes mid-gesture (FTP connections
+                                // repopulate rows on every network round-trip).
                                 val loc = IntArray(2)
                                 rv.getLocationOnScreen(loc)
+                                val localX = e.rawX - loc[0]
+                                val localY = e.rawY - loc[1]
+                                val onItem = rv.findChildViewUnder(localX, localY) != null
                                 val minX = loc[0] + rv.width / 3
                                 val maxX = loc[0] + rv.width * 2 / 3
-                                if (e.rawX < minX || e.rawX > maxX) {
+                                val windowInsets =
+                                    androidx.core.view.ViewCompat.getRootWindowInsets(rv)
+                                val gestureLeft = windowInsets?.systemGestureInsets?.left
+                                    ?.takeIf { it > 0 } ?: (48 * density).toInt()
+                                val gestureRight = windowInsets?.systemGestureInsets?.right
+                                    ?.takeIf { it > 0 } ?: (48 * density).toInt()
+                                val screenWidth = resources.displayMetrics.widthPixels
+                                val inBackGestureZone =
+                                    e.rawX < gestureLeft || e.rawX > screenWidth - gestureRight
+                                if (onItem || inBackGestureZone ||
+                                    e.rawX < minX || e.rawX > maxX
+                                ) {
                                     cancelLongPress()
                                 } else {
                                     longPressPending = true
                                     downX = e.rawX
                                     downY = e.rawY
-                                    handler.postDelayed(longPressRunnable, 550)
+                                    handler.postDelayed(longPressRunnable, 800)
                                 }
                             }
                             android.view.MotionEvent.ACTION_MOVE -> {
                                 if (longPressPending) {
                                     val dx = e.rawX - downX
                                     val dy = e.rawY - downY
-                                    val maxDist = 24 * density
+                                    val maxDist = touchSlop
                                     if (dx * dx + dy * dy > maxDist * maxDist) {
                                         cancelLongPress()
                                     }
@@ -3367,14 +3392,14 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         constructor(intent: Intent) : this(intent, false)
     }
 
-    private class Binding private constructor(
-        val root: View,
-        val drawerLayout: DrawerLayout? = null,
-        val persistentDrawerLayout: PersistentDrawerLayout? = null,
+private class Binding private constructor(
+        val root: FrameLayout,
+        val drawerLayout: DrawerLayout?,
+        val persistentDrawerLayout: PersistentDrawerLayout?,
         val persistentBarLayout: PersistentBarLayout,
         val appBarLayout: CoordinatorAppBarLayout,
         val toolbar: Toolbar,
-        val overlayToolbar: Toolbar,
+        val overlayToolbar: OverlayToolbar,
         val breadcrumbLayout: BreadcrumbLayout,
         val contentLayout: ViewGroup,
         val progress: ProgressBar,

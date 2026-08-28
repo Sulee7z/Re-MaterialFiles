@@ -58,7 +58,7 @@
     <string name="pref_key_two_pane_browsing">key_two_pane_browsing</string>
     <bool name="pref_default_value_two_pane_browsing">false</bool>
     <string name="pref_key_two_pane_dense">key_two_pane_dense</string>
-    <bool name="pref_default_value_two_pane_dense">true</bool>
+    <bool name="pref_default_value_two_pane_dense">false</bool>
     <string name="pref_key_file_name_ellipsize">key_file_name_ellipsize</string>
     <string name="pref_default_value_file_name_ellipsize">1</string>
     <string name="pref_key_wrap_long_file_names">key_wrap_long_file_names</string>

@@ -153,6 +153,11 @@ class FileListAdapter(
 
     private val _touchData: TouchData = TouchData()
 
+    // Long-press-to-select is deferred via a posted Runnable on the row view instead of a
+    // per-touch Thread, so rapid scrolls do not spawn a thread on every ACTION_DOWN.
+    private var longPressSelectRunnable: Runnable? = null
+    private var longPressSelectView: View? = null
+
     private val filePositionMap = mutableMapOf<Path, Int>()
 
     private lateinit var _nameEllipsize: TextUtils.TruncateAt
@@ -349,7 +354,12 @@ class FileListAdapter(
         val localPosition = holder.absoluteAdapterPosition
         val horizontalError = 7.5f
         when (event.action) {
-            MotionEvent.ACTION_DOWN -> {
+MotionEvent.ACTION_DOWN -> {
+                // Cancel any pending long-press from a previous touch (views can be
+                // recycled, so the old Runnable on the previous view must be removed too).
+                longPressSelectView?.removeCallbacks(longPressSelectRunnable)
+                longPressSelectRunnable = null
+                longPressSelectView = null
                 view.parent.requestDisallowInterceptTouchEvent(true)
                 _touchData.reset()
                 _touchData.setup(
@@ -362,14 +372,15 @@ class FileListAdapter(
                     pLastPosSelected = localPosition,
                     pActionIdentifier = event.eventTime,
                 )
-                _touchData.threadedWaiter = Thread {
+                val runnable = Runnable {
                     val id = _touchData.actionIdentifier
-                    SystemClock.sleep(maxWaitMillisSelection)
-                    if (!_touchData.isDuringClick || _touchData.isMultipleSelectionStarted || _touchData.isGestureHorizontal || id != _touchData.actionIdentifier) return@Thread
+                    if (!_touchData.isDuringClick || _touchData.isMultipleSelectionStarted || _touchData.isGestureHorizontal || id != _touchData.actionIdentifier) return@Runnable
                     _touchData.isMultipleSelectionStarted = true
                     selectFile(file)
                 }
-                _touchData.threadedWaiter.start()
+                longPressSelectRunnable = runnable
+                longPressSelectView = view
+                view.postDelayed(runnable, maxWaitMillisSelection)
             }
             MotionEvent.ACTION_MOVE -> {
                 // event.y is local to the icon view while clickedLineAnchorY is based on
@@ -429,6 +440,11 @@ class FileListAdapter(
                 _touchData.prevDeltaPos = deltaPos
             }
             MotionEvent.ACTION_UP -> {
+                // Cancel any pending long-press: the tap completed (or the finger lifted
+                // before the long-press threshold), so it must not fire late.
+                longPressSelectView?.removeCallbacks(longPressSelectRunnable)
+                longPressSelectRunnable = null
+                longPressSelectView = null
                 if (!_touchData.isMultipleSelectionStarted && TouchData.isClickAction(context, _touchData.startTouchPosX, _touchData.startTouchPosY, event.x, event.y)) {
                     _touchData.isDuringClick = false
                     view.performClick()
@@ -440,6 +456,9 @@ class FileListAdapter(
                 // A cancelled gesture (e.g. the list started scrolling) must not leave
                 // stale long-press/drag state behind, otherwise the next touch on another
                 // row would mis-select files.
+                longPressSelectView?.removeCallbacks(longPressSelectRunnable)
+                longPressSelectRunnable = null
+                longPressSelectView = null
                 _touchData.reset()
                 view.parent.requestDisallowInterceptTouchEvent(false)
             }

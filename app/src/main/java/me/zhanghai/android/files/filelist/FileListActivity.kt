@@ -794,9 +794,17 @@ class FileListActivity : AppActivity() {
                     } else {
                         currentDirectory
                     }
-                    me.zhanghai.android.files.filejob.FileJobService.move(
-                        payload.paths, targetDirectory, applicationContext
-                    )
+                    // Archive sources are read-only: dragging OUT of an archive can
+                    // never delete the sources, so it is always a copy.
+                    if (payload.paths.first().isArchivePath) {
+                        me.zhanghai.android.files.filejob.FileJobService.copy(
+                            payload.paths, targetDirectory, applicationContext
+                        )
+                    } else {
+                        me.zhanghai.android.files.filejob.FileJobService.move(
+                            payload.paths, targetDirectory, applicationContext
+                        )
+                    }
                     findFileListFragment(payload.sourceIsSecondaryPane)
                         ?.viewModel?.clearSelectedFiles()
                     true
