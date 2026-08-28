@@ -179,6 +179,7 @@
     <string name="file_job_extract_error_message_format">将文件提取到“%1$s”时发生错误。\n%2$s</string>
     <string name="file_job_move_error_title_format">移动“%1$s”时发生错误</string>
     <string name="file_job_move_error_message_format">将文件移动到“%1$s”时发生错误。\n%2$s</string>
+    <string name="file_job_move_undo_message_format">已移动 %1$d 个项目</string>
     <string name="file_job_delete_error_title">删除时发生错误</string>
     <string name="file_job_delete_error_message_format">在删除“%1$s”时发生错误。\n%2$s</string>
     <string name="file_job_rename_error_title_format">重命名“%1$s”时发生错误</string>

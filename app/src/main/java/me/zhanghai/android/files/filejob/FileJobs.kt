@@ -1071,11 +1071,13 @@ private fun FileJob.postDeleteNotification(transferInfo: TransferInfo, currentPa
 class MoveFileJob(private val sources: List<Path>, private val targetDirectory: Path) : FileJob() {
     @Throws(IOException::class)
     override fun run() {
+        val movedEntries = mutableListOf<Pair<Path, Path>>()
         val sourcesToMove = mutableListOf<Path>()
         for (source in sources) {
             val target = targetDirectory.resolveForeign(source.fileName)
             try {
                 moveAtomically(source, target)
+                movedEntries += source to target
             } catch (e: InterruptedIOException) {
                 throw e
             } catch (e: IOException) {
@@ -1089,8 +1091,11 @@ class MoveFileJob(private val sources: List<Path>, private val targetDirectory: 
         for (source in sourcesToMove) {
             val target = targetDirectory.resolveForeign(source.fileName)
             moveRecursively(source, target, transferInfo, actionAllInfo)
+            movedEntries += source to target
             throwIfInterrupted()
         }
+        // Offer an Undo for the successfully-moved files/directories.
+        MoveUndoManager.record(movedEntries)
     }
 
     @Throws(IOException::class)

@@ -203,6 +203,7 @@
     <string name="file_job_extract_error_message_format">There was an error extracting the file into “%1$s”.\n%2$s</string>
     <string name="file_job_move_error_title_format">Error while moving “%1$s”</string>
     <string name="file_job_move_error_message_format">There was an error moving the file into “%1$s”.\n%2$s</string>
+    <string name="file_job_move_undo_message_format">Moved %1$d item(s)</string>
     <string name="file_job_delete_error_title">Error while deleting</string>
     <string name="file_job_delete_error_message_format">There was an error deleting “%1$s”.\n%2$s</string>
     <string name="file_job_rename_error_title_format">Error while renaming “%1$s”</string>
