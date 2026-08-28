@@ -167,6 +167,10 @@ class ImageViewerFragment : Fragment(), ConfirmDeleteDialogFragment.Listener {
             e.printStackTrace()
             showToast(e.toString())
             return
+        } catch (e: Exception) {
+            e.printStackTrace()
+            showToast(e.toString())
+            return
         }
         paths.removeAll(listOf(path))
         if (paths.isEmpty()) {
