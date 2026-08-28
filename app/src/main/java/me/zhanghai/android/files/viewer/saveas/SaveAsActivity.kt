@@ -5,6 +5,8 @@
 
 package me.zhanghai.android.files.viewer.saveas
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import java8.nio.file.Path
@@ -15,6 +17,7 @@ import me.zhanghai.android.files.file.MimeType
 import me.zhanghai.android.files.file.asMimeTypeOrNull
 import me.zhanghai.android.files.filejob.FileJobService
 import me.zhanghai.android.files.filelist.FileListActivity
+import me.zhanghai.android.files.util.getParcelableExtraSafe
 import me.zhanghai.android.files.util.saveAsPath
 import me.zhanghai.android.files.util.showToast
 
@@ -46,7 +49,27 @@ class SaveAsActivity : AppActivity() {
             finish()
             return
         }
+        // The source may be a content:// URI whose temporary grant dies when this
+        // activity finishes — persist it so the background save job can still read it.
+        persistSourceUriPermission()
         FileJobService.save(intent.saveAsPath!!, result, this)
         finish()
+    }
+
+    private fun persistSourceUriPermission() {
+        val uri = when (intent.action) {
+            Intent.ACTION_VIEW -> intent.data
+            Intent.ACTION_SEND -> intent.getParcelableExtraSafe(Intent.EXTRA_STREAM) as? Uri
+            else -> null
+        }
+        if (uri != null && uri.scheme == "content") {
+            try {
+                contentResolver.takePersistableUriPermission(
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (e: SecurityException) {
+                // The caller did not offer a persistable grant; nothing we can do.
+            }
+        }
     }
 }
