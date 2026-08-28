@@ -19,6 +19,11 @@ object NavigationItemListLiveData : MediatorLiveData<List<NavigationItem?>>() {
         addSource(Settings.BOOKMARK_DIRECTORIES) { loadValue() }
     }
 
+    /** Re-computes the drawer items (e.g. storage free space after file operations). */
+    fun refresh() {
+        loadValue()
+    }
+
     private fun loadValue() {
         value = navigationItems
     }

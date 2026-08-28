@@ -15,6 +15,7 @@ import me.zhanghai.android.files.file.MimeType
 import me.zhanghai.android.files.provider.common.PosixFileModeBit
 import me.zhanghai.android.files.provider.common.PosixGroup
 import me.zhanghai.android.files.provider.common.PosixUser
+import me.zhanghai.android.files.navigation.NavigationItemListLiveData
 import me.zhanghai.android.files.util.ForegroundNotificationManager
 import me.zhanghai.android.files.util.WakeWifiLock
 import me.zhanghai.android.files.util.removeFirst
@@ -59,6 +60,11 @@ class FileJobService : Service() {
                 synchronized(runningJobs) {
                     runningJobs.remove(job)
                     updateWakeWifiLockLocked()
+                }
+                // File operations change storage free space; refresh the nav drawer's
+                // storage subtitles so they reflect the new usage immediately.
+                if (runningJobs.isEmpty()) {
+                    NavigationItemListLiveData.refresh()
                 }
             }
             runningJobs[job] = future

@@ -248,8 +248,15 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     private lateinit var layoutManager: GridLayoutManager
 
-    private lateinit var adapter: FileListAdapter
+    internal lateinit var adapter: FileListAdapter
 
+    /** Forwards the divider's screen position to this pane's adapter (two-pane mode),
+     *  so a drag starting on the divider resize handle never triggers a cross-pane move. */
+    fun setDividerScreenCenterX(centerX: Float) {
+        if (::adapter.isInitialized) {
+            adapter.dividerScreenCenterX = centerX
+        }
+    }
     private val debouncedSearchRunnable = DebouncedRunnable(Handler(Looper.getMainLooper()), 400) {
         if (!isResumed) {
             return@DebouncedRunnable
@@ -514,12 +521,20 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             addOnBackPressedCallback(
                 object : OnBackPressedCallback(false) {
                     override fun handleOnBackPressed() {
-                        viewModel.navigateUp()
+                        // The expanded search bar takes the back key first: collapse it
+                        // (hiding the keyboard) instead of navigating up, so the user can
+                        // scroll through results without leaving them.
+                        if (viewModel.isSearchViewExpanded) {
+                            collapseSearchView()
+                        } else {
+                            viewModel.navigateUp()
+                        }
                     }
                 }
                     .also { callback ->
                         viewModel.breadcrumbLiveData.observe(viewLifecycleOwner) {
-                            callback.isEnabled = viewModel.canNavigateUpBreadcrumb
+                            callback.isEnabled = viewModel.canNavigateUpBreadcrumb ||
+                                viewModel.isSearchViewExpanded
                         }
                     }
             )
@@ -1111,6 +1126,12 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
      * routed to the pane the user last touched). Returns true when consumed.
      */
     fun performBack(): Boolean {
+        // An expanded search bar owns the back key: back collapses the search (hiding
+        // the keyboard too) instead of navigating up / leaving the results.
+        if (viewModel.isSearchViewExpanded) {
+            collapseSearchView()
+            return true
+        }
         if (viewModel.canNavigateUpBreadcrumb) {
             navigateUp()
             return true

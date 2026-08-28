@@ -40,6 +40,7 @@
                     android:layout_height="wrap_content"
                     android:minHeight="@dimen/dense_single_line_list_item_height"
                     android:layout_weight="1"
+                    android:singleLine="true"
                     android:text="@string/file_create_archive_type_zip"
                     android:textAppearance="?textAppearanceListItem" />
 
@@ -49,6 +50,7 @@
                     android:layout_height="wrap_content"
                     android:minHeight="@dimen/dense_single_line_list_item_height"
                     android:layout_weight="1"
+                    android:singleLine="true"
                     android:text="@string/file_create_archive_type_tar_xz"
                     android:textAppearance="?textAppearanceListItem" />
 
@@ -58,6 +60,7 @@
                     android:layout_height="wrap_content"
                     android:minHeight="@dimen/dense_single_line_list_item_height"
                     android:layout_weight="1"
+                    android:singleLine="true"
                     android:text="@string/file_create_archive_type_tar_gz"
                     android:textAppearance="?textAppearanceListItem" />
 
@@ -67,6 +70,7 @@
                     android:layout_height="wrap_content"
                     android:minHeight="@dimen/dense_single_line_list_item_height"
                     android:layout_weight="1"
+                    android:singleLine="true"
                     android:text="@string/file_create_archive_type_7z"
                     android:textAppearance="?textAppearanceListItem"
                     android:visibility="@integer/create_archive_type_seven_z_visibility" />
