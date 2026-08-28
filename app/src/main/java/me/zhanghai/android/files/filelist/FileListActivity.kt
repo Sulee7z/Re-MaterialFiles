@@ -30,6 +30,7 @@ import me.zhanghai.android.files.compat.themeResIdCompat
 import me.zhanghai.android.files.file.MimeType
 import me.zhanghai.android.files.navigation.NavigationFragment
 import me.zhanghai.android.files.settings.Settings
+import me.zhanghai.android.files.ui.OverlayToolbar
 import me.zhanghai.android.files.ui.OverlayToolbarActionMode
 import me.zhanghai.android.files.ui.ToolbarActionMode
 import me.zhanghai.android.files.provider.archive.archiveFile
@@ -166,8 +167,10 @@ class FileListActivity : AppActivity() {
             // action bar renders in the SAME top bar layer (sharedOverlayToolbar), so
             // selecting files in either pane turns the top bar into the action bar.
             setSupportActionBar(findViewById(R.id.sharedToolbar))
+            val sharedOverlayToolbar = findViewById<OverlayToolbar>(R.id.sharedOverlayToolbar)
+            val sharedToolbar = findViewById<androidx.appcompat.widget.Toolbar>(R.id.sharedToolbar)
             sharedOverlayActionMode = OverlayToolbarActionMode(
-                findViewById(R.id.sharedOverlayToolbar)
+                sharedOverlayToolbar, sharedOverlayToolbar, sharedToolbar
             )
             onBackPressedDispatcher.addCallback(
                 this, sharedOverlayActionMode.onBackPressedCallback

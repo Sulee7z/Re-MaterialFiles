@@ -7,6 +7,15 @@ import java.io.File
 import java.io.IOException
 import java.util.Calendar
 
+/**
+ * Escapes glob metacharacters in an FTP pathname so they are treated as literal
+ * characters by the LIST command (which interprets `[` / `]` / `*` / `?` as glob
+ * patterns).  Without this, a file or folder named `my[file].txt` would be matched
+ * as a character-class pattern.
+ */
+fun String.escapeFtpGlob(): String =
+    replace("[", "[[]").replace("]", "[]]").replace("*", "[*]").replace("?", "[?]")
+
 private val DUMMY_ROOT_FTP_FILE = FTPFile().apply {
     rawListing = "Type=dir;Size=4096;Modify=19700101000000;Perm=cdeflmp; /"
     type = FTPFile.DIRECTORY_TYPE
@@ -25,7 +34,8 @@ fun FTPClient.mlistFileCompat(pathname: String): FTPFile? {
     } else {
         val path = File(pathname)
         val parent = path.parent ?: return DUMMY_ROOT_FTP_FILE
-        return listFiles(parent)?.firstOrNull { it != null && it.name == path.name }
+        // Fallback LIST interprets glob chars; escape so the name is literal.
+        return listFiles(parent.escapeFtpGlob())?.firstOrNull { it != null && it.name == path.name }
     }
 }
 
@@ -36,7 +46,7 @@ fun FTPClient.mlistDirCompat(pathname: String): Array<FTPFile>? =
     // @see https://datatracker.ietf.org/doc/html/rfc3659#section-7.8
     // FTPClient silently returns an empty array even when server returns an error for unknown
     // command, so we have to rely on checking the feature.
-    if (hasFeature(FTPCmd.MLST)) mlistDir(pathname) else listFiles(pathname)
+    if (hasFeature(FTPCmd.MLST)) mlistDir(pathname) else listFiles(pathname.escapeFtpGlob())
 
 @Throws(IOException::class)
 fun FTPClient.setModificationTimeCompat(pathname: String, timeval: String): Boolean =

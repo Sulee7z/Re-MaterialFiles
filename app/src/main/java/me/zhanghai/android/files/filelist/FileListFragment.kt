@@ -341,7 +341,9 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         overlayActionMode = if (isTwoPaneMode) {
             (activity as FileListActivity).getSharedOverlayActionMode()
         } else {
-            OverlayToolbarActionMode(binding.overlayToolbar)
+            OverlayToolbarActionMode(
+                binding.overlayToolbar, binding.overlayToolbar, binding.toolbar
+            )
         }
         bottomActionMode = PersistentBarLayoutToolbarActionMode(
             binding.persistentBarLayout, binding.bottomBarLayout, binding.bottomToolbar

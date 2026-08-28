@@ -277,7 +277,7 @@ object Client {
             // back to LIST to make sure dot files actually appear.
             val showHiddenFiles = Settings.FILE_LIST_SHOW_HIDDEN_FILES.valueCompat
             val files = (
-                if (showHiddenFiles) client.listFiles(path.remotePath)
+                if (showHiddenFiles) client.listFiles(path.remotePath.escapeFtpGlob())
                 else client.mlistDirCompat(path.remotePath)
                 ) ?: client.throwNegativeReplyCodeException()
             return files.mapNotNull { file ->
