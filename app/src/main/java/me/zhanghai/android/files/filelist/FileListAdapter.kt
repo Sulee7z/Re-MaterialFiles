@@ -121,6 +121,13 @@ class FileListAdapter(
             }
         }
 
+    /**
+     * Screen-X center of the two-pane divider (set by the hosting fragment in two-pane
+     * mode). A horizontal drag STARTING within the divider's touch zone is a pane
+     * resize, not a cross-pane move, so the cross-pane drag must not start there.
+     */
+    var dividerScreenCenterX: Float? = null
+
     private lateinit var _viewType: FileViewType
     var viewType: FileViewType
         get() = _viewType
@@ -424,7 +431,14 @@ MotionEvent.ACTION_DOWN -> {
                     val deltaX = event.x - _touchData.startTouchPosX
                     val deltaY = event.y - _touchData.startTouchPosY
                     val dragThreshold = 24f * view.resources.displayMetrics.density
+                    // A horizontal drag whose DOWN point is inside the divider touch zone
+                    // is the pane-resize gesture; never start a cross-pane file drag there.
+                    val dividerCenter = dividerScreenCenterX
+                    val startOnDivider = dividerCenter != null &&
+                        kotlin.math.abs(event.rawX - dividerCenter) <=
+                            36f * view.resources.displayMetrics.density
                     if (isCrossPaneDragEnabled && !_touchData.isCrossPaneDragStarted &&
+                        !startOnDivider &&
                         abs(deltaX) > dragThreshold && abs(deltaX) > abs(deltaY)
                     ) {
                         _touchData.isCrossPaneDragStarted = true

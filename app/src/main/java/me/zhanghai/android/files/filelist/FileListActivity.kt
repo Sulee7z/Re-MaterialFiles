@@ -117,6 +117,7 @@ class FileListActivity : AppActivity() {
             fragment = supportFragmentManager.findFragmentById(android.R.id.content)
                 as FileListFragment
         }
+        setupMoveUndo()
     }
 
     private fun showTwoPane(intent: Intent, savedInstanceState: Bundle?) {
@@ -416,8 +417,8 @@ class FileListActivity : AppActivity() {
             // The following touches must NOT flip the active pane (they are global UI, not
             // "this pane is active"): the FAB itself, and the shared top bar (search/sort/
             // three dots) which spans both panes.
-            val divider = findViewById<View>(R.id.divider)
-            if (divider != null && divider.isVisible) {
+            val dividerTouchArea = findViewById<View>(R.id.dividerTouchArea)
+            if (dividerTouchArea != null && dividerTouchArea.isVisible) {
                 val fab = findViewById<com.leinardi.android.speeddial.SpeedDialView>(
                     R.id.floatingActionButton
                 )
@@ -451,8 +452,8 @@ class FileListActivity : AppActivity() {
                     drawerLayout.isDrawerOpen(navigationView)
                 // The divider is the pane-resize drag handle: grabbing it must not flip
                 // the active pane either (a resize is not "operating" either pane).
-                val dividerTouched = ev.rawX >= divider.x &&
-                    ev.rawX <= divider.x + divider.width
+                val dividerTouched = ev.rawX >= dividerTouchArea.x &&
+                    ev.rawX <= dividerTouchArea.x + dividerTouchArea.width
                 // Touches in the system back-gesture zones (screen edges) must not flip
                 // the active pane or evaluate the FAB: a horizontal swipe there is the
                 // system back gesture and has to pass through untouched.
@@ -462,7 +463,7 @@ class FileListActivity : AppActivity() {
                 if (!inSystemGestureZone && !fabTouched && !topBarTouched &&
                     !breadcrumbTouched && !drawerTouched && !dividerTouched
                 ) {
-                    TwoPaneState.setActivePaneSecondary(ev.rawX > divider.x)
+                    TwoPaneState.setActivePaneSecondary(ev.rawX > dividerTouchArea.x)
                 }
             }
         }
@@ -494,6 +495,42 @@ class FileListActivity : AppActivity() {
     }
 
     /**
+     * Offers an Undo snackbar after a move completes: moves each entry's target back to
+     * its source's parent directory. Registered in onCreate for both pane modes.
+     */
+    private fun setupMoveUndo() {
+        me.zhanghai.android.files.filejob.MoveUndoManager.undoLiveData.observe(this) { undo ->
+            if (undo == null) {
+                return@observe
+            }
+            val count = undo.entries.size
+            com.google.android.material.snackbar.Snackbar.make(
+                findViewById(android.R.id.content),
+                getString(R.string.file_job_move_undo_message_format, count),
+                com.google.android.material.snackbar.Snackbar.LENGTH_LONG
+            )
+                .setAction(R.string.undo) {
+                    for ((source, target) in undo.entries) {
+                        // Undo moves the file back next to where it came from.
+                        val targetDirectory = source.parent ?: continue
+                        me.zhanghai.android.files.filejob.FileJobService.move(
+                            listOf(target), targetDirectory, this@FileListActivity
+                        )
+                    }
+                }
+                .addCallback(object : com.google.android.material.snackbar.BaseTransientBottomBar.BaseCallback<com.google.android.material.snackbar.Snackbar>() {
+                    override fun onDismissed(
+                        transientBottomBar: com.google.android.material.snackbar.Snackbar?,
+                        event: Int
+                    ) {
+                        me.zhanghai.android.files.filejob.MoveUndoManager.clear()
+                    }
+                })
+                .show()
+        }
+    }
+
+    /**
      * Draggable divider: dragging it resizes the two panes live (the ratio is kept in
      * [TwoPaneState.paneWidthRatio], so it survives pane switches and Activity
      * recreation). The divider view is 10dp wide, which is the drag touch target. While
@@ -501,12 +538,13 @@ class FileListActivity : AppActivity() {
      * user can see the handle is grabbed.
      */
     private fun setupDividerDrag() {
-        val divider = findViewById<View>(R.id.divider)
-        divider.isClickable = true
-        divider.setOnTouchListener { view, event ->
+        val dividerTouchArea = findViewById<View>(R.id.dividerTouchArea)
+        dividerTouchArea.isClickable = true
+        dividerTouchArea.setOnTouchListener { view, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    view.setBackgroundResource(R.drawable.two_pane_divider_active)
+                    findViewById<View>(R.id.divider)
+                        .setBackgroundResource(R.drawable.two_pane_divider_active)
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -522,8 +560,8 @@ class FileListActivity : AppActivity() {
                     true
                 }
                 else -> {
-                    // ACTION_UP / ACTION_CANCEL: the drag ended, restore the idle line.
-                    view.setBackgroundResource(R.drawable.two_pane_divider)
+                    findViewById<View>(R.id.divider)
+                        .setBackgroundResource(R.drawable.two_pane_divider)
                     false
                 }
             }
@@ -537,12 +575,12 @@ class FileListActivity : AppActivity() {
         }
         val leftPane = findViewById<View>(R.id.leftPane)
         val rightPane = findViewById<View>(R.id.rightPane)
-        val divider = findViewById<View>(R.id.divider)
+        val dividerTouchArea = findViewById<View>(R.id.dividerTouchArea)
         val screenWidth = resources.displayMetrics.widthPixels
         // Both panes side by side; the divider is draggable, so the split follows the
         // user's ratio. Reassigning layoutParams (instead of mutating the field) triggers
         // requestLayout, which the live divider drag relies on.
-        val dividerWidth = maxOf(divider.layoutParams.width, 1)
+        val dividerWidth = maxOf(dividerTouchArea.layoutParams.width, 1)
         val paneWidth = ((screenWidth - dividerWidth) * TwoPaneState.paneWidthRatio)
             .toInt()
             .coerceIn(1, screenWidth - dividerWidth - 1)
@@ -552,7 +590,10 @@ class FileListActivity : AppActivity() {
         }
         leftPane.isVisible = true
         rightPane.isVisible = true
-        divider.isVisible = true
+        dividerTouchArea.isVisible = true
+        // Keep the panes' adapters informed of the divider position so a drag starting
+        // on the divider (resize) never begins a cross-pane file move.
+        updatePaneAdapterDividerCenter()
         // Active-pane marker, MT Manager style: the ACTIVE pane casts a soft shadow
         // gradient onto the INACTIVE pane's divider-facing edge, fading out horizontally
         // toward the pane's outer edge (no blue border / no box elevation).
@@ -923,6 +964,16 @@ class FileListActivity : AppActivity() {
     /** Shows or hides the drag-to-delete trash target during a cross-pane drag. */
     fun setDragDeleteTargetVisible(visible: Boolean) {
         findViewById<View>(R.id.dragDeleteView).isVisible = visible
+    }
+
+    /** Pushes the current divider screen position to both pane adapters, so a drag
+     *  starting on the divider touch area never triggers a cross-pane file move. */
+    private fun updatePaneAdapterDividerCenter() {
+        val dividerTouchArea = findViewById<View>(R.id.dividerTouchArea)
+        val centerX = dividerTouchArea.x + dividerTouchArea.width / 2f
+        for (secondary in listOf(false, true)) {
+            findFileListFragment(secondary)?.setDividerScreenCenterX(centerX)
+        }
     }
     /**
      * Drop target for the two-pane cross-pane drag-and-drop: dropping files over the

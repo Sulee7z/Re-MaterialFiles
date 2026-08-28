@@ -116,11 +116,21 @@
                         android:visibility="gone" />
                 </FrameLayout>
 
-                <View
-                    android:id="@+id/divider"
-                    android:layout_width="10dp"
-                    android:layout_height="match_parent"
-                    android:background="@drawable/two_pane_divider" />
+                <FrameLayout
+                    android:id="@+id/dividerTouchArea"
+                    android:layout_width="@dimen/two_pane_divider_touch_width"
+                    android:layout_height="match_parent">
+
+                    <!-- The visible resize handle: a thin 10dp line centered in the wider
+                         touch area, so grabbing to resize is easy and a slightly-off press
+                         still resizes instead of starting a cross-pane file drag. -->
+                    <View
+                        android:id="@+id/divider"
+                        android:layout_width="10dp"
+                        android:layout_height="match_parent"
+                        android:layout_gravity="center_horizontal"
+                        android:background="@drawable/two_pane_divider" />
+                </FrameLayout>
 
                 <FrameLayout
                     android:id="@+id/rightPane"
