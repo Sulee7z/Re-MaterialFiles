@@ -501,6 +501,10 @@
     <string name="storage_edit_sftp_server_private_key_password_error_invalid">无效私钥密码</string>
     <string name="storage_edit_sftp_server_connect_and_add">连接并添加</string>
     <string name="storage_edit_sftp_server_add">添加</string>
+    <string name="storage_sftp_host_key_changed_title">SFTP 主机密钥已更改</string>
+    <string name="storage_sftp_host_key_changed_message_format">%1$s 的主机密钥已更改。这可能表明存在中间人攻击。仅在您预期此更改时才信任新密钥。</string>
+    <string name="storage_sftp_host_key_changed_message_with_keys_format">%1$s 的主机密钥已更改。这可能表明存在中间人攻击。仅在您预期此更改时才信任新密钥。\n\n旧密钥:\n%2$s\n\n新密钥:\n%3$s</string>
+    <string name="storage_sftp_host_key_changed_trust">信任</string>
     <string name="storage_add_lan_smb_server_loading">正在搜索 SMB 服务器…</string>
     <string name="storage_add_lan_smb_server_add">手动添加</string>
     <string name="storage_edit_smb_server_title_edit">编辑 SMB 服务器</string>
