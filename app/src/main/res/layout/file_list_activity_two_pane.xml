@@ -162,28 +162,37 @@
         <LinearLayout
             android:id="@+id/dragDeleteView"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
+            android:layout_height="96dp"
             android:layout_gravity="top|fill_horizontal"
-            android:background="?attr/colorError"
-            android:elevation="16dp"
-            android:gravity="center"
-            android:orientation="horizontal"
+            android:orientation="vertical"
             android:visibility="invisible">
 
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:importantForAccessibility="no"
-                android:src="@drawable/delete_icon_control_normal_24dp"
-                app:tint="@android:color/white" />
+            <!-- The visible red bar is 48dp tall; the extra 48dp below is a transparent
+                 hit extension, because the drag system's hit test lands slightly lower than
+                 the bar's visual position. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:background="?attr/colorError"
+                android:elevation="16dp"
+                android:gravity="center"
+                android:orientation="horizontal">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="@string/delete"
-                android:textAppearance="?textAppearanceLabelLarge"
-                android:textColor="@android:color/white" />
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/delete_icon_control_normal_24dp"
+                    app:tint="@android:color/white" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/delete"
+                    android:textAppearance="?textAppearanceLabelLarge"
+                    android:textColor="@android:color/white" />
+            </LinearLayout>
         </LinearLayout>
 
         <!-- Paste bar (two-pane): shown when the shared clipboard holds entries; its

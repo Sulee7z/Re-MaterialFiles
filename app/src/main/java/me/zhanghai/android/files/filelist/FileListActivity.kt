@@ -28,6 +28,7 @@ import me.zhanghai.android.files.R
 import me.zhanghai.android.files.app.AppActivity
 import me.zhanghai.android.files.compat.themeResIdCompat
 import me.zhanghai.android.files.file.MimeType
+import me.zhanghai.android.files.file.asFileSize
 import me.zhanghai.android.files.navigation.NavigationFragment
 import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.ui.OverlayToolbar
@@ -57,6 +58,10 @@ class FileListActivity : AppActivity() {
     private lateinit var twoPaneBottomActionMode: ToolbarActionMode
 
     private var actionBarSizePx: Int = 0
+
+    private var deleteDialogShown = false
+
+    private var statusBarHeightPx: Int = 0
 
     // Two-pane back-chain callbacks: they disable themselves while falling through (e.g.
     // back at a pane's root), and must be re-enabled or every later back would exit.
@@ -151,6 +156,7 @@ class FileListActivity : AppActivity() {
                 findViewById<View>(android.R.id.content)
             ) { _, insets ->
                 val top = insets.systemWindowInsetTop
+                statusBarHeightPx = top
                 if (topBarFrame.paddingTop != top) {
                     topBarFrame.updatePaddingRelative(top = top)
                     topBarFrame.layoutParams.height = actionBarSizePx + top
@@ -482,6 +488,7 @@ class FileListActivity : AppActivity() {
      * switch the active pane via dispatchTouchEvent().
      */
     private fun setupResponsivePanes() {
+        android.util.Log.i("TrashDrop", "setupResponsivePanes called")
         // Listen for active-pane changes to keep the highlight in sync.
         TwoPaneState.activePaneSecondaryListener = {
             updateResponsivePanes()
@@ -780,6 +787,7 @@ class FileListActivity : AppActivity() {
      * - Trash bar: delete the dragged files.
      */
     private fun setupTwoPaneDragController() {
+        android.util.Log.i("TrashDrop", "setupTwoPaneDragController called")
         installPaneDropTarget(findViewById(R.id.leftPaneContent), isSecondaryPane = false)
         installPaneDropTarget(findViewById(R.id.rightPaneContent), isSecondaryPane = true)
         installBreadcrumbDropTarget()
@@ -824,6 +832,9 @@ class FileListActivity : AppActivity() {
 
                 android.view.DragEvent.ACTION_DROP -> {
                     setHighlight(false)
+                    // The trash bar handles its own drop via last-position tracking in
+                    // installTrashDropTarget (the system rarely delivers DROP to it), so the
+                    // pane just performs the cross-pane move below.
                     val targetFragment = findFileListFragment(isSecondaryPane)
                     if (payload == null || targetFragment == null ||
                         payload.sourceIsSecondaryPane == isSecondaryPane
@@ -893,49 +904,48 @@ class FileListActivity : AppActivity() {
 
     /** Drop target for the trash bar: dropping files on it deletes them. */
     private fun installTrashDropTarget() {
-        findViewById<View>(R.id.dragDeleteView).setOnDragListener { view, event ->
+        val trashView = findViewById<View>(R.id.dragDeleteView)
+        // Track the finger's last position over the bar, because the system may not deliver
+        // an ACTION_DROP for this overlay (the pane beneath it consumes the drag session).
+        // On ACTION_DRAG_ENDED, if the last position was inside the bar, treat it as a drop.
+        var lastDragX = 0f
+        var lastDragY = 0f
+        var lastDragInside = false
+        trashView.setOnDragListener { view, event ->
             val payload = event.localState as? CrossPaneDragPayload
                 ?: return@setOnDragListener false
-            fun setHighlight(highlighted: Boolean) {
-                view.animate().scaleX(if (highlighted) 1.1f else 1f)
-                    .scaleY(if (highlighted) 1.1f else 1f)
-                    .setDuration(80)
-                    .start()
-            }
             when (event.action) {
-                android.view.DragEvent.ACTION_DRAG_STARTED -> true
+                android.view.DragEvent.ACTION_DRAG_STARTED -> {
+                    deleteDialogShown = false
+                    true
+                }
 
                 android.view.DragEvent.ACTION_DRAG_ENTERED,
                 android.view.DragEvent.ACTION_DRAG_LOCATION -> {
-                    setHighlight(true)
+                    lastDragX = event.x
+                    lastDragY = event.y
+                    lastDragInside = true
                     true
                 }
 
                 android.view.DragEvent.ACTION_DRAG_EXITED -> {
-                    setHighlight(false)
+                    lastDragInside = false
                     true
                 }
 
                 android.view.DragEvent.ACTION_DROP -> {
-                    setHighlight(false)
+                    lastDragInside = true
+                    showDeleteDialog(payload)
+                    lastDragInside = false
                     view.isVisible = false
-                    // Same confirmation flow as normal delete: ask before destroying.
-                    com.google.android.material.dialog.MaterialAlertDialogBuilder(this@FileListActivity)
-                        .setTitle(getString(R.string.delete))
-                        .setPositiveButton(android.R.string.ok) { _, _ ->
-                            me.zhanghai.android.files.filejob.FileJobService.delete(
-                                payload.paths, applicationContext
-                            )
-                            findFileListFragment(payload.sourceIsSecondaryPane)
-                                ?.viewModel?.clearSelectedFiles()
-                        }
-                        .setNegativeButton(android.R.string.cancel, null)
-                        .show()
                     true
                 }
 
                 android.view.DragEvent.ACTION_DRAG_ENDED -> {
-                    setHighlight(false)
+                    if (lastDragInside && !deleteDialogShown) {
+                        showDeleteDialog(payload)
+                    }
+                    lastDragInside = false
                     view.isVisible = false
                     true
                 }
@@ -943,6 +953,120 @@ class FileListActivity : AppActivity() {
                 else -> false
             }
         }
+    }
+
+    private fun showDeleteDialog(payload: CrossPaneDragPayload) {
+        if (deleteDialogShown) {
+            return
+        }
+        deleteDialogShown = true
+        val paths = payload.paths
+        val message = deleteConfirmationMessage(paths)
+        // Post to the main handler so the dialog is not blocked by the drag session.
+        // Same M3 style as ConfirmDeleteFilesDialogFragment: message + OK/Cancel, no title,
+        // with the total size appended once computed.
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this@FileListActivity)
+                .setMessage(message)
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    me.zhanghai.android.files.filejob.FileJobService.delete(
+                        payload.paths, applicationContext
+                    )
+                    findFileListFragment(payload.sourceIsSecondaryPane)
+                        ?.viewModel?.clearSelectedFiles()
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .create()
+            dialog.show()
+            // Compute the total size in the background and append it once ready.
+            Thread {
+                val sizeText = calculateTotalSize(paths)
+                    ?.asFileSize()?.formatHumanReadable(this)
+                if (sizeText != null) {
+                    runOnUiThread {
+                        if (dialog.isShowing) {
+                            dialog.setMessage(
+                                message + "\n\n" +
+                                    getString(R.string.file_delete_message_size_format, sizeText)
+                            )
+                        }
+                    }
+                }
+            }.start()
+        }
+    }
+
+    private fun deleteConfirmationMessage(paths: List<Path>): String {
+        if (paths.size == 1) {
+            val path = paths[0]
+            val isDirectory = try {
+                java8.nio.file.Files.isDirectory(path)
+            } catch (e: Exception) {
+                false
+            }
+            val res = if (isDirectory) {
+                R.string.file_delete_message_directory_format
+            } else {
+                R.string.file_delete_message_file_format
+            }
+            return getString(res, path.fileName?.toString() ?: "")
+        }
+        return resources.getQuantityString(
+            R.plurals.file_delete_message_multiple_files_format, paths.size, paths.size
+        )
+    }
+
+    private fun calculateTotalSize(paths: List<Path>): Long? {
+        var totalSize = 0L
+        var anySizeRead = false
+        for (path in paths) {
+            if (try { java8.nio.file.Files.isDirectory(path) } catch (e: Exception) { false }) {
+                val directorySize = calculateDirectorySize(path)
+                if (directorySize != null) {
+                    totalSize += directorySize
+                    anySizeRead = true
+                }
+            } else {
+                try {
+                    totalSize += java8.nio.file.Files.size(path)
+                    anySizeRead = true
+                } catch (e: Exception) {
+                    // Ignore unreadable files.
+                }
+            }
+        }
+        return if (anySizeRead) totalSize else null
+    }
+
+    private fun calculateDirectorySize(directory: Path): Long? {
+        var size = 0L
+        var anyFileRead = false
+        try {
+            java8.nio.file.Files.walkFileTree(directory, object : java8.nio.file.FileVisitor<Path> {
+                override fun preVisitDirectory(
+                    dir: Path, attributes: java8.nio.file.attribute.BasicFileAttributes
+                ): java8.nio.file.FileVisitResult = java8.nio.file.FileVisitResult.CONTINUE
+
+                override fun visitFile(
+                    file: Path, attributes: java8.nio.file.attribute.BasicFileAttributes
+                ): java8.nio.file.FileVisitResult {
+                    size += attributes.size()
+                    anyFileRead = true
+                    return java8.nio.file.FileVisitResult.CONTINUE
+                }
+
+                override fun visitFileFailed(
+                    file: Path, exception: java.io.IOException
+                ): java8.nio.file.FileVisitResult = java8.nio.file.FileVisitResult.CONTINUE
+
+                override fun postVisitDirectory(
+                    dir: Path, exception: java.io.IOException?
+                ): java8.nio.file.FileVisitResult = java8.nio.file.FileVisitResult.CONTINUE
+            })
+        } catch (e: Exception) {
+            return null
+        }
+        return if (anyFileRead) size else null
     }
 
     private class TwoPaneBottomToolbarActionMode(
@@ -966,7 +1090,12 @@ class FileListActivity : AppActivity() {
 
     /** Shows or hides the drag-to-delete trash target during a cross-pane drag. */
     fun setDragDeleteTargetVisible(visible: Boolean) {
-        findViewById<View>(R.id.dragDeleteView).isVisible = visible
+        val view = findViewById<View>(R.id.dragDeleteView)
+        view.isVisible = visible
+        if (visible) {
+            // The window draws under the status bar, so offset the red bar below it.
+            view.updatePaddingRelative(top = statusBarHeightPx)
+        }
     }
 
     /** Pushes the current divider screen position to both pane adapters, so a drag
