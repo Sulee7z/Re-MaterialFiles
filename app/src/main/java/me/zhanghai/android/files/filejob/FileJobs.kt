@@ -954,42 +954,42 @@ class DeleteFileJob(private val paths: List<Path>) : FileJob() {
             throwIfInterrupted()
         }
     }
+}
 
-    @Throws(IOException::class)
-    private fun deleteRecursively(
-        path: Path,
-        transferInfo: TransferInfo,
-        actionAllInfo: ActionAllInfo
-    ) {
-        Files.walkFileTree(path, object : SimpleFileVisitor<Path>() {
-            @Throws(IOException::class)
-            override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
-                delete(file, transferInfo, actionAllInfo)
-                throwIfInterrupted()
-                return FileVisitResult.CONTINUE
-            }
+@Throws(IOException::class)
+private fun FileJob.deleteRecursively(
+    path: Path,
+    transferInfo: TransferInfo,
+    actionAllInfo: ActionAllInfo
+) {
+    Files.walkFileTree(path, object : SimpleFileVisitor<Path>() {
+        @Throws(IOException::class)
+        override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
+            delete(file, transferInfo, actionAllInfo)
+            throwIfInterrupted()
+            return FileVisitResult.CONTINUE
+        }
 
-            @Throws(IOException::class)
-            override fun visitFileFailed(file: Path, exception: IOException): FileVisitResult {
-                // TODO: Prompt retry, skip, skip-all or abort.
-                return super.visitFileFailed(file, exception)
-            }
+        @Throws(IOException::class)
+        override fun visitFileFailed(file: Path, exception: IOException): FileVisitResult {
+            // TODO: Prompt retry, skip, skip-all or abort.
+            return super.visitFileFailed(file, exception)
+        }
 
-            @Throws(IOException::class)
-            override fun postVisitDirectory(
-                directory: Path,
-                exception: IOException?
-            ): FileVisitResult {
-                // TODO: Prompt retry, skip, skip-all or abort.
-                if (exception != null) {
-                    throw exception
-                }
-                delete(directory, transferInfo, actionAllInfo)
-                throwIfInterrupted()
-                return FileVisitResult.CONTINUE
+        @Throws(IOException::class)
+        override fun postVisitDirectory(
+            directory: Path,
+            exception: IOException?
+        ): FileVisitResult {
+            // TODO: Prompt retry, skip, skip-all or abort.
+            if (exception != null) {
+                throw exception
             }
-        })
-    }
+            delete(directory, transferInfo, actionAllInfo)
+            throwIfInterrupted()
+            return FileVisitResult.CONTINUE
+        }
+    })
 }
 
 /**
@@ -1002,7 +1002,15 @@ class TrashFileJob(private val paths: List<Path>) : FileJob() {
     @Throws(IOException::class)
     override fun run() {
         val trashedEntries = mutableListOf<Pair<Path, Path>>()
+        val permanentlyDeleted = mutableListOf<Path>()
         for (path in paths) {
+            if (!path.isLinuxPath) {
+                // Remote filesystems (FTP, SMB, SFTP, WebDAV) cannot reliably rename
+                // files in place for a recycle bin (and the recycled name would be
+                // invisible to the server's user anyway). Permanently delete them.
+                permanentlyDeleted.add(path)
+                continue
+            }
             val target = getUniqueTrashTarget(path)
             try {
                 path.moveTo(target, LinkOption.NOFOLLOW_LINKS, StandardCopyOption.REPLACE_EXISTING)
@@ -1015,6 +1023,17 @@ class TrashFileJob(private val paths: List<Path>) : FileJob() {
             trashedEntries += path to target
             TrashManager.add(path, target)
             throwIfInterrupted()
+        }
+        if (permanentlyDeleted.isNotEmpty()) {
+            val scanInfo = scan(
+                permanentlyDeleted, R.plurals.file_job_delete_scan_notification_title_format
+            )
+            val transferInfo = TransferInfo(scanInfo, null)
+            val actionAllInfo = ActionAllInfo()
+            for (path in permanentlyDeleted) {
+                deleteRecursively(path, transferInfo, actionAllInfo)
+                throwIfInterrupted()
+            }
         }
         DeleteUndoManager.record(trashedEntries)
     }
@@ -1069,42 +1088,6 @@ class PermanentDeleteJob(private val paths: List<Path>) : FileJob() {
             TrashManager.remove(path)
             throwIfInterrupted()
         }
-    }
-
-    @Throws(IOException::class)
-    private fun deleteRecursively(
-        path: Path,
-        transferInfo: TransferInfo,
-        actionAllInfo: ActionAllInfo
-    ) {
-        Files.walkFileTree(path, object : SimpleFileVisitor<Path>() {
-            @Throws(IOException::class)
-            override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
-                delete(file, transferInfo, actionAllInfo)
-                throwIfInterrupted()
-                return FileVisitResult.CONTINUE
-            }
-
-            @Throws(IOException::class)
-            override fun visitFileFailed(file: Path, exception: IOException): FileVisitResult {
-                // TODO: Prompt retry, skip, skip-all or abort.
-                return super.visitFileFailed(file, exception)
-            }
-
-            @Throws(IOException::class)
-            override fun postVisitDirectory(
-                directory: Path,
-                exception: IOException?
-            ): FileVisitResult {
-                // TODO: Prompt retry, skip, skip-all or abort.
-                if (exception != null) {
-                    throw exception
-                }
-                delete(directory, transferInfo, actionAllInfo)
-                throwIfInterrupted()
-                return FileVisitResult.CONTINUE
-            }
-        })
     }
 }
 
