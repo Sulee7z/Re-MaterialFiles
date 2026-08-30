@@ -735,11 +735,9 @@ MotionEvent.ACTION_DOWN -> {
             }
         }
         holder.nameText.text = file.name
-        holder.descriptionText?.text = if (isDirectory && wrapLongFileNames) {
-            // Folders get the date/size description in the empty space below the name
-            // only when long-name wrap is off; a wrapped name fills the row instead.
-            null
-        } else {
+        // Folders show the date/size description just like files, regardless of the
+        // long-name wrap setting (a wrapped name simply fills the row above).
+        holder.descriptionText?.text = run {
             val context = holder.descriptionText!!.context
             val lastModificationTime = attributes.lastModifiedTime().toInstant()
                 .formatShort(context)
