@@ -8,10 +8,12 @@ package me.zhanghai.android.files.storage
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.withTimeout
 import me.zhanghai.android.files.provider.common.newDirectoryStream
 import me.zhanghai.android.files.util.ActionState
 import me.zhanghai.android.files.util.isFinished
@@ -21,20 +23,25 @@ class EditSmbServerViewModel : ViewModel() {
     private val _connectState = MutableStateFlow<ActionState<SmbServer, Unit>>(ActionState.Ready())
     val connectState = _connectState.asStateFlow()
 
+    private var connectJob: Job? = null
+
     fun connect(server: SmbServer) {
-        viewModelScope.launch {
+        connectJob?.cancel()
+        connectJob = viewModelScope.launch {
             check(_connectState.value.isReady)
             _connectState.value = ActionState.Running(server)
             _connectState.value = try {
-                runInterruptible(Dispatchers.IO) {
-                    SmbServerAuthenticator.addTransientServer(server)
-                    try {
-                        val path = server.path
-                        path.fileSystem.use {
-                            path.newDirectoryStream().toList()
+                withTimeout(CONNECT_TIMEOUT_MILLIS) {
+                    runInterruptible(Dispatchers.IO) {
+                        SmbServerAuthenticator.addTransientServer(server)
+                        try {
+                            val path = server.path
+                            path.fileSystem.use {
+                                path.newDirectoryStream().toList()
+                            }
+                        } finally {
+                            SmbServerAuthenticator.removeTransientServer(server)
                         }
-                    } finally {
-                        SmbServerAuthenticator.removeTransientServer(server)
                     }
                 }
                 ActionState.Success(server, Unit)
@@ -44,10 +51,18 @@ class EditSmbServerViewModel : ViewModel() {
         }
     }
 
+    fun cancelConnecting() {
+        connectJob?.cancel()
+    }
+
     fun finishConnecting() {
         viewModelScope.launch {
             check(_connectState.value.isFinished)
             _connectState.value = ActionState.Ready()
         }
+    }
+
+    companion object {
+        private const val CONNECT_TIMEOUT_MILLIS = 30_000L
     }
 }

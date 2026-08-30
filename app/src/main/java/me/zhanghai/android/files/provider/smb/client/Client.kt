@@ -59,6 +59,15 @@ object Client {
 
     private val sessions = mutableMapOf<Authority, Session>()
 
+    fun removeSession(authority: Authority) {
+        synchronized(sessions) {
+            sessions.remove(authority)?.let { session ->
+                session.closeSafe()
+                session.connection.closeSafe()
+            }
+        }
+    }
+
     private val directoryFileInformationCache =
         Collections.synchronizedMap(WeakHashMap<Path, FileInformation>())
 

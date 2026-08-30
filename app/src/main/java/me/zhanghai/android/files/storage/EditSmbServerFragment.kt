@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import kotlinx.parcelize.Parcelize
 import me.zhanghai.android.files.R
 import me.zhanghai.android.files.databinding.EditSmbServerFragmentBinding
+import me.zhanghai.android.files.provider.smb.SmbFileSystemProvider
 import me.zhanghai.android.files.provider.smb.client.Authority
 import me.zhanghai.android.files.ui.UnfilteredArrayAdapter
 import me.zhanghai.android.files.util.ActionState
@@ -83,6 +84,7 @@ class EditSmbServerFragment : Fragment() {
         binding.portEdit.hideTextInputLayoutErrorOnTextChange(binding.portLayout)
         binding.portEdit.doAfterTextChanged { updateNamePlaceholder() }
         binding.pathEdit.doAfterTextChanged { updateNamePlaceholder() }
+        binding.pathEdit.hideTextInputLayoutErrorOnTextChange(binding.pathLayout)
         binding.authenticationTypeEdit.setAdapter(
             UnfilteredArrayAdapter(
                 binding.authenticationTypeEdit.context, R.layout.dropdown_item,
@@ -97,6 +99,7 @@ class EditSmbServerFragment : Fragment() {
         binding.usernameEdit.hideTextInputLayoutErrorOnTextChange(binding.usernameLayout)
         binding.usernameEdit.doAfterTextChanged { updateNamePlaceholder() }
         binding.domainEdit.doAfterTextChanged { updateNamePlaceholder() }
+        binding.passwordEdit.hideTextInputLayoutErrorOnTextChange(binding.passwordLayout)
         binding.saveOrConnectAndAddButton.setText(
             if (args.server != null) {
                 R.string.save
@@ -111,7 +114,12 @@ class EditSmbServerFragment : Fragment() {
                 connectAndAdd()
             }
         }
-        binding.cancelButton.setOnClickListener { finish() }
+        binding.cancelButton.setOnClickListener {
+            if (viewModel.connectState.value is ActionState.Running) {
+                viewModel.cancelConnecting()
+            }
+            finish()
+        }
         binding.removeOrAddButton.setText(
             if (args.server != null) R.string.remove else R.string.storage_edit_smb_server_add
         )
@@ -213,6 +221,10 @@ class EditSmbServerFragment : Fragment() {
 
     private fun saveOrAdd() {
         val server = getServerOrSetError() ?: return
+        val oldServer = args.server
+        if (oldServer != null) {
+            SmbFileSystemProvider.closeFileSystem(oldServer.authority)
+        }
         Storages.addOrReplace(server)
         setResult(Activity.RESULT_OK)
         finish()
@@ -250,7 +262,9 @@ class EditSmbServerFragment : Fragment() {
     }
 
     private fun remove() {
-        Storages.remove(args.server!!)
+        val server = args.server!!
+        SmbFileSystemProvider.closeFileSystem(server.authority)
+        Storages.remove(server)
         setResult(Activity.RESULT_OK)
         finish()
     }
@@ -281,6 +295,13 @@ class EditSmbServerFragment : Fragment() {
             }
         }
         val path = binding.pathEdit.text.toString().trim()
+        if (path.contains('\\') || path.startsWith("/")) {
+            binding.pathLayout.error =
+                getString(R.string.storage_edit_smb_server_path_error_invalid)
+            if (errorEdit == null) {
+                errorEdit = binding.pathEdit
+            }
+        }
         val name = binding.nameEdit.text.toString().takeIfNotEmpty()
         val username: String?
         val domain: String?
@@ -297,6 +318,13 @@ class EditSmbServerFragment : Fragment() {
                 }
                 domain = binding.domainEdit.text.toString().takeIfNotEmpty()
                 password = binding.passwordEdit.text.toString()
+                if (password.isEmpty()) {
+                    binding.passwordLayout.error =
+                        getString(R.string.storage_edit_smb_server_password_error_empty)
+                    if (errorEdit == null) {
+                        errorEdit = binding.passwordEdit
+                    }
+                }
             }
             AuthenticationType.GUEST -> {
                 AuthenticationContext.guest().let {

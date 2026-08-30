@@ -89,6 +89,12 @@ object SmbFileSystemProvider : FileSystemProvider(), PathObservableProvider, Sea
     internal fun removeFileSystem(fileSystem: SmbFileSystem) {
         val authority = fileSystem.authority
         synchronized(lock) { fileSystems.remove(authority) }
+        Client.removeSession(authority)
+    }
+
+    internal fun closeFileSystem(authority: Authority) {
+        synchronized(lock) { fileSystems.remove(authority) }
+        Client.removeSession(authority)
     }
 
     override fun getPath(uri: URI): Path {
