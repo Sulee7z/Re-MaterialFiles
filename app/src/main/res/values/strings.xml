@@ -204,6 +204,7 @@
     <string name="file_job_move_error_title_format">Error while moving “%1$s”</string>
     <string name="file_job_move_error_message_format">There was an error moving the file into “%1$s”.\n%2$s</string>
     <string name="file_job_move_undo_message_format">Moved %1$d item(s)</string>
+    <string name="file_job_trash_undo_message_format">Deleted %1$d item(s)</string>
     <string name="file_job_delete_error_title">Error while deleting</string>
     <string name="file_job_delete_error_message_format">There was an error deleting “%1$s”.\n%2$s</string>
     <string name="file_job_rename_error_title_format">Error while renaming “%1$s”</string>
@@ -660,6 +661,7 @@
     <string name="storage_edit_smb_server_port_error_invalid">Invalid port</string>
     <string name="storage_edit_smb_server_path">Path</string>
     <string name="storage_edit_smb_server_path_placeholder">Can be left empty</string>
+    <string name="storage_edit_smb_server_path_error_invalid">Invalid path</string>
     <string name="storage_edit_smb_server_name">Name</string>
     <string name="storage_edit_smb_server_name_placeholder">Use hostname</string>
     <string name="storage_edit_smb_server_authentication_type">Authentication</string>
@@ -671,6 +673,7 @@
     <string name="storage_edit_smb_server_username">Username</string>
     <string name="storage_edit_smb_server_username_error_empty">Enter a username</string>
     <string name="storage_edit_smb_server_password">Password</string>
+    <string name="storage_edit_smb_server_password_error_empty">Enter a password</string>
     <string name="storage_edit_smb_server_domain">Domain</string>
     <string name="storage_edit_smb_server_connect_and_add">Connect and add</string>
     <string name="storage_edit_smb_server_add">Add</string>
@@ -725,6 +728,12 @@
     <string name="navigation_edit_bookmark_directory_path">Path</string>
     <string name="navigation_edit_bookmark_directory_path_hint">Select folder</string>
     <string name="navigation_recent_bookmark_directories">Recent &amp; Bookmarks</string>
+    <string name="navigation_trash">Trash</string>
+    <string name="trash_list_title">Trash</string>
+    <string name="trash_list_empty">Trash is empty</string>
+    <string name="trash_item_description_format">Deleted %1$s from %2$s</string>
+    <string name="trash_delete_permanently_title">Delete permanently?</string>
+    <string name="trash_delete_permanently_message_format">\"%1$s\" will be permanently deleted and cannot be restored.</string>
     <string name="recent_directories_title">Recent folders</string>
     <string name="recent_directories_empty">No recently visited folders</string>
     <string name="navigation_recent_bookmark_default_page_dialog_title">Choose default page</string>

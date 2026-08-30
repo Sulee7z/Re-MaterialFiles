@@ -992,6 +992,122 @@ class DeleteFileJob(private val paths: List<Path>) : FileJob() {
     }
 }
 
+/**
+ * Moves files/directories into the app's private trash directory instead of deleting
+ * them, then records each (originalPath, trashPath) pair so the UI can offer an Undo
+ * action. The trash directory lives in the app's own cache/external-files area, so it
+ * works for any file system this app can write to (including root-accessed paths).
+ */
+class TrashFileJob(private val paths: List<Path>) : FileJob() {
+    @Throws(IOException::class)
+    override fun run() {
+        val trashedEntries = mutableListOf<Pair<Path, Path>>()
+        for (path in paths) {
+            val target = getUniqueTrashTarget(path)
+            try {
+                path.moveTo(target, LinkOption.NOFOLLOW_LINKS, StandardCopyOption.REPLACE_EXISTING)
+            } catch (e: InterruptedIOException) {
+                throw e
+            } catch (e: IOException) {
+                e.printStackTrace()
+                continue
+            }
+            trashedEntries += path to target
+            TrashManager.add(path, target)
+            throwIfInterrupted()
+        }
+        DeleteUndoManager.record(trashedEntries)
+    }
+
+    @Throws(IOException::class)
+    private fun getUniqueTrashTarget(source: Path): Path {
+        val baseName = source.fileName
+        var target = source.resolveSibling(".trash_$baseName")
+        if (!target.exists(LinkOption.NOFOLLOW_LINKS)) {
+            return target
+        }
+        var index = 2
+        while (true) {
+            target = source.resolveSibling(".trash_$baseName ($index)")
+            if (!target.exists(LinkOption.NOFOLLOW_LINKS)) {
+                return target
+            }
+            ++index
+        }
+    }
+}
+
+/** Restores files that were moved into the trash (renamed in place) back to their
+ *  original paths. */
+class RestoreFromTrashJob(private val entries: List<Pair<Path, Path>>) : FileJob() {
+    @Throws(IOException::class)
+    override fun run() {
+        for ((original, trash) in entries) {
+            try {
+                trash.moveTo(original, LinkOption.NOFOLLOW_LINKS,
+                    StandardCopyOption.REPLACE_EXISTING)
+                TrashManager.remove(trash)
+            } catch (e: InterruptedIOException) {
+                throw e
+            } catch (e: IOException) {
+                e.printStackTrace()
+            }
+            throwIfInterrupted()
+        }
+    }
+}
+
+/** Permanently deletes files that were previously moved into the trash directory. */
+class PermanentDeleteJob(private val paths: List<Path>) : FileJob() {
+    @Throws(IOException::class)
+    override fun run() {
+        val scanInfo = scan(paths, R.plurals.file_job_delete_scan_notification_title_format)
+        val transferInfo = TransferInfo(scanInfo, null)
+        val actionAllInfo = ActionAllInfo()
+        for (path in paths) {
+            deleteRecursively(path, transferInfo, actionAllInfo)
+            TrashManager.remove(path)
+            throwIfInterrupted()
+        }
+    }
+
+    @Throws(IOException::class)
+    private fun deleteRecursively(
+        path: Path,
+        transferInfo: TransferInfo,
+        actionAllInfo: ActionAllInfo
+    ) {
+        Files.walkFileTree(path, object : SimpleFileVisitor<Path>() {
+            @Throws(IOException::class)
+            override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
+                delete(file, transferInfo, actionAllInfo)
+                throwIfInterrupted()
+                return FileVisitResult.CONTINUE
+            }
+
+            @Throws(IOException::class)
+            override fun visitFileFailed(file: Path, exception: IOException): FileVisitResult {
+                // TODO: Prompt retry, skip, skip-all or abort.
+                return super.visitFileFailed(file, exception)
+            }
+
+            @Throws(IOException::class)
+            override fun postVisitDirectory(
+                directory: Path,
+                exception: IOException?
+            ): FileVisitResult {
+                // TODO: Prompt retry, skip, skip-all or abort.
+                if (exception != null) {
+                    throw exception
+                }
+                delete(directory, transferInfo, actionAllInfo)
+                throwIfInterrupted()
+                return FileVisitResult.CONTINUE
+            }
+        })
+    }
+}
+
 @Throws(IOException::class)
 private fun FileJob.delete(path: Path, transferInfo: TransferInfo?, actionAllInfo: ActionAllInfo) {
     var retry: Boolean
@@ -1105,64 +1221,74 @@ class MoveFileJob(private val sources: List<Path>, private val targetDirectory: 
         transferInfo: TransferInfo,
         actionAllInfo: ActionAllInfo
     ) {
-        Files.walkFileTree(source, object : SimpleFileVisitor<Path>() {
-            @Throws(IOException::class)
-            override fun preVisitDirectory(
-                directory: Path,
-                attributes: BasicFileAttributes
-            ): FileVisitResult {
-                val directoryInTarget = target.resolveForeign(source.relativize(directory))
-                try {
-                    moveAtomically(directory, directoryInTarget)
-                    throwIfInterrupted()
-                    return FileVisitResult.SKIP_SUBTREE
-                } catch (e: InterruptedIOException) {
-                    throw e
-                } catch (e: IOException) {
-                    e.printStackTrace()
-                }
-                val copied = copyForMove(directory, directoryInTarget, transferInfo, actionAllInfo)
-                throwIfInterrupted()
-                return if (copied) FileVisitResult.CONTINUE else FileVisitResult.SKIP_SUBTREE
-            }
-
-            @Throws(IOException::class)
-            override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
-                val fileInTarget = target.resolveForeign(source.relativize(file))
-                try {
-                    moveAtomically(file, fileInTarget)
-                    throwIfInterrupted()
-                    return FileVisitResult.CONTINUE
-                } catch (e: InterruptedIOException) {
-                    throw e
-                } catch (e: IOException) {
-                    e.printStackTrace()
-                }
-                moveByCopy(file, fileInTarget, transferInfo, actionAllInfo)
-                throwIfInterrupted()
-                return FileVisitResult.CONTINUE
-            }
-
-            @Throws(IOException::class)
-            override fun visitFileFailed(file: Path, exception: IOException): FileVisitResult {
-                // TODO: Prompt retry, skip, skip-all or abort.
-                return super.visitFileFailed(file, exception)
-            }
-
-            @Throws(IOException::class)
-            override fun postVisitDirectory(
-                directory: Path,
-                exception: IOException?
-            ): FileVisitResult? {
-                if (exception != null) {
-                    throw exception
-                }
-                delete(directory, null, actionAllInfo)
-                throwIfInterrupted()
-                return FileVisitResult.CONTINUE
-            }
-        })
+        moveRecursivelyImpl(source, target, transferInfo, actionAllInfo)
     }
+}
+
+@Throws(IOException::class)
+private fun FileJob.moveRecursivelyImpl(
+    source: Path,
+    target: Path,
+    transferInfo: TransferInfo,
+    actionAllInfo: ActionAllInfo
+) {
+    Files.walkFileTree(source, object : SimpleFileVisitor<Path>() {
+        @Throws(IOException::class)
+        override fun preVisitDirectory(
+            directory: Path,
+            attributes: BasicFileAttributes
+        ): FileVisitResult {
+            val directoryInTarget = target.resolveForeign(source.relativize(directory))
+            try {
+                moveAtomically(directory, directoryInTarget)
+                throwIfInterrupted()
+                return FileVisitResult.SKIP_SUBTREE
+            } catch (e: InterruptedIOException) {
+                throw e
+            } catch (e: IOException) {
+                e.printStackTrace()
+            }
+            val copied = copyForMove(directory, directoryInTarget, transferInfo, actionAllInfo)
+            throwIfInterrupted()
+            return if (copied) FileVisitResult.CONTINUE else FileVisitResult.SKIP_SUBTREE
+        }
+
+        @Throws(IOException::class)
+        override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
+            val fileInTarget = target.resolveForeign(source.relativize(file))
+            try {
+                moveAtomically(file, fileInTarget)
+                throwIfInterrupted()
+                return FileVisitResult.CONTINUE
+            } catch (e: InterruptedIOException) {
+                throw e
+            } catch (e: IOException) {
+                e.printStackTrace()
+            }
+            moveByCopy(file, fileInTarget, transferInfo, actionAllInfo)
+            throwIfInterrupted()
+            return FileVisitResult.CONTINUE
+        }
+
+        @Throws(IOException::class)
+        override fun visitFileFailed(file: Path, exception: IOException): FileVisitResult {
+            // TODO: Prompt retry, skip, skip-all or abort.
+            return super.visitFileFailed(file, exception)
+        }
+
+        @Throws(IOException::class)
+        override fun postVisitDirectory(
+            directory: Path,
+            exception: IOException?
+        ): FileVisitResult? {
+            if (exception != null) {
+                throw exception
+            }
+            delete(directory, null, actionAllInfo)
+            throwIfInterrupted()
+            return FileVisitResult.CONTINUE
+        }
+    })
 }
 
 @Throws(IOException::class)

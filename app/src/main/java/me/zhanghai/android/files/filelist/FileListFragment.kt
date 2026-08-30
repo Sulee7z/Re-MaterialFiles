@@ -1733,7 +1733,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     override fun deleteFiles(files: FileItemSet) {
-        FileJobService.delete(makePathListForJob(files), requireContext())
+        FileJobService.trashDelete(makePathListForJob(files), requireContext())
         viewModel.selectFiles(files, false)
     }
 
@@ -2420,11 +2420,16 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     override fun installFile(file: FileItem) {
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(file.path.fileProviderUri, file.mimeType.value)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val path = file.path
+        if (path.isArchivePath) {
+            FileJobService.installApk(path, requireContext())
+        } else {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(path.fileProviderUri, file.mimeType.value)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(intent)
         }
-        startActivity(intent)
     }
 
     override fun showApkStringSearch(file: FileItem) {

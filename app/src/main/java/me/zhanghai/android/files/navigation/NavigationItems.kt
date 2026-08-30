@@ -30,6 +30,7 @@ import me.zhanghai.android.files.storage.AddStorageDialogActivity
 import me.zhanghai.android.files.storage.FileSystemRoot
 import me.zhanghai.android.files.storage.Storage
 import me.zhanghai.android.files.storage.StorageVolumeListLiveData
+import me.zhanghai.android.files.storage.TrashListActivity
 import me.zhanghai.android.files.util.createIntent
 import me.zhanghai.android.files.util.isMounted
 import me.zhanghai.android.files.util.supportsExternalStorageManager
@@ -54,6 +55,7 @@ val navigationItems: List<NavigationItem?>
             }
             add(null)
             add(BookmarkRecentDirectoriesItem())
+            add(TrashItem())
             add(null)
             addAll(menuItems)
         }
@@ -359,6 +361,18 @@ private val menuItems: List<NavigationItem>
             AboutActivity::class.createIntent()
         )
     )
+
+private class TrashItem : MenuItem(
+    R.drawable.delete_icon_control_normal_24dp, R.string.navigation_trash
+) {
+    override val id: Long
+        get() = 0x7472617368L // "trash"
+
+    override fun onClick(listener: Listener) {
+        listener.launchIntent(TrashListActivity::class.createIntent())
+        listener.closeNavigationDrawer()
+    }
+}
 
 private abstract class MenuItem(
     @DrawableRes override val iconRes: Int,

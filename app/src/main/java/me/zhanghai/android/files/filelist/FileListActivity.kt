@@ -124,6 +124,7 @@ class FileListActivity : AppActivity() {
                 as FileListFragment
         }
         setupMoveUndo()
+        setupDeleteUndo()
     }
 
     private fun showTwoPane(intent: Intent, savedInstanceState: Bundle?) {
@@ -534,6 +535,36 @@ class FileListActivity : AppActivity() {
                         event: Int
                     ) {
                         me.zhanghai.android.files.filejob.MoveUndoManager.clear()
+                    }
+                })
+                .show()
+        }
+    }
+
+    private fun setupDeleteUndo() {
+        me.zhanghai.android.files.filejob.DeleteUndoManager.undoLiveData.observe(this) { undo ->
+            if (undo == null) {
+                return@observe
+            }
+            val count = undo.entries.size
+            com.google.android.material.snackbar.Snackbar.make(
+                findViewById(android.R.id.content),
+                getString(R.string.file_job_trash_undo_message_format, count),
+                com.google.android.material.snackbar.Snackbar.LENGTH_LONG
+            )
+                .setAction(R.string.undo) {
+                    me.zhanghai.android.files.filejob.FileJobService.restoreFromTrash(
+                        undo.entries, this@FileListActivity
+                    )
+                }
+                .addCallback(object : com.google.android.material.snackbar.BaseTransientBottomBar.BaseCallback<com.google.android.material.snackbar.Snackbar>() {
+                    override fun onDismissed(
+                        transientBottomBar: com.google.android.material.snackbar.Snackbar?,
+                        event: Int
+                    ) {
+                        // Note: the trashed files stay in the recycle bin unless the user
+                        // chose Undo or explicitly empties the bin from the Trash screen.
+                        me.zhanghai.android.files.filejob.DeleteUndoManager.clear()
                     }
                 })
                 .show()
@@ -969,7 +1000,7 @@ class FileListActivity : AppActivity() {
             val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this@FileListActivity)
                 .setMessage(message)
                 .setPositiveButton(android.R.string.ok) { _, _ ->
-                    me.zhanghai.android.files.filejob.FileJobService.delete(
+                    me.zhanghai.android.files.filejob.FileJobService.trashDelete(
                         payload.paths, applicationContext
                     )
                     findFileListFragment(payload.sourceIsSecondaryPane)

@@ -130,12 +130,14 @@
         <SwitchPreferenceCompat
             android:key="@string/pref_key_two_pane_browsing"
             android:title="@string/settings_two_pane_browsing_title"
-            android:summary="@string/settings_two_pane_browsing_summary" />
+            android:summary="@string/settings_two_pane_browsing_summary"
+            android:defaultValue="@bool/pref_default_value_two_pane_browsing" />
 
         <SwitchPreferenceCompat
             android:key="@string/pref_key_two_pane_dense"
             android:title="@string/settings_two_pane_dense_title"
             android:summary="@string/settings_two_pane_dense_summary"
+            android:defaultValue="@bool/pref_default_value_two_pane_dense"
             android:dependency="@string/pref_key_two_pane_browsing" />
 
         <SwitchPreferenceCompat

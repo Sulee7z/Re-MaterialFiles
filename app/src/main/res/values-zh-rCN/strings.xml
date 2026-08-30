@@ -180,6 +180,7 @@
     <string name="file_job_move_error_title_format">移动“%1$s”时发生错误</string>
     <string name="file_job_move_error_message_format">将文件移动到“%1$s”时发生错误。\n%2$s</string>
     <string name="file_job_move_undo_message_format">已移动 %1$d 个项目</string>
+    <string name="file_job_trash_undo_message_format">已删除 %1$d 个项目</string>
     <string name="file_job_delete_error_title">删除时发生错误</string>
     <string name="file_job_delete_error_message_format">在删除“%1$s”时发生错误。\n%2$s</string>
     <string name="file_job_rename_error_title_format">重命名“%1$s”时发生错误</string>
@@ -576,6 +577,12 @@
     <string name="navigation_edit_bookmark_directory_name">名称</string>
     <string name="navigation_edit_bookmark_directory_path">路径</string>
     <string name="navigation_recent_bookmark_directories">最近/书签文件夹</string>
+    <string name="navigation_trash">回收站</string>
+    <string name="trash_list_title">回收站</string>
+    <string name="trash_list_empty">回收站为空</string>
+    <string name="trash_item_description_format">%2$s 中的文件，删除于 %1$s</string>
+    <string name="trash_delete_permanently_title">永久删除？</string>
+    <string name="trash_delete_permanently_message_format">“%1$s”将被永久删除，且无法恢复。</string>
     <string name="recent_directories_title">最近访问</string>
     <string name="recent_directories_empty">暂无最近访问的文件夹</string>
     <string name="navigation_recent_bookmark_default_page_dialog_title">选择默认页面</string>

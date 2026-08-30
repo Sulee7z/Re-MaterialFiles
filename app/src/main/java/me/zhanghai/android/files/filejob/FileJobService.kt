@@ -141,6 +141,18 @@ class FileJobService : Service() {
             startJob(DeleteFileJob(paths), context)
         }
 
+        fun trashDelete(paths: List<Path>, context: Context) {
+            startJob(TrashFileJob(paths), context)
+        }
+
+        fun restoreFromTrash(entries: List<Pair<Path, Path>>, context: Context) {
+            startJob(RestoreFromTrashJob(entries), context)
+        }
+
+        fun permanentDelete(paths: List<Path>, context: Context) {
+            startJob(PermanentDeleteJob(paths), context)
+        }
+
         fun move(sources: List<Path>, targetDirectory: Path, context: Context) {
             startJob(MoveFileJob(sources, targetDirectory), context)
         }
