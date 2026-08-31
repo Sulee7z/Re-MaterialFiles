@@ -404,6 +404,14 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         // touch anywhere in the pane (items, breadcrumb, empty state, toolbar, …).
         val fastScroller = if (isTwoPaneMode && isSecondaryPane.not()) {
             createLeftPaneFastScroller()
+        } else if (isTwoPaneMode) {
+            // The pane has a 16dp screen-edge padding; shift the right-edge scrollbar
+            // back out by the same amount so it sits on the screen edge.
+            ThemedFastScroller.create(
+                binding.recyclerView,
+                paddingRight = -requireContext().resources
+                    .getDimensionPixelSize(R.dimen.screen_edge_margin)
+            )
         } else {
             ThemedFastScroller.create(binding.recyclerView)
         }
@@ -1393,6 +1401,12 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         )
         return FastScrollerBuilder(rtlWrapper)
             .useMd2Style()
+            // The pane has a 16dp screen-edge padding; shift the left-edge scrollbar
+            // back out by the same amount so it sits on the screen edge.
+            .setPadding(
+                -requireContext().resources.getDimensionPixelSize(R.dimen.screen_edge_margin),
+                0, 0, 0
+            )
             .setThumbDrawable(
                 requireContext().getDrawableCompat(R.drawable.fast_scroll_thumb_m3)
             )
