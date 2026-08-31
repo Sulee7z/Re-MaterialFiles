@@ -98,7 +98,8 @@
                     android:id="@+id/leftPane"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
-                    android:paddingStart="@dimen/two_pane_screen_edge_margin"
+                    android:paddingStart="@dimen/screen_edge_margin"
+                    android:paddingEnd="@dimen/screen_edge_margin_minus_8dp"
                     tools:ignore="Suspicious0dp">
 
                     <FrameLayout
@@ -137,7 +138,8 @@
                     android:id="@+id/rightPane"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
-                    android:paddingEnd="@dimen/two_pane_screen_edge_margin_end"
+                    android:paddingStart="@dimen/screen_edge_margin_minus_8dp"
+                    android:paddingEnd="@dimen/screen_edge_margin"
                     tools:ignore="Suspicious0dp">
 
                     <FrameLayout
