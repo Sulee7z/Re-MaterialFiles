@@ -48,10 +48,8 @@ object DirectoryContentSizes {
         val entry = cache[path.toString()] ?: return null
         val lastModifiedMillis = attributes.lastModifiedTime().toInstant().toEpochMilli()
         return if (entry.lastModifiedMillis == lastModifiedMillis) {
-            android.util.Log.d("DirSize", "get hit: $path = ${entry.sizeBytes}")
             entry.sizeBytes
         } else {
-            android.util.Log.d("DirSize", "get stale: $path cached=${entry.lastModifiedMillis} now=$lastModifiedMillis")
             null
         }
     }
@@ -80,7 +78,6 @@ object DirectoryContentSizes {
         pending.add(key)
         executor.execute {
             val sizeBytes = computeSize(path)
-            android.util.Log.d("DirSize", "computed: $path = $sizeBytes")
             synchronized(this@DirectoryContentSizes) {
                 pending.remove(key)
                 cache[key] = Entry(lastModifiedMillis, sizeBytes)
@@ -92,9 +89,6 @@ object DirectoryContentSizes {
     private fun computeSize(directory: Path): Long =
         try {
             var size = 0L
-            var fileCount = 0
-            var failedCount = 0
-            android.util.Log.d("DirSize", "computeSize start: $directory")
             Files.walkFileTree(directory, object : FileVisitor<Path> {
                 override fun preVisitDirectory(
                     dir: Path,
@@ -106,35 +100,23 @@ object DirectoryContentSizes {
                     attributes: BasicFileAttributes
                 ): FileVisitResult {
                     size += attributes.size()
-                    fileCount += 1
                     return FileVisitResult.CONTINUE
                 }
 
                 override fun visitFileFailed(
                     file: Path,
                     exception: IOException
-                ): FileVisitResult {
-                    failedCount += 1
-                    android.util.Log.d(
-                        "DirSize", "visitFileFailed: $file : $exception"
-                    )
-                    return FileVisitResult.CONTINUE
-                }
+                ): FileVisitResult = FileVisitResult.CONTINUE
 
                 override fun postVisitDirectory(
                     dir: Path,
                     exception: IOException?
                 ): FileVisitResult = FileVisitResult.CONTINUE
             })
-            android.util.Log.d(
-                "DirSize", "computeSize done: $directory size=$size files=$fileCount failed=$failedCount"
-            )
             size
         } catch (exception: IOException) {
-            android.util.Log.d("DirSize", "computeSize IOException: $directory : $exception")
             -1L
         } catch (exception: SecurityException) {
-            android.util.Log.d("DirSize", "computeSize SecurityException: $directory : $exception")
             -1L
         }
 

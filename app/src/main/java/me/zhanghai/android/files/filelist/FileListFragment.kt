@@ -1008,6 +1008,11 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         }
         updateOverlayToolbar()
         updateBottomToolbar()
+        // Navigating to a new directory brings the shared FAB back (it may have been
+        // hidden while scrolling the previous directory's list).
+        if (isTwoPaneMode) {
+            (activity as? FileListActivity)?.showFab()
+        }
     }
 
     private fun onSearchViewExpandedChanged(expanded: Boolean) {
@@ -1044,7 +1049,16 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             adapter.clear()
         }
         if (stateful is Success) {
-            viewModel.pendingState?.let { layoutManager.onRestoreInstanceState(it) }
+            val pendingState = viewModel.pendingState
+            if (pendingState != null) {
+                layoutManager.onRestoreInstanceState(pendingState)
+            } else {
+                // No saved scroll state for this directory (first visit, refresh, or a
+                // sibling-directory switch whose trail state was never recorded): jump
+                // to the top instead of keeping a stale offset that would clip the
+                // first row.
+                layoutManager.scrollToPositionWithOffset(0, 0)
+            }
         }
     }
 
@@ -1329,9 +1343,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         // Hide the shared FAB while a multi-select action mode is active (it would
         // otherwise overlap the action bar area and distract from delete/copy).
         if (isTwoPaneMode) {
-            val fab = (requireActivity() as FileListActivity)
-                .findViewById<View?>(R.id.floatingActionButton)
-            fab?.visibility = if (files.isEmpty()) View.VISIBLE else View.GONE
+            (activity as? FileListActivity)?.setFabHiddenBySelection(files.isNotEmpty())
         }
     }
 

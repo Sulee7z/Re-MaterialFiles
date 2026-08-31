@@ -63,6 +63,7 @@
 <dimen name="two_pane_shadow_width">10dp</dimen>
 <dimen name="two_pane_divider_touch_width">12dp</dimen>
 <dimen name="two_pane_screen_edge_margin">8dp</dimen>
+<dimen name="two_pane_screen_edge_margin_end">16dp</dimen>
     <dimen name="touch_target_icon_padding">12dp</dimen>
     <dimen name="touch_target_large_icon_padding">4dp</dimen>
     <dimen name="badge_size">18dp</dimen>

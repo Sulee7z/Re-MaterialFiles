@@ -72,6 +72,35 @@ class FileListActivity : AppActivity() {
      *  Computed in onCreate() because it reads intent, which is only set after attach(). */
     private var twoPaneAtCreation: Boolean = false
 
+    /**
+     * Bridges the ACTIVE pane's current path to the navigation drawer so it always
+     * follows the pane the user is operating (a single one-time subscription in
+     * [observeCurrentPath] would pin the drawer to whichever pane was active when the
+     * drawer fragment was created). Rebound on every pane switch via
+     * [rebindActivePanePath].
+     */
+    private val activePanePathLiveData:
+        androidx.lifecycle.MediatorLiveData<Path> = androidx.lifecycle.MediatorLiveData()
+    private var observedPanePathFragment: FileListFragment? = null
+
+    private fun rebindActivePanePath() {
+        if (!twoPaneAtCreation) {
+            return
+        }
+        val pane = activeFileListFragmentOrNull() ?: return
+        if (pane === observedPanePathFragment) {
+            return
+        }
+        observedPanePathFragment?.viewModel?.currentPathLiveData
+            ?.let(activePanePathLiveData::removeSource)
+        observedPanePathFragment = pane
+        pane.viewModel.currentPathLiveData.let {
+            activePanePathLiveData.addSource(it) { path ->
+                activePanePathLiveData.value = path
+            }
+        }
+    }
+
     /** True while the FAB speed-dial menu is open; touches then must not flip the active pane. */
     private var fabIsOpen: Boolean = false
 
@@ -370,8 +399,10 @@ class FileListActivity : AppActivity() {
                 override fun observeCurrentPath(
                     owner: LifecycleOwner, observer: (Path) -> Unit
                 ) {
-                    activeFileListFragmentOrNull()?.viewModel
-                        ?.currentPathLiveData?.observe(owner, observer)
+                    // Observe the bridge that always mirrors the ACTIVE pane's path
+                    // (rebound on pane switches), so the drawer follows any navigation.
+                    activePanePathLiveData.observe(owner, observer)
+                    rebindActivePanePath()
                 }
                 override fun closeNavigationDrawer() {
                     this@FileListActivity.closeNavigationDrawer()
@@ -552,6 +583,8 @@ class FileListActivity : AppActivity() {
             invalidateOptionsMenu()
             // The paste bar (and its extraction destination) follows the active pane.
             updateTwoPaneBottomToolbar(refreshDestination = true)
+            // The navigation drawer follows the newly active pane's path.
+            rebindActivePanePath()
         }
         setupDividerDrag()
         setupTwoPaneDragController()
@@ -568,11 +601,15 @@ class FileListActivity : AppActivity() {
                 return@observe
             }
             val count = undo.entries.size
+            // Anchor the snackbar above the FAB so it never covers it: the FAB must be
+            // visible for the anchor to take effect, so show it first.
+            showFab()
             com.google.android.material.snackbar.Snackbar.make(
                 findViewById(android.R.id.content),
                 getString(R.string.file_job_move_undo_message_format, count),
                 com.google.android.material.snackbar.Snackbar.LENGTH_LONG
             )
+                .setAnchorView(findViewById<View>(R.id.floatingActionButton))
                 .setAction(R.string.undo) {
                     for ((source, target) in undo.entries) {
                         // Undo moves the file back next to where it came from.
@@ -600,11 +637,15 @@ class FileListActivity : AppActivity() {
                 return@observe
             }
             val count = undo.entries.size
+            // Anchor the snackbar above the FAB so it never covers it: the FAB must be
+            // visible for the anchor to take effect, so show it first.
+            showFab()
             com.google.android.material.snackbar.Snackbar.make(
                 findViewById(android.R.id.content),
                 getString(R.string.file_job_trash_undo_message_format, count),
                 com.google.android.material.snackbar.Snackbar.LENGTH_LONG
             )
+                .setAnchorView(findViewById<View>(R.id.floatingActionButton))
                 .setAction(R.string.undo) {
                     me.zhanghai.android.files.filejob.FileJobService.restoreFromTrash(
                         undo.entries, this@FileListActivity
