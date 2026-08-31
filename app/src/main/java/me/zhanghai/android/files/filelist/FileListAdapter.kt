@@ -81,7 +81,8 @@ class FileListAdapter(
     private var isSearching = false
     /** True when this list is the secondary (right) pane of two-pane browsing. */
     var isSecondaryPane: Boolean = false
-
+    /** True when this list belongs to a two-pane layout (icons move to the row end). */
+    var isTwoPaneMode: Boolean = false
     /** True when the two-pane cross-pane drag-and-drop is active. */
     var isCrossPaneDragEnabled: Boolean = false
 
@@ -334,6 +335,15 @@ class FileListAdapter(
                 if (viewType == FileViewType.LIST && denseLayout) {
                     layoutParams = layoutParams.apply {
                         height = context.resources.getDimensionPixelSize(R.dimen.dense_two_line_list_item_height)
+                    }
+                }
+                // Two-pane rows put the file/folder icon on the RIGHT end (MT Manager
+                // style), with the name reading first. Move it once at creation time.
+                if (isTwoPaneMode && viewType == FileViewType.LIST) {
+                    val iconLayout = findViewById<View>(R.id.iconLayout)
+                    if (iconLayout != null && indexOfChild(iconLayout) != childCount - 1) {
+                        removeView(iconLayout)
+                        addView(iconLayout)
                     }
                 }
             }

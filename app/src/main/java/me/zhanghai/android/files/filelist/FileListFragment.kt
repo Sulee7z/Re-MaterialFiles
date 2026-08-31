@@ -422,9 +422,9 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             // The shared breadcrumb bar (MT Manager style) replaces the per-pane bars.
             binding.breadcrumbLayout.isVisible = false
             adapter.hideMenuButtons = true
-            // Folder rows collapse their icon area to zero width so names span the full
-            // narrow pane; file rows keep their icon. MT Manager style compactness.
-            adapter.hideFolderIcons = true
+            adapter.isTwoPaneMode = true
+            // Icons (folders and files alike) are rendered at the right end of each row
+            // (see FileListAdapter.onCreateViewHolder), MT Manager style.
             // Compactness (small font/icons/dense rows) is driven ENTIRELY by the
             // FILE_LIST_TWO_PANE_DENSE switch via updateDenseLayout(), so the setting
             // and the rendered list can never disagree (and toggling it takes effect
