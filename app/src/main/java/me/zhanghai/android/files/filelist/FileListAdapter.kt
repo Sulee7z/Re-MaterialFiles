@@ -603,11 +603,23 @@ MotionEvent.ACTION_DOWN -> {
             }
         }
         holder.iconLayout.apply {
-            // Two-pane folders: collapse the icon area to zero width so the name spans
-            // the full row (the drag-to-select gesture is handled on the whole item row).
+            // Two-pane rows keep the icon on the right (trailing). The name+description
+            // block keeps weight=1 (text left-aligned, fills the row) and the icon is
+            // pinned to the right edge with a fixed gap: a wrapping text block would make
+            // the icon drift with the name length and look ragged. M3 two-line list with
+            // trailing content.
             val rowContext = holder.itemLayout.context
             val iconLayoutParams = layoutParams
-            if (hideFolderIcons && isDirectory) {
+            if (isTwoPaneMode) {
+                iconLayoutParams.width = rowContext.resources
+                    .getDimensionPixelSize(R.dimen.two_pane_icon_size)
+                (iconLayoutParams as? ViewGroup.MarginLayoutParams)?.apply {
+                    setMarginStart(rowContext.resources
+                        .getDimensionPixelSize(R.dimen.content_start_from_screen_edge_margin_minus_44dp))
+                    setMarginEnd(rowContext.resources
+                        .getDimensionPixelSize(R.dimen.screen_edge_margin_minus_4dp))
+                }
+            } else if (hideFolderIcons && isDirectory) {
                 iconLayoutParams.width = 0
                 (iconLayoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = 0
             } else {
@@ -761,9 +773,10 @@ MotionEvent.ACTION_DOWN -> {
                 lastModificationTime
             }
         }
-        if (useSmallFont) {
+        if (useSmallFont || isTwoPaneMode) {
             // Two-pane mode: use the smaller name/description font (about one and a
-            // half notches below the normal size) so more files fit per pane.
+            // half notches below the normal size) so more files fit per pane and the
+            // rows look tighter. Always applied in two-pane mode, not only in dense.
             val scaledDensity = holder.nameText.resources.displayMetrics.scaledDensity
             holder.nameText.setTextSize(
                 TypedValue.COMPLEX_UNIT_SP,
