@@ -40,8 +40,15 @@ object CheckableItemBackground {
             val checkedDrawable = GradientDrawable().apply {
                 cornerRadius = context.dpToDimension(cornerSizeDp)
                 val primaryColor = context.getColorByAttr(androidx.appcompat.R.attr.colorPrimary)
-                setColor(primaryColor.asColor().withModulatedAlpha(0.12f).value)
-                setStroke(2 * context.dpToDimensionPixelOffset(insetDp), Color.TRANSPARENT)
+                setColor(primaryColor.asColor().withModulatedAlpha(0.15f).value)
+                val strokeWidth = 2 * context.dpToDimensionPixelOffset(insetDp)
+                if (strokeWidth > 0) {
+                    // A visible primary-colored outline makes the selection state much
+                    // clearer than the very subtle fill alone.
+                    setStroke(strokeWidth, primaryColor.asColor().withModulatedAlpha(0.45f).value)
+                } else {
+                    setStroke(0, Color.TRANSPARENT)
+                }
             }
             addState(intArrayOf(android.R.attr.state_checked), checkedDrawable)
             addState(intArrayOf(), ColorDrawable(Color.TRANSPARENT))

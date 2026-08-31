@@ -329,7 +329,7 @@ class FileListAdapter(
                 background = if (viewType == FileViewType.GRID && isMaterial3Theme) {
                     CheckableItemBackground.create(4f, 12f, context)
                 } else {
-                    CheckableItemBackground.create(0f, 0f, context)
+                    CheckableItemBackground.create(4f, 8f, context)
                 }
                 if (viewType == FileViewType.LIST && denseLayout) {
                     layoutParams = layoutParams.apply {
