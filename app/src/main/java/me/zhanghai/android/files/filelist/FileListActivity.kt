@@ -75,6 +75,10 @@ class FileListActivity : AppActivity() {
     /** True while the FAB speed-dial menu is open; touches then must not flip the active pane. */
     private var fabIsOpen: Boolean = false
 
+    /** True while the divider pane-resize drag gesture, handled in [dispatchTouchEvent],
+     *  is active (so the touch is consumed and no file drag/click starts in the panes). */
+    private var dividerDragActive: Boolean = false
+
     /** The effective two-pane mode; false for picker intents even when the setting is on. */
     val isTwoPaneMode: Boolean
         get() = twoPaneAtCreation
@@ -421,6 +425,50 @@ class FileListActivity : AppActivity() {
      * top-bar menu routing (search/sort/three dots) and cross-pane actions.
      */
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (twoPaneAtCreation && !fabIsOpen) {
+            val dividerTouchArea = findViewById<View>(R.id.dividerTouchArea)
+            if (dividerTouchArea != null && dividerTouchArea.isVisible) {
+                val dividerCenterX = dividerTouchArea.x + dividerTouchArea.width / 2f
+                val dividerRadius =
+                    TWO_PANE_DIVIDER_TOUCH_RADIUS_DP * resources.displayMetrics.density
+                when (ev.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        if (kotlin.math.abs(ev.rawX - dividerCenterX) <= dividerRadius) {
+                            // Press within the divider hit zone: start a pane resize.
+                            dividerDragActive = true
+                            findViewById<View>(R.id.divider)
+                                .setBackgroundResource(R.drawable.two_pane_divider_active)
+                            return true
+                        }
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        if (dividerDragActive) {
+                            val ratio = (ev.rawX / resources.displayMetrics.widthPixels)
+                                .coerceIn(
+                                    TwoPaneState.PANE_WIDTH_MIN_RATIO,
+                                    TwoPaneState.PANE_WIDTH_MAX_RATIO
+                                )
+                            if (kotlin.math.abs(
+                                    ratio - TwoPaneState.paneWidthRatio
+                                ) >= 0.001f
+                            ) {
+                                TwoPaneState.paneWidthRatio = ratio
+                                updateResponsivePanes()
+                            }
+                            return true
+                        }
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        if (dividerDragActive) {
+                            dividerDragActive = false
+                            findViewById<View>(R.id.divider)
+                                .setBackgroundResource(R.drawable.two_pane_divider)
+                            return true
+                        }
+                    }
+                }
+            }
+        }
         if (twoPaneAtCreation && !fabIsOpen && ev.actionMasked == MotionEvent.ACTION_DOWN) {
             // Both panes are always shown side by side (portrait included, MT Manager
             // style), so the touch X coordinate decides the pane. findViewById may be null
@@ -462,9 +510,14 @@ class FileListActivity : AppActivity() {
                 val drawerTouched = drawerLayout != null && navigationView != null &&
                     drawerLayout.isDrawerOpen(navigationView)
                 // The divider is the pane-resize drag handle: grabbing it must not flip
-                // the active pane either (a resize is not "operating" either pane).
-                val dividerTouched = ev.rawX >= dividerTouchArea.x &&
-                    ev.rawX <= dividerTouchArea.x + dividerTouchArea.width
+                // the active pane either (a resize is not "operating" either pane). The
+                // hit zone extends symmetrically around the divider center, not the raw
+                // (narrow) divider view width, so a slightly-off press still resizes.
+                val dividerCenterX = dividerTouchArea.x + dividerTouchArea.width / 2f
+                val dividerRadius =
+                    TWO_PANE_DIVIDER_TOUCH_RADIUS_DP * resources.displayMetrics.density
+                val dividerTouched =
+                    kotlin.math.abs(ev.rawX - dividerCenterX) <= dividerRadius
                 // Touches in the system back-gesture zones (screen edges) must not flip
                 // the active pane or evaluate the FAB: a horizontal swipe there is the
                 // system back gesture and has to pass through untouched.
@@ -474,7 +527,7 @@ class FileListActivity : AppActivity() {
                 if (!inSystemGestureZone && !fabTouched && !topBarTouched &&
                     !breadcrumbTouched && !drawerTouched && !dividerTouched
                 ) {
-                    TwoPaneState.setActivePaneSecondary(ev.rawX > dividerTouchArea.x)
+                    TwoPaneState.setActivePaneSecondary(ev.rawX > dividerCenterX)
                 }
             }
         }
@@ -572,41 +625,15 @@ class FileListActivity : AppActivity() {
     }
 
     /**
-     * Draggable divider: dragging it resizes the two panes live (the ratio is kept in
+     * The pane divider drag gesture lives in [dispatchTouchEvent]: a press within
+     * [TWO_PANE_DIVIDER_TOUCH_RADIUS_DP] of the divider center starts a resize (the
+     * visual divider is only 12dp wide so the panes get the full screen width, while a
+     * generous symmetric hit radius keeps the resize easy). The ratio is kept in
      * [TwoPaneState.paneWidthRatio], so it survives pane switches and Activity
-     * recreation). The divider view is 10dp wide, which is the drag touch target. While
-     * the drag is in progress the center line grows and takes the accent color, so the
-     * user can see the handle is grabbed.
+     * recreation. While the drag is in progress the center line grows and takes the
+     * accent color, so the user can see the handle is grabbed.
      */
     private fun setupDividerDrag() {
-        val dividerTouchArea = findViewById<View>(R.id.dividerTouchArea)
-        dividerTouchArea.isClickable = true
-        dividerTouchArea.setOnTouchListener { view, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    findViewById<View>(R.id.divider)
-                        .setBackgroundResource(R.drawable.two_pane_divider_active)
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val ratio = (event.rawX / resources.displayMetrics.widthPixels)
-                        .coerceIn(
-                            TwoPaneState.PANE_WIDTH_MIN_RATIO,
-                            TwoPaneState.PANE_WIDTH_MAX_RATIO
-                        )
-                    if (kotlin.math.abs(ratio - TwoPaneState.paneWidthRatio) >= 0.001f) {
-                        TwoPaneState.paneWidthRatio = ratio
-                        updateResponsivePanes()
-                    }
-                    true
-                }
-                else -> {
-                    findViewById<View>(R.id.divider)
-                        .setBackgroundResource(R.drawable.two_pane_divider)
-                    false
-                }
-            }
-        }
     }
 
     /** Applies the active-pane state to the pane containers (always side by side). */
@@ -656,27 +683,67 @@ class FileListActivity : AppActivity() {
         rightContent.alpha = if (TwoPaneState.activePaneSecondary) 1f else 0.5f
         // The shared breadcrumb bar follows the active pane.
         refreshSharedBreadcrumb()
+        // Switching the active pane brings the FAB back (it may have been hidden while
+        // scrolling the previous pane's list).
+        showFab()
     }
 
     /**
-     * Hides the shared FAB while any pane's list scrolls DOWN, and shows it again when
-     * it scrolls UP. Short lists that cannot scroll never emit deltas, so the FAB stays
-     * visible (the + button is always reachable). Idempotent: safe to call on every
-     * responsive refresh.
+     * Single source of truth for the shared FAB's visibility. Two independent reasons
+     * may hide it: scrolling away from the top of the ACTIVE pane ([fabHiddenByScroll])
+     * and an active multi-select action mode ([fabHiddenBySelection]). Any singleton
+     * restore path just clears its flag and re-derives the visibility, so no competing
+     * writer can win a race (the previous per-listener direct writes were fighting
+     * each other across pane fling / navigation events).
+     */
+    private var fabHiddenByScroll = false
+    private var fabHiddenBySelection = false
+
+    private fun updateFabVisibility() {
+        val fab = findViewById<View>(R.id.floatingActionButton) ?: return
+        fab.visibility = if (fabHiddenByScroll || fabHiddenBySelection) {
+            View.GONE
+        } else {
+            View.VISIBLE
+        }
+    }
+
+    /**
+     * Hides/shows the shared FAB according to the ACTIVE pane's scroll direction:
+     * scrolling down (dy>0) hides it, scrolling up (dy<0) shows it. Only the active
+     * pane controls the FAB, so an inactive pane's fling tail cannot re-hide it right
+     * after a pane switch. Short lists that cannot scroll never emit deltas, so the
+     * FAB stays visible. Idempotent: safe to call on every responsive refresh.
      */
     private fun setupTwoPaneFabAutoHide() {
-        val fab = findViewById<com.leinardi.android.speeddial.SpeedDialView>(
-            R.id.floatingActionButton
-        ) ?: return
-        val listener: (Int) -> Unit = { dy ->
-            if (dy > 0) {
-                fab.visibility = View.GONE
-            } else if (dy < 0) {
-                fab.visibility = View.VISIBLE
+        fun paneListener(isSecondaryPane: Boolean): (Int) -> Unit = { dy ->
+            // Only the ACTIVE pane controls the shared FAB.
+            if (TwoPaneState.activePaneSecondary == isSecondaryPane) {
+                if (dy > 0 && !fabHiddenByScroll) {
+                    fabHiddenByScroll = true
+                    updateFabVisibility()
+                } else if (dy < 0 && fabHiddenByScroll) {
+                    fabHiddenByScroll = false
+                    updateFabVisibility()
+                }
             }
         }
-        findFileListFragment(secondaryPane = false)?.setOnListScrolledListener(listener)
-        findFileListFragment(secondaryPane = true)?.setOnListScrolledListener(listener)
+        findFileListFragment(secondaryPane = false)
+            ?.setOnListScrolledListener(paneListener(false))
+        findFileListFragment(secondaryPane = true)
+            ?.setOnListScrolledListener(paneListener(true))
+    }
+
+    /** Shows the shared FAB again (e.g. after switching panes or navigating). */
+    fun showFab() {
+        fabHiddenByScroll = false
+        updateFabVisibility()
+    }
+
+    /** Hides the shared FAB while a multi-select action mode is active. */
+    fun setFabHiddenBySelection(hidden: Boolean) {
+        fabHiddenBySelection = hidden
+        updateFabVisibility()
     }
 
     /**
@@ -1263,6 +1330,11 @@ class FileListActivity : AppActivity() {
 
         /** The system back-gesture zone width at each screen edge (approximate). */
         private const val SYSTEM_GESTURE_ZONE_DP = 24
+
+        /** Extra hit radius (from the divider center) for the pane resize drag. The
+         *  visual divider is narrow (12dp) so the panes get the full width; this radius
+         *  keeps an easy grab without a hard width limit between the panes. */
+        private const val TWO_PANE_DIVIDER_TOUCH_RADIUS_DP = 24
 
         /** True for picker intents (open file / directory / create), which must run in
          *  single-pane mode: two-pane mode hides the per-pane toolbar that carries the
