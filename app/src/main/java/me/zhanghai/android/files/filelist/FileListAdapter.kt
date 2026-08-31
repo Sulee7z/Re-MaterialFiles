@@ -625,13 +625,17 @@ MotionEvent.ACTION_DOWN -> {
             val rowContext = holder.itemLayout.context
             val iconLayoutParams = layoutParams
             if (isTwoPaneMode) {
-                val gap = rowContext.resources
+                // Two-pane icons are slightly larger (24dp) and sit close to the text
+                // (8dp gap), so the name reads just left of a clear, bigger icon.
+                val textGap = rowContext.resources
+                    .getDimensionPixelSize(R.dimen.screen_edge_margin_minus_8dp)
+                val endGap = rowContext.resources
                     .getDimensionPixelSize(R.dimen.screen_edge_margin_minus_4dp)
                 iconLayoutParams.width = rowContext.resources
-                    .getDimensionPixelSize(R.dimen.two_pane_icon_size)
+                    .getDimensionPixelSize(R.dimen.icon_size)
                 (iconLayoutParams as? ViewGroup.MarginLayoutParams)?.apply {
-                    setMarginStart(gap)
-                    setMarginEnd(gap)
+                    setMarginStart(textGap)
+                    setMarginEnd(endGap)
                 }
                 // Name+description block wraps content and the whole row centers both.
                 val nameBlock = holder.nameText.parent as? android.widget.LinearLayout
