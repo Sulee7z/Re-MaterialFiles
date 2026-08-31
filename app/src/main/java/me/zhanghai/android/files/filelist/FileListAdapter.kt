@@ -341,13 +341,25 @@ class FileListAdapter(
                     }
                 }
                 // Two-pane rows put the file/folder icon on the RIGHT end (MT Manager
-                // style), with the name reading first. Move it once at creation time.
+                // style), with the name reading first. The name+description block wraps
+                // its content (does not stretch across the row) so the icon sits right
+                // next to it instead of being pushed to the far edge by a full-width
+                // text layer; the whole group is centered in the pane. Set once at
+                // creation time (not per-bind) to avoid layout churn.
                 if (isTwoPaneMode && viewType == FileViewType.LIST) {
                     val iconLayout = findViewById<View>(R.id.iconLayout)
                     if (iconLayout != null && indexOfChild(iconLayout) != childCount - 1) {
                         removeView(iconLayout)
                         addView(iconLayout)
                     }
+                    val nameBlock = holder.nameText.parent as? android.widget.LinearLayout
+                    nameBlock?.layoutParams = nameBlock.layoutParams.apply {
+                        width = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                        if (this is ViewGroup.MarginLayoutParams) {
+                            marginEnd = 0
+                        }
+                    }
+                    gravity = android.view.Gravity.CENTER
                 }
             }
             thumbnailOutlineView?.apply {
