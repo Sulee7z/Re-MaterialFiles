@@ -334,6 +334,7 @@ class FileListActivity : AppActivity() {
             // The pane fragments are (or will be) available now; apply the responsive
             // layout and wire the switch bar / highlight.
             setupResponsivePanes()
+            setupTwoPaneFabAutoHide()
             // Create the drawer AFTER the panes so its listener can always find a pane
             // fragment (NavigationFragment.onActivityCreated immediately observes the path).
             if (savedInstanceState == null) {
@@ -489,7 +490,6 @@ class FileListActivity : AppActivity() {
      * switch the active pane via dispatchTouchEvent().
      */
     private fun setupResponsivePanes() {
-        android.util.Log.i("TrashDrop", "setupResponsivePanes called")
         // Listen for active-pane changes to keep the highlight in sync.
         TwoPaneState.activePaneSecondaryListener = {
             updateResponsivePanes()
@@ -635,6 +635,9 @@ class FileListActivity : AppActivity() {
         // Keep the panes' adapters informed of the divider position so a drag starting
         // on the divider (resize) never begins a cross-pane file move.
         updatePaneAdapterDividerCenter()
+        // Idempotent: re-register the FAB auto-hide listeners every refresh; the pane
+        // fragments ignore duplicates until their list view has settled.
+        setupTwoPaneFabAutoHide()
         // Active-pane marker, MT Manager style: the ACTIVE pane casts a soft shadow
         // gradient onto the INACTIVE pane's divider-facing edge, fading out horizontally
         // toward the pane's outer edge (no blue border / no box elevation).
@@ -645,13 +648,35 @@ class FileListActivity : AppActivity() {
         // active it shadows the left pane's right edge, and vice versa.
         leftShadow.isVisible = !leftActive
         rightShadow.isVisible = leftActive
-        // Dim the inactive pane's content.
+        // Dim the inactive pane's content. 0.5 gives a clear
+        // active/inactive contrast while keeping the dimmed pane readable.
         val leftContent = findViewById<View>(R.id.leftPaneContent)
         val rightContent = findViewById<View>(R.id.rightPaneContent)
-        leftContent.alpha = if (TwoPaneState.activePaneSecondary) 0.6f else 1f
-        rightContent.alpha = if (TwoPaneState.activePaneSecondary) 1f else 0.6f
+        leftContent.alpha = if (TwoPaneState.activePaneSecondary) 0.5f else 1f
+        rightContent.alpha = if (TwoPaneState.activePaneSecondary) 1f else 0.5f
         // The shared breadcrumb bar follows the active pane.
         refreshSharedBreadcrumb()
+    }
+
+    /**
+     * Hides the shared FAB while any pane's list scrolls DOWN, and shows it again when
+     * it scrolls UP. Short lists that cannot scroll never emit deltas, so the FAB stays
+     * visible (the + button is always reachable). Idempotent: safe to call on every
+     * responsive refresh.
+     */
+    private fun setupTwoPaneFabAutoHide() {
+        val fab = findViewById<com.leinardi.android.speeddial.SpeedDialView>(
+            R.id.floatingActionButton
+        ) ?: return
+        val listener: (Int) -> Unit = { dy ->
+            if (dy > 0) {
+                fab.visibility = View.GONE
+            } else if (dy < 0) {
+                fab.visibility = View.VISIBLE
+            }
+        }
+        findFileListFragment(secondaryPane = false)?.setOnListScrolledListener(listener)
+        findFileListFragment(secondaryPane = true)?.setOnListScrolledListener(listener)
     }
 
     /**
@@ -818,7 +843,6 @@ class FileListActivity : AppActivity() {
      * - Trash bar: delete the dragged files.
      */
     private fun setupTwoPaneDragController() {
-        android.util.Log.i("TrashDrop", "setupTwoPaneDragController called")
         installPaneDropTarget(findViewById(R.id.leftPaneContent), isSecondaryPane = false)
         installPaneDropTarget(findViewById(R.id.rightPaneContent), isSecondaryPane = true)
         installBreadcrumbDropTarget()

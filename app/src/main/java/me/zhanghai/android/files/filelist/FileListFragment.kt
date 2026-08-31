@@ -257,6 +257,20 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             adapter.dividerScreenCenterX = centerX
         }
     }
+
+    private var onListScrolledListener: ((Int) -> Unit)? = null
+
+    /** Registers a listener invoked when this pane's list scrolls, with the dy delta. */
+    fun setOnListScrolledListener(listener: ((Int) -> Unit)?) {
+        onListScrolledListener = listener
+    }
+
+    private fun onListScrolled(dy: Int) {
+        if (dy == 0) {
+            return
+        }
+        onListScrolledListener?.invoke(dy)
+    }
     private val debouncedSearchRunnable = DebouncedRunnable(Handler(Looper.getMainLooper()), 400) {
         if (!isResumed) {
             return@DebouncedRunnable
@@ -369,6 +383,19 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             this.isSecondaryPane = args.secondaryPane
         }
         binding.recyclerView.adapter = adapter
+        // Report scrolling so two-pane mode can hide/show the shared FAB: hide while
+        // scrolling down, show while scrolling up. The FAB stays visible when the list
+        // cannot scroll (or is idle), so short lists can always reach the + button.
+        binding.recyclerView.addOnScrollListener(object :
+            androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
+            override fun onScrolled(
+                recyclerView: androidx.recyclerview.widget.RecyclerView,
+                dx: Int,
+                dy: Int
+            ) {
+                onListScrolled(dy)
+            }
+        })
         // NOTE: the active-pane tracking does NOT live here. View.setOnTouchListener on
         // the RecyclerView never fires for touches consumed by item children (click/ripple
         // consume ACTION_DOWN first), so tapping files/folders would not switch the active
@@ -971,12 +998,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     private fun onCurrentPathChanged(path: Path) {
-        Log.i(
-            "TwoPaneDebug",
-            "currentPath: secondary=${args.secondaryPane} " +
-                "frag=${System.identityHashCode(this)} vm=${System.identityHashCode(viewModel)} " +
-                "path=$path"
-        )
         // Record the visited directory for the Recent folders feature.
         RecentDirectories.add(path)
         // Keep the two-pane state in sync so the other pane knows where to copy/cut to.
@@ -1305,6 +1326,13 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         }
         updateOverlayToolbar()
         adapter.replaceSelectedFiles(files)
+        // Hide the shared FAB while a multi-select action mode is active (it would
+        // otherwise overlap the action bar area and distract from delete/copy).
+        if (isTwoPaneMode) {
+            val fab = (requireActivity() as FileListActivity)
+                .findViewById<View?>(R.id.floatingActionButton)
+            fab?.visibility = if (files.isEmpty()) View.VISIBLE else View.GONE
+        }
     }
 
     /** Hides the toolbar overflow (three-dot) menu by clearing its icon. */
@@ -2244,7 +2272,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     override fun hideFile(file: FileItem) {
-        Log.i(TAG, "hideFile() called for ${file.path}")
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.file_item_action_hide)
             .setMessage(getString(R.string.file_item_action_hide_confirm_format, file.name))
@@ -2260,7 +2287,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     private fun showManageHiddenDialog() {
         val hiddenPaths = HiddenPaths.getAll().toList()
-        Log.i(TAG, "showManageHiddenDialog() with ${hiddenPaths.size} hidden paths: $hiddenPaths")
         if (hiddenPaths.isEmpty()) {
             // A toast is too easy to miss; use a dialog so the user actually learns how to
             // reach the Hide entry (the 鈰?menu on a file, not long-press which is multi-select).

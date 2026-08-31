@@ -2,7 +2,8 @@
 
 <!--
   ~ Two-pane divider while being dragged: the center line grows to 3dp and takes the
-  ~ theme accent color, so the user can clearly see the pane resize handle is active.
+  ~ theme accent color, and the grabber capsule matches, so the user can clearly see
+  ~ the pane resize handle is active.
   -->
 
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
@@ -10,6 +11,15 @@
         android:width="3dp"
         android:gravity="center">
         <shape android:shape="rectangle">
+            <solid android:color="?attr/colorPrimary" />
+        </shape>
+    </item>
+    <item
+        android:width="4dp"
+        android:height="24dp"
+        android:gravity="center">
+        <shape android:shape="rectangle">
+            <corners android:radius="2dp" />
             <solid android:color="?attr/colorPrimary" />
         </shape>
     </item>
