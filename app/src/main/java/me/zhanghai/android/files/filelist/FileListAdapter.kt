@@ -330,7 +330,10 @@ class FileListAdapter(
                 background = if (viewType == FileViewType.GRID && isMaterial3Theme) {
                     CheckableItemBackground.create(4f, 12f, context)
                 } else {
-                    CheckableItemBackground.create(4f, 8f, context)
+                    // List rows (incl. two-pane) use a soft full-row highlight without an
+                    // outline: the centered name+icon group sits naturally in the middle
+                    // of the highlighted band (Material 3 list selection convention).
+                    CheckableItemBackground.create(0f, 0f, context)
                 }
                 if (viewType == FileViewType.LIST && denseLayout) {
                     layoutParams = layoutParams.apply {
