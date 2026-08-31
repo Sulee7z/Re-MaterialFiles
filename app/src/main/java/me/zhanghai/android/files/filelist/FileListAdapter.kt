@@ -603,22 +603,37 @@ MotionEvent.ACTION_DOWN -> {
             }
         }
         holder.iconLayout.apply {
-            // Two-pane rows keep the icon on the right (trailing). The name+description
-            // block keeps weight=1 (text left-aligned, fills the row) and the icon is
-            // pinned to the right edge with a fixed gap: a wrapping text block would make
-            // the icon drift with the name length and look ragged. M3 two-line list with
-            // trailing content.
+            // Two-pane rows: group the name+description block and the icon together and
+            // center the whole group in the pane. The text block wraps its content and
+            // the icon follows it with a small gap, so there is no dead space between a
+            // left-aligned name and a far-right icon.
             val rowContext = holder.itemLayout.context
             val iconLayoutParams = layoutParams
             if (isTwoPaneMode) {
+                val gap = rowContext.resources
+                    .getDimensionPixelSize(R.dimen.screen_edge_margin_minus_4dp)
                 iconLayoutParams.width = rowContext.resources
                     .getDimensionPixelSize(R.dimen.two_pane_icon_size)
                 (iconLayoutParams as? ViewGroup.MarginLayoutParams)?.apply {
-                    setMarginStart(rowContext.resources
-                        .getDimensionPixelSize(R.dimen.content_start_from_screen_edge_margin_minus_44dp))
-                    setMarginEnd(rowContext.resources
-                        .getDimensionPixelSize(R.dimen.screen_edge_margin_minus_4dp))
+                    setMarginStart(gap)
+                    setMarginEnd(gap)
                 }
+                // Name+description block wraps content and the whole row centers both.
+                val nameBlock = holder.nameText.parent as? android.widget.LinearLayout
+                nameBlock?.layoutParams = nameBlock.layoutParams.apply {
+                    width = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                    if (this is ViewGroup.MarginLayoutParams) {
+                        marginEnd = 0
+                    }
+                }
+                holder.itemLayout.gravity = android.view.Gravity.CENTER
+                // Cap long names so they cannot push the icon off the pane. Use the
+                // screen width (always valid during bind) instead of itemLayout.width,
+                // which may not be laid out yet; ellipsize applies at the cap.
+                val maxNameWidth = (rowContext.resources.displayMetrics.widthPixels
+                    * 0.5f).toInt()
+                holder.nameText.maxWidth = maxNameWidth
+                holder.nameText.ellipsize = android.text.TextUtils.TruncateAt.END
             } else if (hideFolderIcons && isDirectory) {
                 iconLayoutParams.width = 0
                 (iconLayoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = 0
@@ -773,10 +788,9 @@ MotionEvent.ACTION_DOWN -> {
                 lastModificationTime
             }
         }
-        if (useSmallFont || isTwoPaneMode) {
-            // Two-pane mode: use the smaller name/description font (about one and a
-            // half notches below the normal size) so more files fit per pane and the
-            // rows look tighter. Always applied in two-pane mode, not only in dense.
+        if (useSmallFont) {
+            // Dense two-pane rows use the smaller name/description font (about one and
+            // a half notches below the normal size) so more files fit per pane.
             val scaledDensity = holder.nameText.resources.displayMetrics.scaledDensity
             holder.nameText.setTextSize(
                 TypedValue.COMPLEX_UNIT_SP,
