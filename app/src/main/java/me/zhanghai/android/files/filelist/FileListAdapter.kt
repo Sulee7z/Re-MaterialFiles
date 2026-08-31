@@ -646,6 +646,27 @@ MotionEvent.ACTION_DOWN -> {
                     }
                 }
                 holder.itemLayout.gravity = android.view.Gravity.CENTER
+                // Shift only the NAME text slightly to the left (about two spaces) while
+                // the icon stays where it is: the text gets a leading padding, the icon
+                // keeps its gap to the text.
+                holder.nameText.setPaddingRelative(
+                    rowContext.resources.getDimensionPixelSize(
+                        R.dimen.two_pane_name_leading_padding
+                    ),
+                    holder.nameText.paddingTop,
+                    holder.nameText.paddingEnd,
+                    holder.nameText.paddingBottom
+                )
+                // Align the description line's left edge with the name text (both share
+                // the same leading padding), so the date/size starts exactly under it.
+                holder.descriptionText?.setPaddingRelative(
+                    rowContext.resources.getDimensionPixelSize(
+                        R.dimen.two_pane_name_leading_padding
+                    ),
+                    holder.descriptionText!!.paddingTop,
+                    holder.descriptionText!!.paddingEnd,
+                    holder.descriptionText!!.paddingBottom
+                )
                 // Cap long names so they cannot push the icon off the pane. Use the
                 // screen width (always valid during bind) instead of itemLayout.width,
                 // which may not be laid out yet; ellipsize applies at the cap.
