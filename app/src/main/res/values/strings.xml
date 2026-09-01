@@ -318,6 +318,9 @@
     <string name="unhide">Unhide</string>
     <string name="unhide_all">Unhide all</string>
     <string name="file_list_action_copy_path">Copy path</string>
+<string name="file_list_action_save_archive">Save archive</string>
+<string name="file_list_action_save_archive_success">Archive saved</string>
+<string name="file_list_action_save_archive_error">Failed to save archive</string>
     <string name="file_list_action_open_in_terminal">Open in terminal</string>
     <string name="file_list_action_add_bookmark">Add bookmark</string>
     <string name="file_list_action_create_shortcut">Create shortcut</string>

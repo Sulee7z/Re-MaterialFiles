@@ -122,10 +122,16 @@ private const val MAX_READ_SIZE = 64 * 1024 * 1024
         vararg attributes: FileAttribute<*>
     ): SeekableByteChannel {
         file as? ArchivePath ?: throw ProviderMismatchException(file.toString())
-        options.toOpenOptions().checkForArchive()
         if (attributes.isNotEmpty()) {
             throw UnsupportedOperationException(attributes.contentToString())
         }
+        if (options.toOpenOptions().write) {
+            // Writes to an archive entry are buffered and recorded in the file system's
+            // edit overlay as soon as the channel is closed. Nothing touches the archive
+            // file itself until the user saves.
+            return file.fileSystem.newWritableChannel(file)
+        }
+        options.toOpenOptions().checkForArchive()
         // Read the whole entry into memory and expose it as a read-only channel. Archive
         // entries (files inside zip/7z/...) are typically small, and this is what makes
         // opening files inside an APK/zip (e.g. AndroidManifest.xml via the text viewer)
@@ -205,7 +211,10 @@ private const val MAX_READ_SIZE = 64 * 1024 * 1024
     @Throws(IOException::class)
     override fun createDirectory(directory: Path, vararg attributes: FileAttribute<*>) {
         directory as? ArchivePath ?: throw ProviderMismatchException(directory.toString())
-        throw ReadOnlyFileSystemException(directory.toString())
+        if (attributes.isNotEmpty()) {
+            throw UnsupportedOperationException(attributes.contentToString())
+        }
+        directory.fileSystem.recordCreation(directory, null)
     }
 
     @Throws(IOException::class)
@@ -228,7 +237,10 @@ private const val MAX_READ_SIZE = 64 * 1024 * 1024
     @Throws(IOException::class)
     override fun delete(path: Path) {
         path as? ArchivePath ?: throw ProviderMismatchException(path.toString())
-        throw ReadOnlyFileSystemException(path.toString())
+        // Ensure the entry still exists before recording the deletion (respecting the
+        // overlay, e.g. a just-created entry can also be deleted).
+        path.fileSystem.getEntry(path)
+        path.fileSystem.recordDeletion(path)
     }
 
     @Throws(IOException::class)
@@ -249,7 +261,13 @@ private const val MAX_READ_SIZE = 64 * 1024 * 1024
     override fun move(source: Path, target: Path, vararg options: CopyOption) {
         source as? ArchivePath ?: throw ProviderMismatchException(source.toString())
         target as? ArchivePath ?: throw ProviderMismatchException(target.toString())
-        throw ReadOnlyFileSystemException(source.toString(), target.toString(), null)
+        val sourceFileSystem = source.fileSystem
+        if (sourceFileSystem !== target.fileSystem) {
+            throw IllegalStateException(
+                "Moving between different archive file systems is unsupported"
+            )
+        }
+        sourceFileSystem.recordRename(source, target)
     }
 
     @Throws(IOException::class)

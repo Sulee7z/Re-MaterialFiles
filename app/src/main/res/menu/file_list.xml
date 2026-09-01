@@ -23,6 +23,13 @@
         app:showAsAction="always|collapseActionView" />
 
     <item
+        android:id="@+id/action_save_archive"
+        android:icon="@drawable/save_icon_control_normal_24dp"
+        android:orderInCategory="95"
+        android:title="@string/file_list_action_save_archive"
+        app:showAsAction="always" />
+
+    <item
         android:id="@+id/action_view_sort"
         android:icon="@drawable/sort_icon_control_normal_24dp"
         android:orderInCategory="100"

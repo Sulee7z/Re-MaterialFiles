@@ -810,6 +810,33 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         updateViewSortMenuItems()
         updateSelectAllMenuItem()
         updateShowHiddenFilesMenuItem()
+        updateSaveArchiveMenuItem(menu)
+    }
+
+    private fun activePaneForSaveMenu(): FileListFragment =
+        if (isTwoPaneMode) activePaneFragment() else this
+
+    private fun updateSaveArchiveMenuItem(menu: Menu) {
+        val item = menu.findItem(R.id.action_save_archive) ?: return
+        val fragment = activePaneForSaveMenu()
+        if (fragment === this && isSecondaryPane != isTwoPaneMode) {
+            // Single-pane mode only the primary fragment contributes menus.
+            item.isVisible = false
+            return
+        }
+        val visible = fragment.hasSaveableArchiveEdits()
+        item.isVisible = visible
+        item.isEnabled = true
+    }
+
+    private fun hasSaveableArchiveEdits(): Boolean {
+        val path = viewModel.currentPath
+        if (!path.isArchivePath) {
+            return false
+        }
+        val fileSystem = path.fileSystem
+        return fileSystem is me.zhanghai.android.files.provider.archive.ArchiveFileSystem &&
+            fileSystem.hasUnsavedChanges
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
@@ -835,6 +862,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
      */
     fun performMenuAction(itemId: Int): Boolean {
         return when (itemId) {
+            R.id.action_save_archive -> {
+                saveCurrentArchive()
+                true
+            }
             android.R.id.home -> {
                 // Toggle: open when closed, close when open (this path is hit instead of
                 // the Activity's handler because fragments receive menu events first).
@@ -1017,6 +1048,36 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         // hidden while scrolling the previous directory's list).
         if (isTwoPaneMode) {
             (activity as? FileListActivity)?.showFab()
+        }
+    }
+
+    /** Saves the currently-open archive, rewriting its file with all pending edits. */
+    private fun saveCurrentArchive() {
+        val path = viewModel.currentPath
+        val fileSystem = path.fileSystem
+        if (fileSystem !is me.zhanghai.android.files.provider.archive.ArchiveFileSystem ||
+            !fileSystem.hasUnsavedChanges
+        ) {
+            return
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            val success = withContext(Dispatchers.IO) {
+                try {
+                    fileSystem.save()
+                    true
+                } catch (throwable: Throwable) {
+                    throwable.printStackTrace()
+                    false
+                }
+            }
+            if (success) {
+                showToast(getString(R.string.file_list_action_save_archive_success))
+            } else {
+                showToast(getString(R.string.file_list_action_save_archive_error))
+            }
+            // Refresh both the current view and the menu visibility.
+            viewModel.reload()
+            requireActivity().invalidateOptionsMenu()
         }
     }
 

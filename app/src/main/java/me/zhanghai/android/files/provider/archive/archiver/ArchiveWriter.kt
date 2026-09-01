@@ -9,6 +9,7 @@ import java8.nio.channels.SeekableByteChannel
 import java8.nio.file.LinkOption
 import java8.nio.file.Path
 import java8.nio.file.attribute.BasicFileAttributes
+import java8.nio.file.attribute.FileTime
 import me.zhanghai.android.files.provider.common.PosixFileAttributes
 import me.zhanghai.android.files.provider.common.PosixFileMode
 import me.zhanghai.android.files.provider.common.PosixFileType
@@ -28,6 +29,40 @@ class ArchiveWriter @Throws(IOException::class) constructor(
     password: String?
 ) : Closeable {
     private val archive = WriteArchive(channel, format, filter, password)
+
+    /**
+     * Writes an entry from an in-memory [ByteArray]. Used when saving an edited archive so
+     * modified/new entries do not need a temporary file on disk.
+     */
+    @Throws(IOException::class)
+    fun writeBytes(
+        entryName: String,
+        content: ByteArray,
+        lastModifiedTime: FileTime?,
+        isDirectory: Boolean = false,
+        symbolicLinkTarget: String? = null
+    ) {
+        val type = when {
+            symbolicLinkTarget != null -> PosixFileType.SYMBOLIC_LINK
+            isDirectory -> PosixFileType.DIRECTORY
+            else -> PosixFileType.REGULAR_FILE
+        }
+        val mode = when {
+            isDirectory -> PosixFileMode.DIRECTORY_DEFAULT
+            type == PosixFileType.SYMBOLIC_LINK -> PosixFileMode.SYMBOLIC_LINK_DEFAULT
+            else -> PosixFileMode.FILE_DEFAULT
+        }
+        val size = if (type == PosixFileType.REGULAR_FILE) content.size.toLong() else 0
+        archive.Entry(
+            entryName, lastModifiedTime, null, null, type, size, null, null, mode,
+            symbolicLinkTarget
+        ).use { archive.writeEntry(it) }
+        if (type == PosixFileType.REGULAR_FILE) {
+            archive.newDataOutputStream().use { outputStream ->
+                outputStream.write(content)
+            }
+        }
+    }
 
     @Throws(IOException::class)
     fun write(file: Path, entryName: Path, intervalMillis: Long, listener: ((Long) -> Unit)?) {
