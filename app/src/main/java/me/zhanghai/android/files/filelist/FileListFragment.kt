@@ -761,10 +761,15 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     override fun onResume() {
         super.onResume()
 
-        if (!viewModel.isNotificationPermissionRequested) {
+        // Storage and notification permission requests are app-wide, and each pane's
+        // FileListFragment has its own viewModel flag — in two-pane mode BOTH panes
+        // would otherwise fire them, showing two identical permission dialogs. Only
+        // the primary (left) pane requests permissions; the secondary pane skips.
+        val primaryPane = !isSecondaryPane || !isTwoPaneMode
+        if (primaryPane && !viewModel.isNotificationPermissionRequested) {
             ensureStorageAccess()
         }
-        if (!viewModel.isStorageAccessRequested) {
+        if (primaryPane && !viewModel.isStorageAccessRequested) {
             ensureNotificationPermission()
         }
     }
