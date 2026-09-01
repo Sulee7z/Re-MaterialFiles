@@ -35,6 +35,9 @@
     <string name="pref_key_ftp_server_writable">key_ftp_server_writable</string>
     <bool name="pref_default_value_ftp_server_writable">true</bool>
 
+    <string name="pref_key_trash_auto_delete_days">key_trash_auto_delete_days</string>
+    <integer name="pref_default_value_trash_auto_delete_days">0</integer>
+
     <string name="pref_key_locale">key_locale</string>
     <string name="pref_key_theme_color">key_theme_color</string>
     <string name="pref_default_value_theme_color">0</string>

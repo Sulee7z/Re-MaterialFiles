@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 
 <!--
   ~ Copyright (c) 2019 Hai Zhang <dreaming.in.code.zh@gmail.com>
@@ -578,6 +578,9 @@
     <string name="navigation_edit_bookmark_directory_path">路径</string>
     <string name="navigation_recent_bookmark_directories">最近/书签文件夹</string>
     <string name="navigation_trash">回收站</string>
+    <string name="trash_empty_action">清空回收站</string>
+    <string name="trash_empty_title">清空回收站？</string>
+    <string name="trash_empty_message_format">%1$d 个项目将被永久删除，无法恢复。</string>
     <string name="trash_list_title">回收站</string>
     <string name="trash_list_empty">回收站为空</string>
     <string name="trash_item_description_format">%2$s 中的文件，删除于 %1$s</string>
@@ -905,4 +908,7 @@
     <string name="about_author_name_title">张海</string>
     <string name="about_author_github_title">在 GitHub 上关注</string>
     <string name="about_author_twitter_title">在 Twitter 上关注</string>
+    <string name="settings_trash_title">回收站</string>
+    <string name="settings_trash_auto_delete_days_title">自动删除天数</string>
+    <string name="settings_trash_auto_delete_days_summary">回收站中的文件在删除前保留的天数（0 表示从不过期）</string>
 </resources>

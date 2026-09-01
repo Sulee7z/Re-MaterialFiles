@@ -28,7 +28,6 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import me.zhanghai.android.fastscroll.FastScroller
 import me.zhanghai.android.fastscroll.FastScrollerBuilder
-import me.zhanghai.android.fastscroll.PopupTextProvider
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -143,6 +142,7 @@ import me.zhanghai.android.files.ui.DrawerLayoutOnBackPressedCallback
 import me.zhanghai.android.files.ui.FixQueryChangeSearchView
 import me.zhanghai.android.files.ui.OverlayToolbar
 import me.zhanghai.android.files.ui.OverlayToolbarActionMode
+import me.zhanghai.android.files.ui.ActivePaneScrollbarHelper
 import me.zhanghai.android.files.ui.PersistentBarLayout
 import me.zhanghai.android.files.ui.PersistentBarLayoutToolbarActionMode
 import me.zhanghai.android.files.ui.PersistentDrawerLayout
@@ -270,6 +270,55 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             return
         }
         onListScrolledListener?.invoke(dy)
+    }
+
+    /** True while the shared FAB is hidden because of scrolling (blank-tap target). */
+    private fun isFabHiddenByScroll(): Boolean =
+        (activity as? FileListActivity)?.isFabHiddenByScroll == true
+
+    private var downWasOnItem = false
+
+    /**
+     * The shared two-pane scrollbar's helper (owned by the RIGHT pane fragment, which
+     * hosts the bar on the right screen edge). Null in single-pane mode.
+     */
+    private var activePaneScrollbarHelper: ActivePaneScrollbarHelper? = null
+
+    /** The shared scrollbar's host view in the right pane, removed on view destroy. */
+    private var sharedScrollbarHost: FrameLayout? = null
+
+    /** The registered active-pane switch listener, removed on view destroy. */
+    private var activePaneSwitchListener: (() -> Unit)? = null
+
+    /**
+     * Wires this pane's list into the shared two-pane scrollbar as the LEFT target.
+     * Called by the left pane fragment when its view is ready; the right pane's own
+     * creation path retries as well, so both fragment creation orders are covered.
+     */
+    fun attachSharedScrollbarLeftList(
+        leftList: androidx.recyclerview.widget.RecyclerView,
+        adapter: FileListAdapter
+    ) {
+        activePaneScrollbarHelper?.attachLeftList(leftList, adapter)
+    }
+
+    /** Returns this pane's RecyclerView, for the shared two-pane scrollbar wiring. */
+    fun sharedScrollerRecyclerView(): androidx.recyclerview.widget.RecyclerView =
+        binding.recyclerView
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        activePaneSwitchListener?.let {
+            TwoPaneState.removeActivePaneSecondaryListener(it)
+        }
+        activePaneSwitchListener = null
+        (activity as? FileListActivity)?.let {
+            sharedScrollbarHost?.let { host ->
+                it.findViewById<ViewGroup>(R.id.rightPane)?.removeView(host)
+            }
+        }
+        sharedScrollbarHost = null
+        activePaneScrollbarHelper = null
     }
     private val debouncedSearchRunnable = DebouncedRunnable(Handler(Looper.getMainLooper()), 400) {
         if (!isResumed) {
@@ -403,15 +452,32 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         // touch X coordinate (each pane is exactly half the screen), which cannot miss any
         // touch anywhere in the pane (items, breadcrumb, empty state, toolbar, …).
         val fastScroller = if (isTwoPaneMode && isSecondaryPane.not()) {
-            createLeftPaneFastScroller()
+            // The left pane has no scrollbar of its own in two-pane mode: the SINGLE
+            // shared scrollbar lives on the right screen edge (created by the right
+            // pane's fragment below) and controls whichever pane is active.
+            null
         } else if (isTwoPaneMode) {
             createRightPaneFastScroller()
         } else {
             ThemedFastScroller.create(binding.recyclerView)
         }
-        binding.recyclerView.setOnApplyWindowInsetsListener(
-            ScrollingViewOnApplyWindowInsetsListener(binding.recyclerView, fastScroller)
-        )
+        if (fastScroller != null) {
+            binding.recyclerView.setOnApplyWindowInsetsListener(
+                ScrollingViewOnApplyWindowInsetsListener(binding.recyclerView, fastScroller)
+            )
+        } else if (isTwoPaneMode) {
+            // Left pane in two-pane mode: no scrollbar, but still need the insets
+            // listener for correct system bottom inset (navigation bar gap).
+            binding.recyclerView.setOnApplyWindowInsetsListener(
+                ScrollingViewOnApplyWindowInsetsListener(binding.recyclerView, null)
+            )
+        }
+        if (isTwoPaneMode && isSecondaryPane.not()) {
+            // Attach this (left) pane's list to the shared scrollbar owned by the right
+            // pane. Whichever fragment's view is created last performs the wiring.
+            (activity as? FileListActivity)?.findFileListFragment(secondaryPane = true)
+                ?.attachSharedScrollbarLeftList(binding.recyclerView, adapter)
+        }
         if (isTwoPaneMode) {
             // Two-pane layout adjustments: the shared top bar (search/sort/three dots)
             // lives in the Activity above both panes and is always visible, so both pane
@@ -491,6 +557,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                                 val localX = e.rawX - loc[0]
                                 val localY = e.rawY - loc[1]
                                 val onItem = rv.findChildViewUnder(localX, localY) != null
+                                downWasOnItem = onItem
                                 val minX = loc[0] + rv.width / 3
                                 val maxX = loc[0] + rv.width * 2 / 3
                                 val windowInsets =
@@ -511,6 +578,13 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                                     downX = e.rawX
                                     downY = e.rawY
                                     handler.postDelayed(longPressRunnable, 800)
+                                }
+                            }
+                            android.view.MotionEvent.ACTION_UP -> {
+                                if (downWasOnItem) cancelLongPress()
+                                if (longPressPending && isFabHiddenByScroll()) {
+                                    cancelLongPress()
+                                    (activity as? FileListActivity)?.showFab()
                                 }
                             }
                             android.view.MotionEvent.ACTION_MOVE -> {
@@ -1424,56 +1498,22 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     /**
-     * Left-pane fast scrollbar on the LEFT edge (two-pane left pane only, mirroring the
-     * classic dual-pane layout): AndroidFastScroll positions the bar by layout direction
-     * and draws it in the HOST view's overlay, so the bar can only live at the host's own
-     * edge. The pane's screen-edge padding insets every child, which would push the bar
-     * away from the screen edge (negative offsets get clipped by the overlay). So the
-     * scrollbar is hosted on a dedicated transparent RTL FrameLayout that spans the FULL
-     * pane width (negative margins undo the pane padding, clipToPadding=false keeps it
-     * unclipped); the bar then lands exactly on the left screen edge while the list and
-     * its content keep their insets. Scrolling and touches go through the RecyclerView
-     * via the custom view helper.
-     */
-    private fun createLeftPaneFastScroller(): FastScroller {
-        val recyclerView = binding.recyclerView
-        val pane = (activity as? FileListActivity)?.findViewById<ViewGroup>(R.id.leftPane)
-            ?: return ThemedFastScroller.create(recyclerView)
-        val host = FrameLayout(requireContext()).apply {
-            layoutDirection = View.LAYOUT_DIRECTION_RTL
-        }
-        val hostLayoutParams = FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.MATCH_PARENT
-        ).apply {
-            setMargins(-pane.paddingStart, 0, -pane.paddingEnd, 0)
-        }
-        pane.clipToPadding = false
-        pane.addView(host, hostLayoutParams)
-        val viewHelper = RecyclerViewFastScrollerViewHelper(
-            recyclerView, adapter as? PopupTextProvider
-        )
-        return FastScrollerBuilder(host)
-            .useMd2Style()
-            .setThumbDrawable(
-                requireContext().getDrawableCompat(R.drawable.fast_scroll_thumb_m3)
-            )
-            .setViewHelper(viewHelper)
-            .build()
-    }
-
-    /**
-     * Right-pane fast scrollbar on the RIGHT edge: mirror of [createLeftPaneFastScroller].
-     * An LTR host spans the FULL right pane (negative margins undo the pane's screen-edge
-     * padding, clipToPadding=false keeps it unclipped), so the bar draws exactly at the
-     * right screen edge — clear of the right-aligned row icons — while the list keeps its
-     * insets. Scrolling and touches go through the RecyclerView via the view helper.
+     * Shared fast scrollbar for BOTH panes in two-pane mode: a single bar on the RIGHT
+     * screen edge. The host spans the FULL right pane (negative margins undo the pane's
+     * screen-edge padding), so the thumb draws exactly at the right screen edge, adapting
+     * to whatever padding the system insets impose. The [ActivePaneScrollbarHelper] routes
+     * touches through the host itself (same coordinate space as the thumb — always exact)
+     * and forwards scroll math to the ACTIVE pane's list, so dragging the bar scrolls the
+     * active pane and tapping the other pane switches the bar's target.
      */
     private fun createRightPaneFastScroller(): FastScroller {
         val recyclerView = binding.recyclerView
         val pane = (activity as? FileListActivity)?.findViewById<ViewGroup>(R.id.rightPane)
             ?: return ThemedFastScroller.create(recyclerView)
         val host = FrameLayout(requireContext())
+        // MATCH_PARENT with negative margins so the host spans the FULL pane, pushing
+        // the thumb to the right screen edge. The pane's padding (system insets) is
+        // undone by the negative margins, so the bar always lands on the screen edge.
         val hostLayoutParams = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
@@ -1482,16 +1522,39 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         }
         pane.clipToPadding = false
         pane.addView(host, hostLayoutParams)
-        val viewHelper = RecyclerViewFastScrollerViewHelper(
-            recyclerView, adapter as? PopupTextProvider
+        sharedScrollbarHost = host
+
+        val helper = ActivePaneScrollbarHelper(
+            host, recyclerView,
+            RecyclerViewFastScrollerViewHelper(recyclerView, adapter)
         )
-        return FastScrollerBuilder(host)
+        activePaneScrollbarHelper = helper
+        // Follow the active pane: the bar's target switches together with it.
+        val listener = {
+            helper.setActivePaneSecondary(TwoPaneState.activePaneSecondary)
+        }
+        activePaneSwitchListener = listener
+        TwoPaneState.addActivePaneSecondaryListener(listener)
+        listener()
+
+        // Attach the left pane's list if its view already exists (otherwise the left
+        // pane's own creation path wires it up when its view becomes ready).
+        val leftFragment = (activity as? FileListActivity)
+            ?.findFileListFragment(secondaryPane = false)
+        if (leftFragment?.view != null) {
+            helper.attachLeftList(
+                leftFragment.sharedScrollerRecyclerView(), leftFragment.adapter
+            )
+        }
+
+        val builder = FastScrollerBuilder(host)
             .useMd2Style()
             .setThumbDrawable(
                 requireContext().getDrawableCompat(R.drawable.fast_scroll_thumb_m3)
             )
-            .setViewHelper(viewHelper)
-            .build()
+            .setViewHelper(helper)
+        builder.disableScrollbarAutoHide()
+        return builder.build()
     }
 
     /**
@@ -3680,9 +3743,24 @@ object TwoPaneState {
     @Volatile
     var activePaneSecondaryListener: (() -> Unit)? = null
 
+    /** Additional listeners (e.g. the shared scrollbar) called on active-pane changes. */
+    private val _activePaneSecondaryListeners =
+        java.util.concurrent.CopyOnWriteArrayList<() -> Unit>()
+
+    fun addActivePaneSecondaryListener(listener: () -> Unit) {
+        _activePaneSecondaryListeners.add(listener)
+    }
+
+    fun removeActivePaneSecondaryListener(listener: () -> Unit) {
+        _activePaneSecondaryListeners.remove(listener)
+    }
+
     fun setActivePaneSecondary(secondary: Boolean) {
         if (_activePaneSecondary.getAndSet(secondary) != secondary) {
             activePaneSecondaryListener?.invoke()
+            for (listener in _activePaneSecondaryListeners) {
+                listener()
+            }
         }
     }
 }

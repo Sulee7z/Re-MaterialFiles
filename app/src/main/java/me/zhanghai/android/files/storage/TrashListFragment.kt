@@ -7,6 +7,9 @@ package me.zhanghai.android.files.storage
 
 import android.os.Bundle
 import android.view.LayoutInflater
+import android.view.Menu
+import android.view.MenuInflater
+import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.app.AppCompatActivity
@@ -41,6 +44,7 @@ class TrashListFragment : Fragment(), TrashListAdapter.Listener {
         val activity = requireActivity() as AppCompatActivity
         activity.setSupportActionBar(binding.toolbar)
         activity.supportActionBar!!.setDisplayHomeAsUpEnabled(true)
+        activity.supportActionBar!!.setTitle(R.string.navigation_trash)
         binding.recyclerView.layoutManager = LinearLayoutManager(
             activity, RecyclerView.VERTICAL, false
         )
@@ -50,12 +54,59 @@ class TrashListFragment : Fragment(), TrashListAdapter.Listener {
             ScrollingViewOnApplyWindowInsetsListener(binding.recyclerView)
         )
 
+        setHasOptionsMenu(true)
         TrashManager.trashLiveData.observe(viewLifecycleOwner) { onTrashListChanged(it) }
+
+        // Enforce the auto-delete setting when the user opens the Trash screen.
+        FileJobService.trashCleanup(requireContext())
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
+        super.onCreateOptionsMenu(menu, inflater)
+        inflater.inflate(R.menu.trash, menu)
+        updateEmptyTrashMenuItem(menu)
+    }
+
+    override fun onPrepareOptionsMenu(menu: Menu) {
+        super.onPrepareOptionsMenu(menu)
+        updateEmptyTrashMenuItem(menu)
+    }
+
+    private fun updateEmptyTrashMenuItem(menu: Menu) {
+        val item = menu.findItem(R.id.action_empty_trash) ?: return
+        item.isEnabled = TrashManager.getAll().isNotEmpty()
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_empty_trash -> {
+                confirmEmptyTrash()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    private fun confirmEmptyTrash() {
+        val count = TrashManager.getAll().size
+        if (count == 0) {
+            return
+        }
+        val dialog = MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.trash_empty_title)
+            .setMessage(getString(R.string.trash_empty_message_format, count))
+            .setPositiveButton(R.string.empty) { _, _ ->
+                FileJobService.clearTrash(requireContext())
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        dialog.show()
     }
 
     private fun onTrashListChanged(entries: List<TrashManager.TrashEntry>) {
         binding.emptyView.fadeToVisibilityUnsafe(entries.isEmpty())
         adapter.replace(entries)
+        activity?.invalidateOptionsMenu()
     }
 
     override fun restoreEntry(entry: TrashManager.TrashEntry) {

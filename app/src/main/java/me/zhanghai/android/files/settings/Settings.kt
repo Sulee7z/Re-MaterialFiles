@@ -95,6 +95,13 @@ object Settings {
             R.string.pref_key_ftp_server_port, R.integer.pref_default_value_ftp_server_port
         )
 
+    /** Days after which entries in the Trash are deleted automatically (0 = never). */
+    val TRASH_AUTO_DELETE_DAYS: SettingLiveData<Int> =
+        IntegerSettingLiveData(
+            R.string.pref_key_trash_auto_delete_days,
+            R.integer.pref_default_value_trash_auto_delete_days
+        )
+
     val FTP_SERVER_HOME_DIRECTORY: SettingLiveData<Path> =
         ParcelValueSettingLiveData(
             R.string.pref_key_ftp_server_home_directory,

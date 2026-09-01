@@ -73,9 +73,32 @@ object TrashManager {
 
     fun getAll(): List<TrashEntry> = getAllInternal()
 
+    /**
+     * Returns entries whose [TrashEntry.deletedAtMillis] is older than [days] days.
+     * A [days] of 0 means "never" and returns nothing.
+     */
+    fun findExpired(days: Int): List<TrashEntry> {
+        if (days <= 0) {
+            return emptyList()
+        }
+        val cutoff = System.currentTimeMillis() - days * DAY_MILLIS
+        return getAllInternal().filter { it.deletedAtMillis < cutoff }
+    }
+
+    /** Removes the given entries (by trash path) from the persisted trash record. */
+    fun removeEntries(entries: List<TrashEntry>) {
+        if (entries.isEmpty()) {
+            return
+        }
+        val removedPaths = entries.map { it.trashPath }.toSet()
+        save(getAllInternal().filter { it.trashPath !in removedPaths })
+    }
+
     fun clear() {
         save(emptyList())
     }
+
+    private const val DAY_MILLIS = 24 * 60 * 60 * 1000L
 
     private fun getAllInternal(): List<TrashEntry> {
         val encoded = prefs.getString(KEY_TRASH_LIST, null) ?: return emptyList()

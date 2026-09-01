@@ -152,4 +152,13 @@
             android:title="@string/settings_read_remote_files_for_thumbnail_title"
             android:defaultValue="@bool/pref_default_value_read_remote_files_for_thumbnail" />
     </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/settings_trash_title">
+
+        <me.zhanghai.android.files.settings.NonNegativeIntegerPreference
+            android:key="@string/pref_key_trash_auto_delete_days"
+            android:title="@string/settings_trash_auto_delete_days_title"
+            android:summary="@string/settings_trash_auto_delete_days_summary"
+            android:defaultValue="@integer/pref_default_value_trash_auto_delete_days" />
+    </PreferenceCategory>
 </PreferenceScreen>

@@ -145,6 +145,14 @@ class FileJobService : Service() {
             startJob(TrashFileJob(paths), context)
         }
 
+        fun trashCleanup(context: Context) {
+            startJob(TrashCleanupJob(), context)
+        }
+
+        fun clearTrash(context: Context) {
+            startJob(ClearTrashJob(), context)
+        }
+
         fun restoreFromTrash(entries: List<Pair<Path, Path>>, context: Context) {
             startJob(RestoreFromTrashJob(entries), context)
         }

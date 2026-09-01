@@ -781,6 +781,10 @@ class FileListActivity : AppActivity() {
         updateFabVisibility()
     }
 
+    /** True while the shared FAB is hidden because of list scrolling. */
+    val isFabHiddenByScroll: Boolean
+        get() = fabHiddenByScroll && !fabHiddenBySelection
+
     /** Hides the shared FAB while a multi-select action mode is active. */
     fun setFabHiddenBySelection(hidden: Boolean) {
         fabHiddenBySelection = hidden

@@ -80,6 +80,7 @@ import me.zhanghai.android.files.provider.common.setSeLinuxContext
 import me.zhanghai.android.files.provider.common.toByteString
 import me.zhanghai.android.files.provider.common.toModeString
 import me.zhanghai.android.files.provider.linux.isLinuxPath
+import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.util.asFileName
 import me.zhanghai.android.files.util.createInstallPackageIntent
 import me.zhanghai.android.files.util.createIntent
@@ -87,6 +88,7 @@ import me.zhanghai.android.files.util.createViewIntent
 import me.zhanghai.android.files.util.extraPath
 import me.zhanghai.android.files.util.getQuantityString
 import me.zhanghai.android.files.util.putArgs
+import me.zhanghai.android.files.util.valueCompat
 import me.zhanghai.android.files.util.showToast
 import me.zhanghai.android.files.util.toEnumSet
 import me.zhanghai.android.files.util.withChooser
@@ -1087,6 +1089,162 @@ class PermanentDeleteJob(private val paths: List<Path>) : FileJob() {
             deleteRecursively(path, transferInfo, actionAllInfo)
             TrashManager.remove(path)
             throwIfInterrupted()
+        }
+    }
+}
+
+/**
+ * Deletes trashed files whose trash-entry age exceeds the auto-delete setting
+ * (see Settings.TRASH_AUTO_DELETE_DAYS). The files were moved out of their original
+ * locations into .trash_* names; this job permanently deletes the renamed files and
+ * removes their records from [TrashManager].
+ */
+class TrashCleanupJob : FileJob() {
+    @Throws(IOException::class)
+    override fun run() {
+        val days = Settings.TRASH_AUTO_DELETE_DAYS.valueCompat ?: 0
+        if (days <= 0) {
+            return
+        }
+        val expired = TrashManager.findExpired(days)
+        if (expired.isEmpty()) {
+            return
+        }
+        // Keep only files that still exist; delete the rest silently (they may have been
+        // deleted manually or the entry is stale).
+        val toDelete = expired.mapNotNull { entry ->
+            val trashPath = entry.toTrashPath()
+            trashPath
+        }
+        if (toDelete.isEmpty()) {
+            return
+        }
+        for (path in toDelete) {
+            try {
+                deleteIgnoringErrors(path)
+            } catch (e: InterruptedIOException) {
+                throw e
+            } catch (e: IOException) {
+                // Auto-cleanup must never surface errors to the UI: some trashed files may
+                // sit on devices that are gone, or under paths the app can no longer reach.
+                e.printStackTrace()
+            }
+            throwIfInterrupted()
+        }
+        // Remove all expired entries (including already-gone ones) from the record.
+        TrashManager.removeEntries(expired)
+    }
+
+    /**
+     * Deletes [path] recursively, ignoring failures per-file and treating a missing path as
+     * success. Unlike [deleteRecursively] this does not prompt the user: cleanup is best
+     * effort and must not interrupt the user with error dialogs.
+     */
+    @Throws(IOException::class)
+    private fun deleteIgnoringErrors(path: Path) {
+        if (!path.exists(LinkOption.NOFOLLOW_LINKS)) {
+            return
+        }
+        try {
+            Files.walkFileTree(path, object : SimpleFileVisitor<Path>() {
+                @Throws(IOException::class)
+                override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
+                    try {
+                        file.delete()
+                    } catch (e: IOException) {
+                        e.printStackTrace()
+                    }
+                    throwIfInterrupted()
+                    return FileVisitResult.CONTINUE
+                }
+
+                @Throws(IOException::class)
+                override fun visitFileFailed(file: Path, exception: IOException): FileVisitResult {
+                    exception.printStackTrace()
+                    return FileVisitResult.CONTINUE
+                }
+
+                @Throws(IOException::class)
+                override fun postVisitDirectory(
+                    directory: Path,
+                    exception: IOException?
+                ): FileVisitResult {
+                    try {
+                        directory.delete()
+                    } catch (e: IOException) {
+                        e.printStackTrace()
+                    }
+                    throwIfInterrupted()
+                    return FileVisitResult.CONTINUE
+                }
+            })
+        } catch (e: IOException) {
+            e.printStackTrace()
+        }
+    }
+}
+
+/**
+ * Empties the Trash: permanently deletes every trashed file and clears the persisted
+ * trash record.
+ */
+class ClearTrashJob : FileJob() {
+    @Throws(IOException::class)
+    override fun run() {
+        val entries = TrashManager.getAll()
+        if (entries.isEmpty()) {
+            return
+        }
+        for (entry in entries) {
+            val trashPath = entry.toTrashPath()
+            // Best-effort deletion exactly like TrashCleanupJob: no user dialogs, missing
+            // files are fine, failures are logged.
+            deleteIgnoringErrors(trashPath)
+            throwIfInterrupted()
+        }
+        TrashManager.clear()
+    }
+
+    @Throws(IOException::class)
+    private fun deleteIgnoringErrors(path: Path) {
+        if (!path.exists(LinkOption.NOFOLLOW_LINKS)) {
+            return
+        }
+        try {
+            Files.walkFileTree(path, object : SimpleFileVisitor<Path>() {
+                @Throws(IOException::class)
+                override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
+                    try {
+                        file.delete()
+                    } catch (e: IOException) {
+                        e.printStackTrace()
+                    }
+                    throwIfInterrupted()
+                    return FileVisitResult.CONTINUE
+                }
+
+                @Throws(IOException::class)
+                override fun visitFileFailed(file: Path, exception: IOException): FileVisitResult {
+                    exception.printStackTrace()
+                    return FileVisitResult.CONTINUE
+                }
+
+                @Throws(IOException::class)
+                override fun postVisitDirectory(
+                    directory: Path,
+                    exception: IOException?
+                ): FileVisitResult {
+                    try {
+                        directory.delete()
+                    } catch (e: IOException) {
+                        e.printStackTrace()
+                    }
+                    throwIfInterrupted()
+                    return FileVisitResult.CONTINUE
+                }
+            })
+        } catch (e: IOException) {
+            e.printStackTrace()
         }
     }
 }

@@ -1094,4 +1094,10 @@
     <string name="syntax_highlighting">Syntax Highlighting</string>
     <string name="undo">Undo</string>
     <string name="redo">Redo</string>
+    <string name="settings_trash_title">Trash</string>
+    <string name="settings_trash_auto_delete_days_title">Auto-delete after days</string>
+    <string name="settings_trash_auto_delete_days_summary">Days to keep trashed items before they are deleted automatically (0 = never)</string>
+    <string name="trash_empty_title">Empty trash?</string>
+    <string name="trash_empty_action">Empty trash</string>
+    <string name="trash_empty_message_format">All %1$d item(s) will be permanently deleted and cannot be restored.</string>
 </resources>

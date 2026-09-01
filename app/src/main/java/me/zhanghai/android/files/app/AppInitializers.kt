@@ -46,7 +46,8 @@ val appInitializers = listOf(
     ::initializeCustomTheme,
     ::initializeNightMode,
     ::createNotificationChannels,
-    ::preloadSearchIndexIfNeeded
+    ::preloadSearchIndexIfNeeded,
+    ::cleanupExpiredTrash
 )
 
 private fun initializeCrashlytics() {
@@ -171,6 +172,31 @@ private fun initializeCustomTheme() {
 private fun initializeNightMode() {
     NightModeHelper.initialize(application)
 }
+
+/**
+ * Deletes trashed files whose age exceeds the auto-delete setting shortly after app start,
+ * so stale trash does not pile up. Runs on a background thread after the launch window
+ * and only when the setting is non-zero.
+ */
+private fun cleanupExpiredTrash() {
+    Thread {
+        try {
+            Thread.sleep(TRASH_CLEANUP_DELAY_MILLIS)
+        } catch (e: InterruptedException) {
+            return@Thread
+        }
+        try {
+            me.zhanghai.android.files.filejob.FileJobService.trashCleanup(application)
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
+    }.apply {
+        name = "TrashCleanup"
+        priority = Thread.MIN_PRIORITY
+    }.start()
+}
+
+private const val TRASH_CLEANUP_DELAY_MILLIS = 5000L
 
 private const val SFTP_WARM_UP_DELAY_MILLIS = 4000L
 
