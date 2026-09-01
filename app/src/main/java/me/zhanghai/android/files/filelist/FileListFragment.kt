@@ -622,6 +622,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             me.zhanghai.android.files.settings.Settings.SHOW_ADD_BUTTON.observe(viewLifecycleOwner) {
                 binding.speedDialView.isVisible = it
             }
+            setupSinglePaneDragAndDrop()
         }
 
         val viewLifecycleOwner = viewLifecycleOwner
@@ -1398,6 +1399,90 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             FileJobService.copy(paths, directory, requireContext())
         } else {
             FileJobService.move(paths, directory, requireContext())
+        }
+    }
+
+    /** Enables drag-and-drop and installs drop targets for single-pane mode. */
+    private fun setupSinglePaneDragAndDrop() {
+        adapter.isCrossPaneDragEnabled = true
+
+        // Breadcrumb drop target: drag files to a segment → move to that directory.
+        binding.breadcrumbLayout.setDropTargetListener { paths, directory ->
+            movePathsTo(paths, directory)
+        }
+
+        // Drag-to-delete bar.
+        val deleteView = binding.dragDeleteView
+        var lastDragInside = false
+        var deleteDialogShown = false
+        deleteView.setOnDragListener { view, event ->
+            val payload = event.localState as? CrossPaneDragPayload
+                ?: return@setOnDragListener false
+            when (event.action) {
+                android.view.DragEvent.ACTION_DRAG_STARTED -> {
+                    deleteView.isVisible = true
+                    deleteDialogShown = false
+                    true
+                }
+                android.view.DragEvent.ACTION_DRAG_ENTERED,
+                android.view.DragEvent.ACTION_DRAG_LOCATION -> {
+                    lastDragInside = true
+                    true
+                }
+                android.view.DragEvent.ACTION_DRAG_EXITED -> {
+                    lastDragInside = false
+                    true
+                }
+                android.view.DragEvent.ACTION_DROP -> {
+                    lastDragInside = true
+                    showSinglePaneDeleteDialog(payload)
+                    deleteDialogShown = true
+                    deleteView.isVisible = false
+                    true
+                }
+                android.view.DragEvent.ACTION_DRAG_ENDED -> {
+                    if (lastDragInside && !deleteDialogShown) {
+                        showSinglePaneDeleteDialog(payload)
+                    }
+                    lastDragInside = false
+                    deleteView.isVisible = false
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun showSinglePaneDeleteDialog(payload: CrossPaneDragPayload) {
+        val paths = payload.paths
+        val message = if (paths.size == 1) {
+            val path = paths[0]
+            val isDirectory = try {
+                java8.nio.file.Files.isDirectory(path)
+            } catch (e: Exception) {
+                false
+            }
+            val res = if (isDirectory) {
+                R.string.file_delete_message_directory_format
+            } else {
+                R.string.file_delete_message_file_format
+            }
+            getString(res, path.fileName?.toString() ?: "")
+        } else {
+            resources.getQuantityString(
+                R.plurals.file_delete_message_multiple_files_format, paths.size, paths.size
+            )
+        }
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                .setMessage(message)
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    FileJobService.trashDelete(paths, requireContext())
+                    viewModel.clearSelectedFiles()
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .create()
+                .show()
         }
     }
 
@@ -3642,7 +3727,8 @@ private class Binding private constructor(
         val bottomToolbar: Toolbar,
         val bottomCreateFileNameEdit: EditText,
         val extractDestinationEdit: EditText,
-        val speedDialView: SpeedDialView
+        val speedDialView: SpeedDialView,
+        val dragDeleteView: View
     ) {
         companion object {
             fun inflate(
@@ -3666,7 +3752,8 @@ private class Binding private constructor(
                     contentBinding.swipeRefreshLayout, contentBinding.recyclerView,
                     bottomBarBinding.bottomBarLayout, bottomBarBinding.bottomToolbar,
                     bottomBarBinding.bottomCreateFileNameEdit,
-                    bottomBarBinding.extractDestinationEdit, speedDialBinding.speedDialView
+                    bottomBarBinding.extractDestinationEdit, speedDialBinding.speedDialView,
+                    binding.dragDeleteView
                 )
             }
         }

@@ -7,6 +7,7 @@
 
 <FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -15,4 +16,43 @@
       ~ <merge> tag.
       -->
     <include layout="@layout/file_list_fragment_include" />
+
+    <!-- Drag-to-delete bar (single-pane): always in the hierarchy (invisible when
+         idle); becomes visible while a drag is in flight. Dropping files on it
+         deletes them (with the standard delete confirmation). -->
+    <LinearLayout
+        android:id="@+id/dragDeleteView"
+        android:layout_width="match_parent"
+        android:layout_height="96dp"
+        android:layout_gravity="top|fill_horizontal"
+        android:orientation="vertical"
+        android:visibility="invisible">
+
+        <!-- The visible red bar is 48dp tall; the extra 48dp below is a transparent
+             hit extension, because the drag system's hit test lands slightly lower than
+             the bar's visual position. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="?attr/colorError"
+            android:elevation="16dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/delete_icon_control_normal_24dp"
+                app:tint="@android:color/white" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="@string/delete"
+                android:textAppearance="?textAppearanceLabelLarge"
+                android:textColor="@android:color/white" />
+        </LinearLayout>
+    </LinearLayout>
 </FrameLayout>
