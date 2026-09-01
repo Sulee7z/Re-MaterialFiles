@@ -93,7 +93,6 @@ class ActivePaneScrollbarHelper(
 
     private var leftHelper: RecyclerViewFastScrollerViewHelper? = null
     private var onScrollChanged: Runnable? = null
-    private var onPreDrawRunnable: Runnable? = null
 
     /**
      * Attaches the LEFT pane's list so the shared scrollbar can drive it. Called by the
@@ -105,19 +104,6 @@ class ActivePaneScrollbarHelper(
             leftList, adapter as? PopupTextProvider
         )
         Log.d(tag, "attachLeftList: leftHelper=$leftHelper")
-        // Register the pre-draw decoration on the left list too, so the popup text
-        // updates live when the left list scrolls (not just when the right list draws).
-        onPreDrawRunnable?.let { runnable ->
-            leftList.addItemDecoration(object : RecyclerView.ItemDecoration() {
-                override fun onDraw(
-                    canvas: Canvas,
-                    parent: RecyclerView,
-                    state: RecyclerView.State
-                ) {
-                    runnable.run()
-                }
-            })
-        }
         leftList.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 // Only the ACTIVE list drives the shared scrollbar.
@@ -147,7 +133,6 @@ class ActivePaneScrollbarHelper(
     }
 
     override fun addOnPreDrawListener(onPreDraw: Runnable) {
-        onPreDrawRunnable = onPreDraw
         touchList.addItemDecoration(object : RecyclerView.ItemDecoration() {
             override fun onDraw(
                 canvas: Canvas,

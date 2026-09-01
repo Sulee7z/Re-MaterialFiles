@@ -501,6 +501,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             // Horizontal drag on a row starts a cross-pane drag-and-drop (drop on the
             // other pane moves the files there).
             adapter.isCrossPaneDragEnabled = true
+            installDragEdgeAutoScroll()
             // Long-press on empty space (below the last item or in gaps) creates a
             // folder here. A strict stationary press is required:
             // - the press must land within the MIDDLE third of the pane width, and NOT
@@ -1402,25 +1403,65 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         }
     }
 
+    override fun movePathsIntoFolder(paths: List<Path>, folder: Path) {
+        // Windows-style drop onto a directory row: same move/copy semantics as the
+        // breadcrumb target (archive sources are read-only → copy).
+        if (paths.first().isArchivePath) {
+            FileJobService.copy(paths, folder, requireContext())
+        } else {
+            FileJobService.move(paths, folder, requireContext())
+        }
+        viewModel.clearSelectedFiles()
+    }
+
     /** Enables drag-and-drop and installs drop targets for single-pane mode. */
     private fun setupSinglePaneDragAndDrop() {
         adapter.isCrossPaneDragEnabled = true
+        installDragEdgeAutoScroll()
 
         // Breadcrumb drop target: drag files to a segment → move to that directory.
         binding.breadcrumbLayout.setDropTargetListener { paths, directory ->
             movePathsTo(paths, directory)
         }
-
-        // Drag-to-delete bar.
-        val deleteView = binding.dragDeleteView
+        // Drag-to-delete bar. The ROOT view (always visible) detects the drag start/end
+        // and shows/hides the bar. The BAR's own listener ACCEPTS the drag on STARTED
+        // (so the system delivers ENTERED/LOCATION/DROP to it) and performs the delete.
+        val deleteView = binding.singlePaneDragDeleteView
         var lastDragInside = false
         var deleteDialogShown = false
+
+        binding.root.setOnDragListener { _, event ->
+            when (event.action) {
+                android.view.DragEvent.ACTION_DRAG_STARTED -> {
+                    if (event.localState is CrossPaneDragPayload) {
+                        deleteView.isVisible = true
+                        deleteDialogShown = false
+                        // The delete bar is a top overlay of the edge-to-edge root, so push
+                        // it below the status bar.
+                        val statusBarHeight =
+                            androidx.core.view.ViewCompat.getRootWindowInsets(deleteView)
+                                ?.systemWindowInsetTop ?: 0
+                        deleteView.updatePaddingRelative(top = statusBarHeight)
+                        // The breadcrumb lives inside the AppBarLayout; if the user scrolled
+                        // the title bar away, expand it so breadcrumb drops still work.
+                        binding.appBarLayout.setExpanded(true)
+                    }
+                    false
+                }
+                android.view.DragEvent.ACTION_DRAG_ENDED -> {
+                    deleteView.isVisible = false
+                    false
+                }
+                else -> false
+            }
+        }
+
         deleteView.setOnDragListener { view, event ->
             val payload = event.localState as? CrossPaneDragPayload
                 ?: return@setOnDragListener false
             when (event.action) {
                 android.view.DragEvent.ACTION_DRAG_STARTED -> {
-                    deleteView.isVisible = true
+                    // Accept the drag so ENTERED/LOCATION/DROP reach this bar.
                     deleteDialogShown = false
                     true
                 }
@@ -1451,6 +1492,93 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 else -> false
             }
         }
+    }
+
+    /**
+     * Windows-style drag edge auto-scroll, using the proven "edge placeholder" pattern
+     * (cf. Amaze file manager): two TRANSPARENT placeholder views overlay the list's
+     * top/bottom edge. Each accepts our file drag and, on
+     * [android.view.DragEvent.ACTION_DRAG_ENTERED] / [ACTION_DRAG_EXITED], starts/stops a
+     * scroll loop scrolling the list up/down.
+     *
+     * Why not listen on the RecyclerView with coordinates? A drag event's LOCATION is
+     * handed ONLY to the front-most hit child that accepted ACTION_DRAG_STARTED — our
+     * folder rows accept it, so while the drag is over a row the RecyclerView itself
+     * never sees LOCATION. A dedicated overlay placeholder is hit-tested FIRST (top
+     * z-order) and sees ENTERED/EXITED regardless of what is under it, with no
+     * coordinate math at all.
+     */
+    private fun installDragEdgeAutoScroll() {
+        val contentLayout = binding.contentLayout
+        val density = resources.displayMetrics.density
+        // Edge placeholder height: ~56dp, self-adapting to small/large screens.
+        val edgeHeight = (56 * density).toInt()
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        var scrollRunnable: Runnable? = null
+
+        fun stopScroll() {
+            scrollRunnable?.let { handler.removeCallbacks(it) }
+            scrollRunnable = null
+        }
+
+        fun startScroll(direction: Int) {
+            stopScroll()
+            if (direction == 0) {
+                return
+            }
+            val stepPx = (16 * density).toInt()
+            val runnable = object : Runnable {
+                override fun run() {
+                    binding.recyclerView.scrollBy(0, direction * stepPx)
+                    handler.postDelayed(this, 16)
+                }
+            }
+            scrollRunnable = runnable
+            handler.post(runnable)
+        }
+
+        fun makeEdge(direction: Int) {
+            contentLayout.addView(View(requireContext()).apply {
+                layoutParams = android.widget.FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    edgeHeight
+                ).apply {
+                    gravity = if (direction < 0) {
+                        android.view.Gravity.TOP
+                    } else {
+                        android.view.Gravity.BOTTOM
+                    }
+                }
+                isClickable = false
+                setOnDragListener { _, event ->
+                    when (event.action) {
+                        android.view.DragEvent.ACTION_DRAG_STARTED -> {
+                            event.localState is CrossPaneDragPayload
+                        }
+                        android.view.DragEvent.ACTION_DRAG_ENTERED ->
+                            event.localState is CrossPaneDragPayload && run {
+                                startScroll(direction)
+                                true
+                            }
+                        android.view.DragEvent.ACTION_DRAG_LOCATION ->
+                            event.localState is CrossPaneDragPayload
+                        android.view.DragEvent.ACTION_DRAG_EXITED -> {
+                            stopScroll()
+                            true
+                        }
+                        android.view.DragEvent.ACTION_DROP,
+                        android.view.DragEvent.ACTION_DRAG_ENDED -> {
+                            stopScroll()
+                            false
+                        }
+                        else -> false
+                    }
+                }
+            })
+        }
+
+        makeEdge(-1)
+        makeEdge(1)
     }
 
     private fun showSinglePaneDeleteDialog(payload: CrossPaneDragPayload) {
@@ -3728,7 +3856,7 @@ private class Binding private constructor(
         val bottomCreateFileNameEdit: EditText,
         val extractDestinationEdit: EditText,
         val speedDialView: SpeedDialView,
-        val dragDeleteView: View
+        val singlePaneDragDeleteView: View
     ) {
         companion object {
             fun inflate(
@@ -3753,7 +3881,7 @@ private class Binding private constructor(
                     bottomBarBinding.bottomBarLayout, bottomBarBinding.bottomToolbar,
                     bottomBarBinding.bottomCreateFileNameEdit,
                     bottomBarBinding.extractDestinationEdit, speedDialBinding.speedDialView,
-                    binding.dragDeleteView
+                    binding.singlePaneDragDeleteView
                 )
             }
         }

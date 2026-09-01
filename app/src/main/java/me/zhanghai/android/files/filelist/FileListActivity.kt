@@ -462,9 +462,20 @@ class FileListActivity : AppActivity() {
                 val dividerCenterX = dividerTouchArea.x + dividerTouchArea.width / 2f
                 val dividerRadius =
                     TWO_PANE_DIVIDER_TOUCH_RADIUS_DP * resources.displayMetrics.density
+                // The navigation drawer sits over both panes when open: its touches must
+                // never reach the divider resize (a press near the divider center inside
+                // the open drawer would otherwise start a pane-width drag).
+                val drawerLayout = findViewById<androidx.drawerlayout.widget.DrawerLayout>(
+                    R.id.activityDrawerLayout
+                )
+                val navigationView = findViewById<View>(R.id.activityNavigationFragment)
+                val drawerOpen = drawerLayout != null && navigationView != null &&
+                    drawerLayout.isDrawerOpen(navigationView)
                 when (ev.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
-                        if (kotlin.math.abs(ev.rawX - dividerCenterX) <= dividerRadius) {
+                        if (!drawerOpen &&
+                            kotlin.math.abs(ev.rawX - dividerCenterX) <= dividerRadius
+                        ) {
                             // Press within the divider hit zone: start a pane resize.
                             dividerDragActive = true
                             findViewById<View>(R.id.divider)
@@ -1002,33 +1013,12 @@ class FileListActivity : AppActivity() {
                     // The trash bar handles its own drop via last-position tracking in
                     // installTrashDropTarget (the system rarely delivers DROP to it), so the
                     // pane just performs the cross-pane move below.
-                    val targetFragment = findFileListFragment(isSecondaryPane)
-                    if (payload == null || targetFragment == null ||
+                    if (payload == null ||
                         payload.sourceIsSecondaryPane == isSecondaryPane
                     ) {
                         return@setOnDragListener false
                     }
-                    // A pane browsing INSIDE an opened archive is read-only: redirect
-                    // the move next to the archive file instead.
-                    val currentDirectory = targetFragment.viewModel.currentPath
-                    val targetDirectory = if (currentDirectory.isArchivePath) {
-                        currentDirectory.archiveFile.parent ?: currentDirectory
-                    } else {
-                        currentDirectory
-                    }
-                    // Archive sources are read-only: dragging OUT of an archive can
-                    // never delete the sources, so it is always a copy.
-                    if (payload.paths.first().isArchivePath) {
-                        me.zhanghai.android.files.filejob.FileJobService.copy(
-                            payload.paths, targetDirectory, applicationContext
-                        )
-                    } else {
-                        me.zhanghai.android.files.filejob.FileJobService.move(
-                            payload.paths, targetDirectory, applicationContext
-                        )
-                    }
-                    findFileListFragment(payload.sourceIsSecondaryPane)
-                        ?.viewModel?.clearSelectedFiles()
+                    handleCrossPaneDrop(payload, isSecondaryPane)
                     true
                 }
 
@@ -1041,6 +1031,34 @@ class FileListActivity : AppActivity() {
                 else -> false
             }
         }
+    }
+
+    /** Moves (or copies) the dragged [payload]'s files into the target pane's current
+     *  directory. Shared by the pane container drop target AND the per-pane list's own
+     *  drop (which may intercept the drag before the pane container sees DROP). */
+    fun handleCrossPaneDrop(payload: CrossPaneDragPayload, targetIsSecondaryPane: Boolean) {
+        val targetFragment = findFileListFragment(targetIsSecondaryPane) ?: return
+        // A pane browsing INSIDE an opened archive is read-only: redirect
+        // the move next to the archive file instead.
+        val currentDirectory = targetFragment.viewModel.currentPath
+        val targetDirectory = if (currentDirectory.isArchivePath) {
+            currentDirectory.archiveFile.parent ?: currentDirectory
+        } else {
+            currentDirectory
+        }
+        // Archive sources are read-only: dragging OUT of an archive can
+        // never delete the sources, so it is always a copy.
+        if (payload.paths.first().isArchivePath) {
+            me.zhanghai.android.files.filejob.FileJobService.copy(
+                payload.paths, targetDirectory, applicationContext
+            )
+        } else {
+            me.zhanghai.android.files.filejob.FileJobService.move(
+                payload.paths, targetDirectory, applicationContext
+            )
+        }
+        findFileListFragment(payload.sourceIsSecondaryPane)
+            ?.viewModel?.clearSelectedFiles()
     }
 
     /**
@@ -1261,7 +1279,12 @@ class FileListActivity : AppActivity() {
         view.isVisible = visible
         if (visible) {
             // The window draws under the status bar, so offset the red bar below it.
-            view.updatePaddingRelative(top = statusBarHeightPx)
+            // Read the insets live (the cached statusBarHeightPx may still be 0 during
+            // the first drag, e.g. before the insets listener has fired).
+            val statusBarHeight =
+                androidx.core.view.ViewCompat.getRootWindowInsets(view)
+                    ?.systemWindowInsetTop ?: statusBarHeightPx
+            view.updatePaddingRelative(top = statusBarHeight)
         }
     }
 

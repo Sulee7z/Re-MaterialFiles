@@ -47,6 +47,7 @@ import me.zhanghai.android.files.ui.AnimatedListAdapter
 import me.zhanghai.android.files.ui.CheckableForegroundLinearLayout
 import me.zhanghai.android.files.ui.CheckableItemBackground
 import me.zhanghai.android.files.util.activity
+import me.zhanghai.android.files.util.getColorByAttr
 import me.zhanghai.android.files.util.isMaterial3Theme
 import me.zhanghai.android.files.util.layoutInflater
 import me.zhanghai.android.files.util.valueCompat
@@ -616,6 +617,79 @@ MotionEvent.ACTION_DOWN -> {
                 }
                 true
             }
+            // Windows-style drop target: a directory row accepts a drag of other files/
+            // folders and moves them into it on drop. Only enabled when cross-pane drag
+            // is (i.e. drag-and-drop of rows) is enabled. Only IN-PANE drops are accepted:
+            // a cross-pane drop falls through to the original pane move logic.
+            if (isDirectory && isCrossPaneDragEnabled) {
+                setOnDragListener { view, event ->
+                    val payload = event.localState as? CrossPaneDragPayload
+                    if (payload == null || payload.paths.isEmpty()) {
+                        return@setOnDragListener false
+                    }
+                    // Same-pane drop only (Windows-style move into folder). A cross-pane
+                    // drag must NOT drop into a folder row — it is handled by the pane
+                    // container (move to the other pane's current directory).
+                    val dropInThisPane = payload.sourceIsSecondaryPane == isSecondaryPane
+                    val droppingOntoSelf =
+                        payload.paths.any { it == file.path || it.startsWith(file.path) }
+                    fun highlight(highlighted: Boolean) {
+                        view.background = if (highlighted) {
+                            rowDropHighlightDrawable(context)
+                        } else {
+                            CheckableItemBackground.create(
+                                if (_viewType == FileViewType.GRID && context.isMaterial3Theme) {
+                                    4f
+                                } else {
+                                    0f
+                                },
+                                if (_viewType == FileViewType.GRID && context.isMaterial3Theme) {
+                                    12f
+                                } else {
+                                    0f
+                                },
+                                context
+                            )
+                        }
+                    }
+                    when (event.action) {
+                        android.view.DragEvent.ACTION_DRAG_STARTED -> {
+                            // Accept only same-pane drops that don't drop a folder INTO
+                            // itself (Windows refuses this too).
+                            dropInThisPane && !droppingOntoSelf
+                        }
+                        android.view.DragEvent.ACTION_DRAG_ENTERED,
+                        android.view.DragEvent.ACTION_DRAG_LOCATION -> {
+                            if (dropInThisPane && !droppingOntoSelf) {
+                                highlight(true)
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                        android.view.DragEvent.ACTION_DRAG_EXITED -> {
+                            highlight(false)
+                            true
+                        }
+                        android.view.DragEvent.ACTION_DROP -> {
+                            highlight(false)
+                            if (dropInThisPane && !droppingOntoSelf) {
+                                listener.movePathsIntoFolder(payload.paths, file.path)
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                        android.view.DragEvent.ACTION_DRAG_ENDED -> {
+                            highlight(false)
+                            true
+                        }
+                        else -> false
+                    }
+                }
+            } else {
+                setOnDragListener(null)
+            }
         }
         holder.iconLayout.apply {
             // Two-pane rows: group the name+description block and the icon together and
@@ -1115,6 +1189,20 @@ MotionEvent.ACTION_DOWN -> {
         view.startDragAndDrop(clipData, View.DragShadowBuilder(view), payload, 0)
     }
 
+    /** Solid highlight used while a folder row is hovered by a drag. */
+    private fun rowDropHighlightDrawable(context: android.content.Context):
+        android.graphics.drawable.Drawable =
+        android.graphics.drawable.GradientDrawable().apply {
+            setColor(context.getColorByAttr(android.R.attr.colorControlHighlight))
+            cornerRadius = if (_viewType == FileViewType.GRID &&
+                context.isMaterial3Theme
+            ) {
+                12f * context.resources.displayMetrics.density
+            } else {
+                0f
+            }
+        }
+
     interface Listener {
         fun clearSelectedFiles()
         fun selectFile(file: FileItem, selected: Boolean)
@@ -1127,6 +1215,10 @@ MotionEvent.ACTION_DOWN -> {
         fun showRenameFileDialog(file: FileItem)
         fun hideFile(file: FileItem)
         fun extractFile(file: FileItem)
+
+        /** Moves (or copies, for read-only sources) [paths] into the target folder —
+         *  Windows-style drag onto a directory row. */
+        fun movePathsIntoFolder(paths: List<Path>, folder: Path)
 
         /** Extracts [file] into the current directory (a subfolder named after it). */
         fun extractFilesHere(file: FileItem)

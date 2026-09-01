@@ -19,9 +19,10 @@
 
     <!-- Drag-to-delete bar (single-pane): always in the hierarchy (invisible when
          idle); becomes visible while a drag is in flight. Dropping files on it
-         deletes them (with the standard delete confirmation). -->
+         deletes them (with the standard delete confirmation). Uses a DISTINCT id
+         so it never collides with the two-pane layout's R.id.dragDeleteView. -->
     <LinearLayout
-        android:id="@+id/dragDeleteView"
+        android:id="@+id/singlePaneDragDeleteView"
         android:layout_width="match_parent"
         android:layout_height="96dp"
         android:layout_gravity="top|fill_horizontal"
