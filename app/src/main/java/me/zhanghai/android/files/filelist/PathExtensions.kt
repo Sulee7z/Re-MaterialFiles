@@ -19,7 +19,7 @@ val Path.name: String
 
 fun Path.toUserFriendlyString(): String = if (isLinuxPath) toFile().path else toUri().toString()
 
-fun Path.isArchiveFile(mimeType: MimeType): Boolean = !isArchivePath && mimeType.isSupportedArchive
+fun Path.isArchiveFile(mimeType: MimeType): Boolean = mimeType.isSupportedArchive
 
 val Path.isLocalPath: Boolean
     get() =
