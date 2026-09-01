@@ -404,6 +404,8 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         // touch anywhere in the pane (items, breadcrumb, empty state, toolbar, …).
         val fastScroller = if (isTwoPaneMode && isSecondaryPane.not()) {
             createLeftPaneFastScroller()
+        } else if (isTwoPaneMode) {
+            createRightPaneFastScroller()
         } else {
             ThemedFastScroller.create(binding.recyclerView)
         }
@@ -1362,36 +1364,67 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     /**
      * Left-pane fast scrollbar on the LEFT edge (two-pane left pane only, mirroring the
-     * classic dual-pane layout): AndroidFastScroll positions the bar by layout direction,
-     * so the RecyclerView is re-parented into an RTL wrapper (the bar draws at the
-     * wrapper's left edge) while the list itself stays LTR. Scrolling and touches still
-     * go through the RecyclerView via the custom view helper.
+     * classic dual-pane layout): AndroidFastScroll positions the bar by layout direction
+     * and draws it in the HOST view's overlay, so the bar can only live at the host's own
+     * edge. The pane's screen-edge padding insets every child, which would push the bar
+     * away from the screen edge (negative offsets get clipped by the overlay). So the
+     * scrollbar is hosted on a dedicated transparent RTL FrameLayout that spans the FULL
+     * pane width (negative margins undo the pane padding, clipToPadding=false keeps it
+     * unclipped); the bar then lands exactly on the left screen edge while the list and
+     * its content keep their insets. Scrolling and touches go through the RecyclerView
+     * via the custom view helper.
      */
     private fun createLeftPaneFastScroller(): FastScroller {
         val recyclerView = binding.recyclerView
-        val parent = recyclerView.parent as? ViewGroup
+        val pane = (activity as? FileListActivity)?.findViewById<ViewGroup>(R.id.leftPane)
             ?: return ThemedFastScroller.create(recyclerView)
-        val index = parent.indexOfChild(recyclerView)
-        val layoutParams = recyclerView.layoutParams
-        parent.removeView(recyclerView)
-        val rtlWrapper = FrameLayout(requireContext()).apply {
+        val host = FrameLayout(requireContext()).apply {
             layoutDirection = View.LAYOUT_DIRECTION_RTL
         }
-        rtlWrapper.addView(
-            recyclerView,
-            ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-        )
-        // The wrapper is RTL ONLY for the scrollbar positioning; layout direction is
-        // inherited, so force the list back to LTR or its icons/text would mirror.
-        recyclerView.layoutDirection = View.LAYOUT_DIRECTION_LTR
-        parent.addView(rtlWrapper, index, layoutParams)
+        val hostLayoutParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        ).apply {
+            setMargins(-pane.paddingStart, 0, -pane.paddingEnd, 0)
+        }
+        pane.clipToPadding = false
+        pane.addView(host, hostLayoutParams)
         val viewHelper = RecyclerViewFastScrollerViewHelper(
             recyclerView, adapter as? PopupTextProvider
         )
-        return FastScrollerBuilder(rtlWrapper)
+        return FastScrollerBuilder(host)
+            .useMd2Style()
+            .setThumbDrawable(
+                requireContext().getDrawableCompat(R.drawable.fast_scroll_thumb_m3)
+            )
+            .setViewHelper(viewHelper)
+            .build()
+    }
+
+    /**
+     * Right-pane fast scrollbar on the RIGHT edge: mirror of [createLeftPaneFastScroller].
+     * An LTR host spans the FULL right pane (negative margins undo the pane's screen-edge
+     * padding, clipToPadding=false keeps it unclipped), so the bar draws exactly at the
+     * right screen edge — clear of the right-aligned row icons — while the list keeps its
+     * insets. Scrolling and touches go through the RecyclerView via the view helper.
+     */
+    private fun createRightPaneFastScroller(): FastScroller {
+        val recyclerView = binding.recyclerView
+        val pane = (activity as? FileListActivity)?.findViewById<ViewGroup>(R.id.rightPane)
+            ?: return ThemedFastScroller.create(recyclerView)
+        val host = FrameLayout(requireContext())
+        val hostLayoutParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        ).apply {
+            setMargins(-pane.paddingStart, 0, -pane.paddingEnd, 0)
+        }
+        pane.clipToPadding = false
+        pane.addView(host, hostLayoutParams)
+        val viewHelper = RecyclerViewFastScrollerViewHelper(
+            recyclerView, adapter as? PopupTextProvider
+        )
+        return FastScrollerBuilder(host)
             .useMd2Style()
             .setThumbDrawable(
                 requireContext().getDrawableCompat(R.drawable.fast_scroll_thumb_m3)
@@ -1419,7 +1452,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         adapter.denseLayout = denseLayout
         if (twoPaneMode) {
             adapter.useSmallFont = denseLayout
-            adapter.useSmallIcons = denseLayout
+            adapter.useSmallIcons = true
         }
         updateSpanCount()
         // re-set adapter to prevent RecyclerView from recycling views and reusing old padding
