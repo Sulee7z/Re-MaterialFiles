@@ -13,6 +13,7 @@ import java8.nio.file.FileVisitor
 import java8.nio.file.Files
 import java8.nio.file.Path
 import java8.nio.file.attribute.BasicFileAttributes
+import me.zhanghai.android.files.provider.common.readAttributes
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
@@ -26,10 +27,11 @@ import java.util.concurrent.Executors
  * directory's last modification time, so an unchanged directory is never walked twice.
  */
 object DirectoryContentSizes {
-    // Multiple threads so one slow directory (e.g. Android/data with tens of thousands
-    // of entries) cannot stall the queue and starve every other folder's computation.
+    // Limited concurrency: parallel walks over the same flash-backed storage only
+    // contend (each stat is a FUSE round-trip), so fewer, normal-priority threads
+    // finish visible folders sooner.
     private val executor = Executors.newFixedThreadPool(4) { runnable ->
-        Thread(runnable, "DirectoryContentSizes").apply { priority = Thread.MIN_PRIORITY }
+        Thread(runnable, "DirectoryContentSizes")
     }
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -40,8 +42,7 @@ object DirectoryContentSizes {
 
     /**
      * Returns the cached content size in bytes for the directory, or null when it has
-     * not been computed yet (or the directory changed since it was). A negative value
-     * means a previous computation failed; callers should fall back to the entry size.
+     * not been computed yet (or the directory changed since it was).
      */
     @Synchronized
     fun get(path: Path, attributes: BasicFileAttributes): Long? {
@@ -88,37 +89,59 @@ object DirectoryContentSizes {
 
     private fun computeSize(directory: Path): Long =
         try {
+            // Iterative implementation (Amaze-style): list directories recursively with
+            // an explicit stack, reading each entry's attributes.
             var size = 0L
-            Files.walkFileTree(directory, object : FileVisitor<Path> {
-                override fun preVisitDirectory(
-                    dir: Path,
-                    attributes: BasicFileAttributes
-                ): FileVisitResult = FileVisitResult.CONTINUE
-
-                override fun visitFile(
-                    file: Path,
-                    attributes: BasicFileAttributes
-                ): FileVisitResult {
-                    size += attributes.size()
-                    return FileVisitResult.CONTINUE
+            var visited = 0
+            val stack = ArrayDeque<Path>()
+            stack.addFirst(directory)
+            while (stack.isNotEmpty()) {
+                var stream: java8.nio.file.DirectoryStream<Path>
+                try {
+                    val current = stack.removeFirst()
+                    stream = java8.nio.file.Files.newDirectoryStream(current)
+                } catch (exception: Exception) {
+                    continue
                 }
-
-                override fun visitFileFailed(
-                    file: Path,
-                    exception: IOException
-                ): FileVisitResult = FileVisitResult.CONTINUE
-
-                override fun postVisitDirectory(
-                    dir: Path,
-                    exception: IOException?
-                ): FileVisitResult = FileVisitResult.CONTINUE
-            })
+                stream.use { entries ->
+                    val iterator = entries.iterator()
+                    while (iterator.hasNext()) {
+                        val path = iterator.next()
+                        if (++visited > MAX_ENTRIES) {
+                            return UNKNOWN
+                        }
+                        try {
+                            // Same attribute read as loadFileItem() (NOFOLLOW_LINKS): the
+                            // custom java8.nio provider reports correct dir/file/size only
+                            // through this path.
+                            val attrs = path.readAttributes(
+                                java8.nio.file.attribute.BasicFileAttributes::class.java,
+                                java8.nio.file.LinkOption.NOFOLLOW_LINKS
+                            )
+                            if (attrs.isDirectory) {
+                                stack.addFirst(path)
+                            } else if (attrs.isRegularFile) {
+                                size += attrs.size()
+                            }
+                        } catch (exception: Exception) {
+                            // Unreadable entry: skip it, keep the rest.
+                        }
+                    }
+                }
+            }
             size
-        } catch (exception: IOException) {
-            -1L
-        } catch (exception: SecurityException) {
-            -1L
+        } catch (exception: Exception) {
+            UNKNOWN
         }
 
+    /** Sentinels stored for directories whose size could not be computed (too large,
+     *  unreadable, …); callers show date-only rather than a misleading "0 B". */
+    const val UNKNOWN = Long.MIN_VALUE
+    private const val MAX_ENTRIES = 300000
     private const val MAX_CACHE_ENTRIES = 1000
+
+    @Synchronized
+    fun clear() {
+        cache.clear()
+    }
 }

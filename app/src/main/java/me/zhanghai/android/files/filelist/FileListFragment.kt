@@ -248,6 +248,14 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     private lateinit var layoutManager: GridLayoutManager
 
+    /**
+     * Scroll state captured when a refresh starts (e.g. a file move changed the
+     * directory), restored when the new list arrives so the user's scroll position
+     * survives in-place refresh cycles instead of jumping back to the top.
+     * Navigation (navigateTo) keeps its own pendingState from the trail.
+     */
+    private var refreshScrollState: android.os.Parcelable? = null
+
     internal lateinit var adapter: FileListAdapter
 
     /** Forwards the divider's screen position to this pane's adapter (two-pane mode),
@@ -1195,15 +1203,22 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             // This resets animation as well.
             adapter.clear()
         }
+        if (stateful is Loading) {
+            // Capture the current scroll position so a refresh (e.g. file moved in/out
+            // of this directory) restores it instead of jumping to the top.
+            refreshScrollState = layoutManager.onSaveInstanceState()
+        }
         if (stateful is Success) {
             val pendingState = viewModel.pendingState
             if (pendingState != null) {
                 layoutManager.onRestoreInstanceState(pendingState)
+            } else if (refreshScrollState != null) {
+                // In-place refresh (no navigation): keep the user's scroll position.
+                layoutManager.onRestoreInstanceState(refreshScrollState)
+                refreshScrollState = null
             } else {
-                // No saved scroll state for this directory (first visit, refresh, or a
-                // sibling-directory switch whose trail state was never recorded): jump
-                // to the top instead of keeping a stale offset that would clip the
-                // first row.
+                // No saved scroll state for this directory (first visit): jump to the
+                // top instead of keeping a stale offset that would clip the first row.
                 layoutManager.scrollToPositionWithOffset(0, 0)
             }
         }
@@ -2447,8 +2462,11 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     private fun onWrapLongFileNamesChanged(wrapLongFileNames: Boolean) {
         adapter.wrapLongFileNames = wrapLongFileNames
         // Re-set the adapter so RecyclerView re-measures the (now content-sized) item
-        // heights; notifyDataSetChanged() alone reuses the old measured heights.
+        // heights; notifyDataSetChanged() alone reuses the old measured heights. Save
+        // and restore the scroll position so the list does not jump to the top.
+        val scrollState = layoutManager.onSaveInstanceState()
         binding.recyclerView.adapter = adapter
+        layoutManager.onRestoreInstanceState(scrollState)
     }
 
     override fun clearSelectedFiles() {
@@ -3680,6 +3698,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     private fun onRequestAllFilesAccessResult(isGranted: Boolean) {
         viewModel.isStorageAccessRequested = false
         if (isGranted) {
+            // The first load ran WITHOUT All-Files-Access (the permission dialog appears
+            // on the first launch), so directory sizes/attributes were read restricted.
+            // Drop any cached restricted results and reload so sizes show correctly.
+            DirectoryContentSizes.clear()
             refresh()
         }
     }

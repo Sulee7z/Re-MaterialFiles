@@ -174,7 +174,10 @@ class FileListAdapter(
         get() = _nameEllipsize
         set(value) {
             _nameEllipsize = value
-            notifyItemRangeChanged(0, itemCount, PAYLOAD_STATE_CHANGED)
+            // Full rebind: text ellipsize/marquee is applied in the non-payload bind
+            // path, so a payload-only notify would skip it (and in two-pane mode the
+            // rows would never follow the "display long file name" setting).
+            notifyDataSetChanged()
         }
 
     private var _denseLayout: Boolean = false
@@ -544,11 +547,21 @@ MotionEvent.ACTION_DOWN -> {
                 maxLines = Int.MAX_VALUE
                 ellipsize = null
                 isSelected = false
-            } else if (isSingleLineCompat) {
+            } else if (isListRow) {
                 val nameEllipsize = nameEllipsize
                 ellipsize = nameEllipsize
                 isSelected = nameEllipsize == TextUtils.TruncateAt.MARQUEE
                 setSingleLine(true)
+                // Two-pane rows size the name block WRAP_CONTENT so the icon follows the
+                // text, but a wrap-content TextView can never be NARROWER than its text —
+                // the marquee would never scroll. Give the block a fixed wide width only
+                // when marquee scrolling is selected, so long names can actually scroll.
+                if (isTwoPaneMode && nameEllipsize == TextUtils.TruncateAt.MARQUEE) {
+                    (parent as? android.widget.LinearLayout)?.layoutParams =
+                        (parent as? android.widget.LinearLayout)?.layoutParams?.apply {
+                            width = android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                        }
+                }
             } else {
                 // Grid item: restore the default two-line clamp.
                 maxLines = 2
@@ -712,9 +725,15 @@ MotionEvent.ACTION_DOWN -> {
                     setMarginEnd(endGap)
                 }
                 // Name+description block wraps content and the whole row centers both.
+                // (Keep MATCH_PARENT when marquee scrolling is on, set earlier, so the
+                // name is narrower than its content and can actually scroll.)
                 val nameBlock = holder.nameText.parent as? android.widget.LinearLayout
                 nameBlock?.layoutParams = nameBlock.layoutParams.apply {
-                    width = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                    width = if (_nameEllipsize == android.text.TextUtils.TruncateAt.MARQUEE) {
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                    } else {
+                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                    }
                     if (this is ViewGroup.MarginLayoutParams) {
                         marginEnd = 0
                     }
@@ -747,7 +766,11 @@ MotionEvent.ACTION_DOWN -> {
                 val maxNameWidth = (rowContext.resources.displayMetrics.widthPixels
                     * 0.5f).toInt()
                 holder.nameText.maxWidth = maxNameWidth
-                holder.nameText.ellipsize = android.text.TextUtils.TruncateAt.END
+                // The marquee scroller (if selected) must NOT be overwritten back to
+                // END here — this runs AFTER the marquee setup above, so guard it.
+                if (nameEllipsize != android.text.TextUtils.TruncateAt.MARQUEE) {
+                    holder.nameText.ellipsize = android.text.TextUtils.TruncateAt.END
+                }
             } else if (hideFolderIcons && isDirectory) {
                 iconLayoutParams.width = 0
                 (iconLayoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = 0
@@ -1077,11 +1100,14 @@ MotionEvent.ACTION_DOWN -> {
             return if (contentSize >= 0L) {
                 contentSize.asFileSize().formatHumanReadable(context)
             } else {
-                // A previous walk failed; keep showing the entry size instead.
-                attributes.fileSize.formatHumanReadable(context)
+                // UNKNOWN (too large / unreadable): no reliable content size, so show
+                // date-only instead of a misleading "0 B" directory entry size.
+                null
             }
         }
         if (path.fileSystem.provider().scheme != SCHEME_FILE) {
+            // Remote/archive directories: walking them is far too slow to do
+            // implicitly per row — show the entry size (the only cheap metadata).
             return attributes.fileSize.formatHumanReadable(context)
         }
         DirectoryContentSizes.request(path, attributes) { onDirectoryContentSizeLoaded(path) }
