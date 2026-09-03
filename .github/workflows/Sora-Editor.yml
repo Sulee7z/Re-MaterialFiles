@@ -119,10 +119,24 @@ jobs:
       run: |
         RELEASE_TAG="${{ steps.release_tag.outputs.release }}"
         APK="app/build/outputs/apk/release/${{ steps.rename.outputs.apk_name }}"
+        if [ -f RELEASE_NOTES.md ]; then
+          # Strip the leading "# title" line: the release title already carries it.
+          NOTES=$(printf '%s\n' "$(tail -n +2 RELEASE_NOTES.md)")
+        else
+          NOTES="Automated build of commit ${{ github.sha }}"
+        fi
         if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
           # Release (or its tag) already exists: attach the APK to it.
           gh release upload "$RELEASE_TAG" "$APK" --clobber
+        elif [ "$GITHUB_REF_TYPE" = "tag" ]; then
+          # Explicit tag push: a real release with notes from RELEASE_NOTES.md.
+          gh release create \
+            "$RELEASE_TAG" \
+            "$APK" \
+            --title "Re-MaterialFiles $RELEASE_TAG" \
+            --notes "$NOTES"
         else
+          # Branch push: auto-versioned build tag, minimal notes.
           gh release create \
             "$RELEASE_TAG" \
             "$APK" \
