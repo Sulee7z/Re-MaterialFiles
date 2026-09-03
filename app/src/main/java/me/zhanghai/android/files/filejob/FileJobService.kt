@@ -62,9 +62,13 @@ class FileJobService : Service() {
                     updateWakeWifiLockLocked()
                 }
                 // File operations change storage free space; refresh the nav drawer's
-                // storage subtitles so they reflect the new usage immediately.
+                // storage subtitles so they reflect the new usage immediately. The
+                // LiveData singletons use setValue (main thread only) — posting to the
+                // main looper also avoids initializing them on this worker thread.
                 if (runningJobs.isEmpty()) {
-                    NavigationItemListLiveData.refresh()
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        NavigationItemListLiveData.refresh()
+                    }
                 }
             }
             runningJobs[job] = future
