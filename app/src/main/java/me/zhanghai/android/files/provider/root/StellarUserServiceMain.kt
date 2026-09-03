@@ -14,6 +14,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.Process
 import android.util.Log
+import androidx.annotation.Keep
 import com.stellar.api.BinderContainer
 import rikka.hidden.compat.ActivityManagerApis
 
@@ -26,6 +27,7 @@ import rikka.hidden.compat.ActivityManagerApis
  * initialize the Android runtime, create the service interface (which starts
  * RootFileService) and deliver the service binder back to the app's provider.
  */
+@Keep
 object StellarUserServiceMain {
 
     private const val TAG = "StellarUserServiceMain"
