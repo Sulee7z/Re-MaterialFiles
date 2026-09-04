@@ -8,6 +8,10 @@ package me.zhanghai.android.files.app
 import android.os.AsyncTask
 import android.os.Build
 import android.webkit.WebView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import jcifs.context.SingletonContext
 import me.zhanghai.android.files.BuildConfig
 import me.zhanghai.android.files.coil.initializeCoil
@@ -24,8 +28,10 @@ import me.zhanghai.android.files.storage.SftpServerAuthenticator
 import me.zhanghai.android.files.storage.SmbServerAuthenticator
 import me.zhanghai.android.files.storage.StorageVolumeListLiveData
 import me.zhanghai.android.files.storage.WebDavServerAuthenticator
+import me.zhanghai.android.files.terminal.TerminalBubble
 import me.zhanghai.android.files.theme.custom.CustomThemeHelper
 import me.zhanghai.android.files.theme.night.NightModeHelper
+import me.zhanghai.android.files.util.valueCompat
 import java.util.Properties
 import me.zhanghai.android.files.provider.ftp.client.Client as FtpClient
 import me.zhanghai.android.files.provider.sftp.client.Client as SftpClient
@@ -47,7 +53,8 @@ val appInitializers = listOf(
     ::initializeNightMode,
     ::createNotificationChannels,
     ::preloadSearchIndexIfNeeded,
-    ::cleanupExpiredTrash
+    ::cleanupExpiredTrash,
+    ::initializeTerminalBubbleLifecycle
 )
 
 private fun initializeCrashlytics() {
@@ -171,6 +178,28 @@ private fun initializeCustomTheme() {
 
 private fun initializeNightMode() {
     NightModeHelper.initialize(application)
+}
+
+/**
+ * When the "terminal bubble only in app" setting is on, the floating bubble must only be
+ * visible while this app is in the foreground: hide it when the app goes to the background
+ * and bring it back when the app returns (if the session is still running). Registered
+ * unconditionally; the setting is consulted on every foreground/background transition, so
+ * toggling it at runtime takes effect immediately.
+ */
+private fun initializeTerminalBubbleLifecycle() {
+    ProcessLifecycleOwner.get().lifecycle.addObserver(object : LifecycleEventObserver {
+        override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
+            if (!Settings.TERMINAL_BUBBLE_ONLY_IN_APP.valueCompat) {
+                return
+            }
+            when (event) {
+                Lifecycle.Event.ON_START -> TerminalBubble.onAppForegrounded()
+                Lifecycle.Event.ON_STOP -> TerminalBubble.onAppBackgrounded()
+                else -> {}
+            }
+        }
+    })
 }
 
 /**

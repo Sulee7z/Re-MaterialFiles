@@ -151,6 +151,12 @@
             android:key="@string/pref_key_read_remote_files_for_thumbnail"
             android:title="@string/settings_read_remote_files_for_thumbnail_title"
             android:defaultValue="@bool/pref_default_value_read_remote_files_for_thumbnail" />
+
+        <SwitchPreferenceCompat
+            android:key="@string/pref_key_terminal_bubble_only_in_app"
+            android:title="@string/settings_terminal_bubble_only_in_app_title"
+            android:summary="@string/settings_terminal_bubble_only_in_app_summary"
+            android:defaultValue="@bool/pref_default_value_terminal_bubble_only_in_app" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/settings_trash_title">

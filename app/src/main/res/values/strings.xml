@@ -813,6 +813,12 @@
     <string name="terminal_title">Terminal</string>
     <string name="terminal_exit_status_failed">Terminal session exited with an error</string>
     <string name="terminal_not_supported_for_path">Terminal is not supported for this path</string>
+    <string name="terminal_bubble_return">Return to terminal</string>
+    <string name="terminal_bubble_hide">Hide bubble</string>
+    <string name="terminal_bubble_close">Close terminal</string>
+    <string name="terminal_bubble_permission_hint">Enable the overlay permission to minimize the terminal into a floating bubble</string>
+    <string name="settings_terminal_bubble_only_in_app_title">Terminal bubble only in app</string>
+    <string name="settings_terminal_bubble_only_in_app_summary">Show the terminal bubble only while Material Files is in the foreground</string>
     <string name="copy_text">Copy</string>
     <string name="paste_text">Paste</string>
     <string name="text_selection_more">More</string>

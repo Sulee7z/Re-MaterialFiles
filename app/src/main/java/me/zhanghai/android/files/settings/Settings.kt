@@ -220,6 +220,13 @@ object Settings {
             R.bool.pref_default_value_show_add_button
         )
 
+    /** Only show the terminal bubble while Material Files itself is in the foreground. */
+    val TERMINAL_BUBBLE_ONLY_IN_APP: SettingLiveData<Boolean> =
+        BooleanSettingLiveData(
+            R.string.pref_key_terminal_bubble_only_in_app,
+            R.bool.pref_default_value_terminal_bubble_only_in_app
+        )
+
     val ARCHIVE_FILE_NAME_ENCODING: SettingLiveData<String> =
         StringSettingLiveData(
             R.string.pref_key_archive_file_name_encoding,

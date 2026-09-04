@@ -85,8 +85,10 @@ class TerminalFragment : Fragment() {
                 }
             },
             onSessionFinished = { success ->
-                // The shell is killed when this activity finishes, so this may fire after the
-                // fragment is detached; guard every fragment/activity access.
+                // The shell exited on its own (e.g. `exit`): forget the app-scoped session so
+                // the bubble goes away. This may fire after the fragment is detached; guard
+                // every fragment/activity access.
+                TerminalSessionManager.onSessionEnded()
                 if (isAdded) {
                     if (!success) {
                         showToast(R.string.terminal_exit_status_failed)

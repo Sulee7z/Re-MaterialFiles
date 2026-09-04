@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!-- Terminal bubble: a transparent floating ">_" glyph with a soft shadow so it stays
+     readable over any wallpaper. The position is persisted and restored (see
+     TerminalBubble), so the bubble never resets to a default spot. -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/terminalBubble"
+    android:layout_width="48dp"
+    android:layout_height="48dp"
+    android:gravity="center"
+    android:text="&gt;_"
+    android:textColor="@color/terminal_bubble_text"
+    android:textSize="18sp"
+    android:textStyle="bold"
+    android:shadowColor="#66000000"
+    android:shadowDx="0"
+    android:shadowDy="0"
+    android:shadowRadius="6" />

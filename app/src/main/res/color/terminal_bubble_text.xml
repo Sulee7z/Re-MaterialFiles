@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!-- Material 3 onPrimaryContainer color, hardcoded — see terminal_bubble_background.xml. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="#FF21005D" />
+</selector>

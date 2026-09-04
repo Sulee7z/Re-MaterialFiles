@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!-- Material 3 primaryContainer color (light mode), hardcoded because the bubble is
+     inflated from the application context whose theme is the M2 manifest theme, where
+     M3 attributes like colorPrimaryContainer do not exist (they resolve to transparent). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#FFEADDFF" />
+    <stroke
+        android:width="1dp"
+        android:color="#1F1D1B" />
+</shape>

@@ -89,6 +89,8 @@
     <bool name="pref_default_value_recent_directories_match_longest">true</bool>
     <string name="pref_key_show_add_button">key_show_add_button</string>
     <bool name="pref_default_value_show_add_button">true</bool>
+    <string name="pref_key_terminal_bubble_only_in_app">key_terminal_bubble_only_in_app</string>
+    <bool name="pref_default_value_terminal_bubble_only_in_app">false</bool>
     <string-array name="pref_entry_values_bookmark_recent_default_page">
         <item>0</item>
         <item>1</item>

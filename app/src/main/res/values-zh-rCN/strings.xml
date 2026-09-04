@@ -874,6 +874,12 @@
     <string name="settings_recent_directories_match_longest_summary">添加最近访问的文件夹时,仅保留匹配的最长路径</string>
     <string name="settings_show_add_button_title">显示添加按钮</string>
     <string name="settings_show_add_button_summary">在主界面右下角显示添加按钮</string>
+    <string name="settings_terminal_bubble_only_in_app_title">仅在本应用中显示终端悬浮球</string>
+    <string name="settings_terminal_bubble_only_in_app_summary">终端悬浮球仅在质感文件处于前台时显示，应用退到后台时自动隐藏</string>
+    <string name="terminal_bubble_return">返回终端</string>
+    <string name="terminal_bubble_hide">隐藏悬浮球</string>
+    <string name="terminal_bubble_close">关闭终端</string>
+    <string name="terminal_bubble_permission_hint">需要授予悬浮窗权限，才能将终端最小化为悬浮球</string>
     <string-array name="settings_bookmark_recent_default_page_entries">
         <item>书签文件夹</item>
         <item>最近访问</item>
