@@ -1,26 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <!--
-  ~ Two-pane divider while being dragged: the center line grows to 3dp and takes the
-  ~ theme accent color, and the grabber capsule matches, so the user can clearly see
-  ~ the pane resize handle is active.
+  ~ Two-pane divider handle while being dragged: the gesture-bar pill turns fully
+  ~ opaque (colorOnSurface at full strength: solid black in light mode, solid
+  ~ white in dark mode), so the user can clearly see the handle is active.
   -->
 
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item
-        android:width="3dp"
-        android:gravity="center">
-        <shape android:shape="rectangle">
-            <solid android:color="?attr/colorPrimary" />
-        </shape>
-    </item>
-    <item
         android:width="4dp"
-        android:height="24dp"
+        android:height="32dp"
         android:gravity="center">
         <shape android:shape="rectangle">
             <corners android:radius="2dp" />
-            <solid android:color="?attr/colorPrimary" />
+            <solid android:color="?attr/colorOnSurface" />
         </shape>
     </item>
 </layer-list>

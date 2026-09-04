@@ -476,10 +476,13 @@ class FileListActivity : AppActivity() {
                         if (!drawerOpen &&
                             kotlin.math.abs(ev.rawX - dividerCenterX) <= dividerRadius
                         ) {
-                            // Press within the divider hit zone: start a pane resize.
+                            // Press within the divider hit zone: start a pane resize. The
+                            // visual handle is hidden by default; show it while resizing.
                             dividerDragActive = true
-                            findViewById<View>(R.id.divider)
-                                .setBackgroundResource(R.drawable.two_pane_divider_active)
+                            findViewById<View>(R.id.divider).apply {
+                                isVisible = true
+                                setBackgroundResource(R.drawable.two_pane_divider_active)
+                            }
                             return true
                         }
                     }
@@ -503,8 +506,10 @@ class FileListActivity : AppActivity() {
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                         if (dividerDragActive) {
                             dividerDragActive = false
-                            findViewById<View>(R.id.divider)
-                                .setBackgroundResource(R.drawable.two_pane_divider)
+                            findViewById<View>(R.id.divider).apply {
+                                setBackgroundResource(R.drawable.two_pane_divider)
+                                isVisible = false
+                            }
                             return true
                         }
                     }
@@ -682,8 +687,9 @@ class FileListActivity : AppActivity() {
      * visual divider is only 12dp wide so the panes get the full screen width, while a
      * generous symmetric hit radius keeps the resize easy). The ratio is kept in
      * [TwoPaneState.paneWidthRatio], so it survives pane switches and Activity
-     * recreation. While the drag is in progress the center line grows and takes the
-     * accent color, so the user can see the handle is grabbed.
+     * recreation. The visual handle is hidden by default so the panes look seamless;
+     * while the drag is in progress it appears and takes the accent color, so the
+     * user can see the handle is grabbed.
      */
     private fun setupDividerDrag() {
     }

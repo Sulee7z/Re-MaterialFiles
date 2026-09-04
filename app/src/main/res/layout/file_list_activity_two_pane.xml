@@ -125,13 +125,15 @@
 
                     <!-- The visible resize handle: a thin 10dp line centered in the wider
                          touch area, so grabbing to resize is easy and a slightly-off press
-                         still resizes instead of starting a cross-pane file drag. -->
+                         still resizes instead of starting a cross-pane file drag. Hidden by
+                         default; shown while a pane resize drag is in progress. -->
                     <View
                         android:id="@+id/divider"
                         android:layout_width="10dp"
                         android:layout_height="match_parent"
                         android:layout_gravity="center_horizontal"
-                        android:background="@drawable/two_pane_divider" />
+                        android:background="@drawable/two_pane_divider"
+                        android:visibility="gone" />
                 </FrameLayout>
 
                 <FrameLayout
