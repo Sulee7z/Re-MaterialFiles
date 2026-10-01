@@ -5,14 +5,17 @@
 
 package me.zhanghai.android.files.provider.root
 
+import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
+import android.os.Parcel
 import androidx.annotation.ChecksSdkIntAtLeast
 import androidx.annotation.Keep
 import androidx.annotation.RequiresApi
+import kotlin.system.exitProcess
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -23,6 +26,7 @@ import me.zhanghai.android.files.provider.remote.IRemoteFileService
 import me.zhanghai.android.files.provider.remote.RemoteFileServiceInterface
 import me.zhanghai.android.files.provider.remote.RemoteFileSystemException
 import rikka.shizuku.Shizuku
+import rikka.shizuku.ShizukuApiConstants
 import rikka.sui.Sui
 import roro.stellar.Stellar
 import kotlin.coroutines.resume
@@ -399,5 +403,31 @@ object SuiFileServiceLauncher {
 class SuiFileServiceInterface : RemoteFileServiceInterface() {
     init {
         RootFileService.main()
+    }
+
+    // Shizuku's manager sends a destroy transaction to tear the user service down (e.g.
+    // when the permission is revoked), which the generated AIDL stub doesn't know about.
+    // The service process must exit on it, otherwise it leaks after the app is gone.
+    override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+        // Let super call data.enforceInterface() exactly once.
+        if (super.onTransact(code, data, reply, flags)) {
+            return true
+        }
+        return if (code == TRANSACTION_destroy) {
+            destroy()
+            true
+        } else {
+            false
+        }
+    }
+
+    private fun destroy() {
+        exitProcess(0)
+    }
+
+    companion object {
+        @Suppress("ConstPropertyName")
+        @SuppressLint("RestrictedApi")
+        private const val TRANSACTION_destroy = ShizukuApiConstants.USER_SERVICE_TRANSACTION_destroy
     }
 }

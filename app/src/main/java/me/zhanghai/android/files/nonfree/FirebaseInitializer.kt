@@ -8,8 +8,9 @@ package me.zhanghai.android.files.nonfree
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.content.pm.Signature
-import android.os.Build
-import com.google.firebase.crashlytics.FirebaseCrashlytics
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailability
+import com.google.firebase.FirebaseApp
 import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
 import me.zhanghai.android.files.BuildConfig
@@ -17,22 +18,28 @@ import me.zhanghai.android.files.app.application
 import me.zhanghai.android.files.app.packageManager
 import me.zhanghai.android.files.util.getPackageInfoOrNull
 
-object CrashlyticsInitializer {
+object FirebaseInitializer {
     private val HEX_CHARS = "0123456789ABCDEF".toCharArray()
 
     fun initialize() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+        if (BuildConfig.DEBUG) {
             return
         }
-        if (BuildConfig.DEBUG) {
+        if (!isGooglePlayServicesAvailable()) {
+            // Prevent "Enable Google Play Services" notifiation when Google Play Services is
+            // disabled by the user.
             return
         }
         if (!verifyPackageName() || !verifySignature()) {
             // Please, don't spam.
             return
         }
-        FirebaseCrashlytics.getInstance().isCrashlyticsCollectionEnabled = true
+        FirebaseApp.initializeApp(application)
     }
+
+    private fun isGooglePlayServicesAvailable(): Boolean =
+        GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(application) ==
+            ConnectionResult.SUCCESS
 
     private fun verifyPackageName(): Boolean {
         return application.packageName == "me.zhanghai.android.files"

@@ -12,6 +12,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.ColorStateList
 import android.graphics.drawable.Drawable
+import android.os.Build
 import android.util.AttributeSet
 import androidx.annotation.AttrRes
 import androidx.annotation.ColorInt
@@ -43,6 +44,14 @@ fun Context.getDrawableCompat(@DrawableRes id: Int): Drawable =
 
 fun <T> Context.getSystemServiceCompat(serviceClass: Class<T>): T =
     ContextCompat.getSystemService(this, serviceClass)!!
+
+val Context.opPackageNameCompat: String
+    get() =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            opPackageName
+        } else {
+            applicationContext.packageName
+        }
 
 val Context.mainExecutorCompat: Executor
     get() = ContextCompat.getMainExecutor(this)

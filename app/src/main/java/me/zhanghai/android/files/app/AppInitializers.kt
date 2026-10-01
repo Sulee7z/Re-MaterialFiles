@@ -40,7 +40,7 @@ import me.zhanghai.android.files.provider.webdav.client.Client as WebDavClient
 import roro.stellar.Stellar
 
 val appInitializers = listOf(
-    ::initializeCrashlytics,
+    ::initializeFirebase,
     ::disableHiddenApiChecks,
     ::initializeWebViewDebugging,
     ::initializeCoil,
@@ -57,9 +57,9 @@ val appInitializers = listOf(
     ::initializeTerminalBubbleLifecycle
 )
 
-private fun initializeCrashlytics() {
+private fun initializeFirebase() {
 //#ifdef NONFREE
-    me.zhanghai.android.files.nonfree.CrashlyticsInitializer.initialize()
+    me.zhanghai.android.files.nonfree.FirebaseInitializer.initialize()
 //#endif
 }
 

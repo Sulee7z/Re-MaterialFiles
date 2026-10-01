@@ -15,26 +15,30 @@
 
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE"
+        tools:ignore="ForegroundServicesPolicy" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
-        tools:ignore="ScopedStorage" />
+        tools:ignore="AllFilesAccessPolicy,ScopedStorage" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="QueryAllPackagesPermission" />
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+        tools:ignore="PackageVisibilityPolicy,QueryAllPackagesPermission" />
+    <uses-permission
+        android:name="android.permission.REQUEST_INSTALL_PACKAGES"
+        tools:ignore="RequestInstallPackagesPolicy" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" />
 
-    <!-- Crashlytics and Shizuku requires API 23. -->
-    <uses-sdk tools:overrideLibrary="com.google.firebase,com.google.firebase.components,com.google.firebase.crashlytics,com.google.firebase.crashlytics.ndk,com.google.firebase.installations,com.google.firebase.sessions,rikka.shizuku.aidl,rikka.shizuku.api,rikka.shizuku.shared" />
+    <!-- Shizuku requires API 24. -->
+    <uses-sdk tools:overrideLibrary="rikka.shizuku.aidl,rikka.shizuku.api,rikka.shizuku.shared" />
 
     <!--
       ~ Samsung DeX requires explicitly setting android:resizeableActivity="true" for the app to be
@@ -450,10 +454,19 @@
 
         <service
             android:name="me.zhanghai.android.files.filejob.FileJobService"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="This is a generic file manager app supporting both local and network storages, and background file operations with large files or a large amount of files, potentially over a slow network connection, can easily exceed the six-hour limit of dataSync, so that this service has to use specialUse to maintain the user expected behavior of completing the requested file operations in all cases." />
+        </service>
 
-        <service android:name="me.zhanghai.android.files.ftpserver.FtpServerService"
-            android:foregroundServiceType="dataSync" />
+        <service
+            android:name="me.zhanghai.android.files.ftpserver.FtpServerService"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="This is a generic file manager app offering a FTP server functionality that allows serving files from local or network storages to the local network, and users expect it to keep serving in the background for days or even weeks once they start it and until they manually end it, so that this service has to use specialUse to maintain the user expected behavior of keeping serving the files until manually ended." />
+        </service>
 
         <service
             android:name="me.zhanghai.android.files.ftpserver.FtpServerTileService"
@@ -539,9 +552,10 @@
 
         <receiver android:name="me.zhanghai.android.files.ftpserver.FtpServerReceiver" />
 
-        <meta-data
-            android:name="firebase_crashlytics_collection_enabled"
-            android:value="false" />
+        <provider
+            android:name="com.google.firebase.provider.FirebaseInitProvider"
+            android:authorities="${applicationId}.firebaseinitprovider"
+            tools:node="remove" />
     </application>
 </manifest>
 
