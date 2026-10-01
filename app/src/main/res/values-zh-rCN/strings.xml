@@ -880,7 +880,7 @@
     <string name="terminal_bubble_hide">隐藏悬浮球</string>
     <string name="terminal_bubble_close">关闭终端</string>
     <string name="terminal_bubble_permission_hint">需要授予悬浮窗权限，才能将终端最小化为悬浮球</string>
-    <string name="locate_file_activity_label">定位文件所在位置</string>
+    <string name="locate_file_activity_label">定位所在位置</string>
     <string name="locate_file_error">无法定位分享文件所在位置</string>
     <string name="locate_file_not_found">未找到文件</string>
     <string-array name="settings_bookmark_recent_default_page_entries">

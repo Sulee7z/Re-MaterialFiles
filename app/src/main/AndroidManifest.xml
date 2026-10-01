@@ -332,9 +332,10 @@
         </activity>
 
         <!--
-          ~ Share-menu entry (MT Manager style "locate file location"): opens the file list
-          ~ at the shared file's parent directory and selects the file. A translucent
-          ~ trampoline that resolves the shared URI's real path and launches FileListActivity.
+          ~ System "locate file" entry (MT Manager style): opens the file list at the
+          ~ shared/opened file's parent directory and selects the file. A translucent
+          ~ trampoline that resolves the URI's real path and launches FileListActivity.
+          ~ Registered for both the share sheet (SEND) and the "open with" chooser (VIEW).
           -->
         <activity
             android:name="me.zhanghai.android.files.filelist.LocateFileActivity"
@@ -344,6 +345,11 @@
             android:theme="@style/Theme.MaterialFiles.Translucent">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
             </intent-filter>
