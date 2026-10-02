@@ -9,7 +9,7 @@
 >
 > 在 [Material Files](https://github.com/zhanghai/MaterialFiles)（Hai Zhang）与
 > [Sora-Editor 分支](https://github.com/Citrinae-Lime/MaterialFiles.Sora-Editor)（Citrinae-Lime）的基础上继续演进：
-> 融合 **MT 管理器风格的逆向工具、内置终端、Everything 搜索**，并加入 **双栏浏览、全局拖拽、回收站、文档提供器** 等大量重构与增强。
+> 融合 **逆向工具、内置终端、Everything 搜索**，并加入 **双栏浏览、全局拖拽、回收站、文档提供器** 等大量重构与增强。
 
 ---
 
