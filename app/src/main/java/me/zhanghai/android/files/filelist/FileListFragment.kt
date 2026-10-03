@@ -287,8 +287,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     private fun isFabHiddenByScroll(): Boolean =
         (activity as? FileListActivity)?.isFabHiddenByScroll == true
 
-    private var downWasOnItem = false
-
     /**
      * The shared two-pane scrollbar's helper (owned by the RIGHT pane fragment, which
      * hosts the bar on the right screen edge). Null in single-pane mode.
@@ -519,18 +517,25 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             //   inside the system back-gesture zone (WindowInsets.getSystemGestureInsets);
             // - the finger must stay within touch slop (~8dp) for 800ms. Any horizontal
             //   intent (scroll/fling/back swipe, however the ROM starts it) moves past
-            //   slop immediately and cancels, so only a truly still press fires.
+            //   slop immediately and cancels, so only a truly still press fires;
+            // - archives are read-only, so archive paths are excluded.
+            // The events MUST be observed from BOTH onInterceptTouchEvent and
+            // onTouchEvent: a blank-area DOWN is consumed by the RecyclerView itself, so
+            // MOVE/UP/CANCEL never reach the intercept callback (the pending state would
+            // survive the finger-up and a later double tap would open the dialog). The
+            // `isDown` flag keeps the DOWN (which can reach both callbacks) single-shot.
             val density = resources.displayMetrics.density
             val touchSlop = android.view.ViewConfiguration.get(binding.recyclerView.context)
                 .scaledTouchSlop.toFloat()
             var longPressPending = false
+            var isDown = false
             var downX = 0f
             var downY = 0f
             val handler = android.os.Handler(android.os.Looper.getMainLooper())
             val longPressRunnable = Runnable {
                 val pending = longPressPending
                 longPressPending = false
-                if (!pending || !isAdded) {
+                if (!pending || !isAdded || viewModel.currentPath.isArchivePath) {
                     return@Runnable
                 }
                 // Re-check with the original down point: only blank space triggers.
@@ -547,6 +552,76 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 longPressPending = false
                 handler.removeCallbacks(longPressRunnable)
             }
+            val handleTouch = { rv: androidx.recyclerview.widget.RecyclerView,
+                    e: android.view.MotionEvent ->
+                when (e.actionMasked) {
+                    android.view.MotionEvent.ACTION_DOWN -> {
+                        if (!isDown) {
+                            isDown = true
+                            // Drop any callback left from a previous tap before arming
+                            // a new one: a double tap must never fire the dialog.
+                            cancelLongPress()
+                            // A deliberate, centered gesture is required. The press
+                            // must land on BLANK space (not an item row), within the
+                            // middle third of the pane, NOT inside the system
+                            // back-gesture zone, and not inside an archive.
+                            // Checking the item hit NOW (not after the delay) means a
+                            // tap on a file can never be misread as a long-press, even
+                            // when the list refreshes mid-gesture (FTP connections
+                            // repopulate rows on every network round-trip).
+                            val loc = IntArray(2)
+                            rv.getLocationOnScreen(loc)
+                            val localX = e.rawX - loc[0]
+                            val localY = e.rawY - loc[1]
+                            val onItem = rv.findChildViewUnder(localX, localY) != null
+                            val minX = loc[0] + rv.width / 3
+                            val maxX = loc[0] + rv.width * 2 / 3
+                            val windowInsets =
+                                androidx.core.view.ViewCompat.getRootWindowInsets(rv)
+                            val gestureLeft = windowInsets?.systemGestureInsets?.left
+                                ?.takeIf { it > 0 } ?: (48 * density).toInt()
+                            val gestureRight = windowInsets?.systemGestureInsets?.right
+                                ?.takeIf { it > 0 } ?: (48 * density).toInt()
+                            val screenWidth = resources.displayMetrics.widthPixels
+                            val inBackGestureZone =
+                                e.rawX < gestureLeft || e.rawX > screenWidth - gestureRight
+                            if (onItem || inBackGestureZone ||
+                                e.rawX < minX || e.rawX > maxX ||
+                                viewModel.currentPath.isArchivePath
+                            ) {
+                                cancelLongPress()
+                            } else {
+                                longPressPending = true
+                                downX = e.rawX
+                                downY = e.rawY
+                                handler.postDelayed(longPressRunnable, 800)
+                            }
+                        }
+                    }
+                    android.view.MotionEvent.ACTION_UP -> {
+                        // The FAB hides while scrolling; a blank press restores it.
+                        if (longPressPending && isFabHiddenByScroll()) {
+                            (activity as? FileListActivity)?.showFab()
+                        }
+                        cancelLongPress()
+                        isDown = false
+                    }
+                    android.view.MotionEvent.ACTION_POINTER_DOWN,
+                    android.view.MotionEvent.ACTION_CANCEL -> {
+                        cancelLongPress()
+                        isDown = false
+                    }
+                    android.view.MotionEvent.ACTION_MOVE -> {
+                        if (longPressPending) {
+                            val dx = e.rawX - downX
+                            val dy = e.rawY - downY
+                            if (dx * dx + dy * dy > touchSlop * touchSlop) {
+                                cancelLongPress()
+                            }
+                        }
+                    }
+                }
+            }
             binding.recyclerView.addOnItemTouchListener(
                 object :
                     androidx.recyclerview.widget.RecyclerView.SimpleOnItemTouchListener() {
@@ -554,64 +629,15 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                         rv: androidx.recyclerview.widget.RecyclerView,
                         e: android.view.MotionEvent
                     ): Boolean {
-                        when (e.actionMasked) {
-                            android.view.MotionEvent.ACTION_DOWN -> {
-                                // A deliberate, centered gesture is required. The press
-                                // must land on BLANK space (not an item row), within the
-                                // middle third of the pane, and NOT inside the system
-                                // back-gesture zone (WindowInsets.getSystemGestureInsets).
-                                // Checking the item hit NOW (not after the delay) means a
-                                // tap on a file can never be misread as a long-press, even
-                                // when the list refreshes mid-gesture (FTP connections
-                                // repopulate rows on every network round-trip).
-                                val loc = IntArray(2)
-                                rv.getLocationOnScreen(loc)
-                                val localX = e.rawX - loc[0]
-                                val localY = e.rawY - loc[1]
-                                val onItem = rv.findChildViewUnder(localX, localY) != null
-                                downWasOnItem = onItem
-                                val minX = loc[0] + rv.width / 3
-                                val maxX = loc[0] + rv.width * 2 / 3
-                                val windowInsets =
-                                    androidx.core.view.ViewCompat.getRootWindowInsets(rv)
-                                val gestureLeft = windowInsets?.systemGestureInsets?.left
-                                    ?.takeIf { it > 0 } ?: (48 * density).toInt()
-                                val gestureRight = windowInsets?.systemGestureInsets?.right
-                                    ?.takeIf { it > 0 } ?: (48 * density).toInt()
-                                val screenWidth = resources.displayMetrics.widthPixels
-                                val inBackGestureZone =
-                                    e.rawX < gestureLeft || e.rawX > screenWidth - gestureRight
-                                if (onItem || inBackGestureZone ||
-                                    e.rawX < minX || e.rawX > maxX
-                                ) {
-                                    cancelLongPress()
-                                } else {
-                                    longPressPending = true
-                                    downX = e.rawX
-                                    downY = e.rawY
-                                    handler.postDelayed(longPressRunnable, 800)
-                                }
-                            }
-                            android.view.MotionEvent.ACTION_UP -> {
-                                if (downWasOnItem) cancelLongPress()
-                                if (longPressPending && isFabHiddenByScroll()) {
-                                    cancelLongPress()
-                                    (activity as? FileListActivity)?.showFab()
-                                }
-                            }
-                            android.view.MotionEvent.ACTION_MOVE -> {
-                                if (longPressPending) {
-                                    val dx = e.rawX - downX
-                                    val dy = e.rawY - downY
-                                    val maxDist = touchSlop
-                                    if (dx * dx + dy * dy > maxDist * maxDist) {
-                                        cancelLongPress()
-                                    }
-                                }
-                            }
-                            else -> cancelLongPress()
-                        }
+                        handleTouch(rv, e)
                         return false
+                    }
+
+                    override fun onTouchEvent(
+                        rv: androidx.recyclerview.widget.RecyclerView,
+                        e: android.view.MotionEvent
+                    ) {
+                        handleTouch(rv, e)
                     }
                 }
             )
