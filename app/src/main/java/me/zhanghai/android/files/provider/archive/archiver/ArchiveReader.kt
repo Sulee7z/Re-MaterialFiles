@@ -10,6 +10,7 @@ import java8.nio.channels.SeekableByteChannel
 import java8.nio.charset.StandardCharsets
 import java8.nio.file.Path
 import me.zhanghai.android.files.R
+import me.zhanghai.android.files.provider.archive.cacheIfFtpArchive
 import me.zhanghai.android.files.provider.common.DelegateForceableSeekableByteChannel
 import me.zhanghai.android.files.provider.common.DelegateInputStream
 import me.zhanghai.android.files.provider.common.DelegateNonForceableSeekableByteChannel
@@ -132,8 +133,11 @@ object ArchiveReader {
         file: Path,
         passwords: List<String>
     ): Pair<ReadArchive, ArchiveCloseable> {
+        // FTP has no efficient random access (FileByteChannel opens a new session per seek),
+        // so parse archives from a local cached copy instead of the remote file.
+        val readFile = file.cacheIfFtpArchive()
         val channel = try {
-            CacheSizeSeekableByteChannel(file.newByteChannel())
+            CacheSizeSeekableByteChannel(readFile.newByteChannel())
         } catch (e: Exception) {
             e.printStackTrace()
             null
@@ -150,7 +154,7 @@ object ArchiveReader {
                 }
             }
         }
-        val inputStream = file.newInputStream()
+        val inputStream = readFile.newInputStream()
         var successful = false
         try {
             val archive = ReadArchive(inputStream, passwords)

@@ -280,6 +280,12 @@ object Client {
                 if (showHiddenFiles) client.listFiles(path.remotePath.escapeFtpGlob())
                 else client.mlistDirCompat(path.remotePath)
                 ) ?: client.throwNegativeReplyCodeException()
+            // commons-net silently returns an empty listing when the data connection
+            // cannot be established (e.g. an FTPS server rejecting a non-resumed TLS
+            // session): surface the server error instead of showing an empty folder.
+            if (files.isEmpty() && !FTPReply.isPositiveCompletion(client.replyCode)) {
+                client.throwNegativeReplyCodeException()
+            }
             return files.mapNotNull { file ->
                 if (file.name == "." || file.name == "..") {
                     return@mapNotNull null
