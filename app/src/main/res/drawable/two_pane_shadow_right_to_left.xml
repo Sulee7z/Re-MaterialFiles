@@ -11,7 +11,8 @@
     android:shape="rectangle">
     <gradient
         android:angle="180"
-        android:startColor="#0A000000"
-        android:centerColor="#05000000"
-        android:endColor="#00000000" />
+        android:centerX="0.25"
+        android:startColor="@color/two_pane_shadow_start"
+        android:centerColor="@color/two_pane_shadow_center"
+        android:endColor="@color/two_pane_shadow_end" />
 </shape>

@@ -98,6 +98,7 @@
                     android:id="@+id/leftPane"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
+                    android:clipToPadding="false"
                     android:paddingStart="@dimen/screen_edge_margin"
                     android:paddingEnd="@dimen/screen_edge_margin_minus_8dp"
                     tools:ignore="Suspicious0dp">
@@ -108,12 +109,14 @@
                         android:layout_height="match_parent" />
 
                     <!-- Shadow cast by the ACTIVE (right) pane onto the inactive left
-                         pane's divider side; fades out to the left, MT Manager style. -->
+                         pane's divider side; hugs the divider (the negative margin
+                         cancels the pane's inner padding), fading out to the left. -->
                     <View
                         android:id="@+id/leftPaneShadow"
                         android:layout_width="@dimen/two_pane_shadow_width"
                         android:layout_height="match_parent"
                         android:layout_gravity="end"
+                        android:layout_marginEnd="@dimen/two_pane_shadow_negative_margin"
                         android:background="@drawable/two_pane_shadow_right_to_left"
                         android:visibility="gone" />
                 </FrameLayout>
@@ -140,6 +143,7 @@
                     android:id="@+id/rightPane"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
+                    android:clipToPadding="false"
                     android:paddingStart="@dimen/screen_edge_margin_minus_8dp"
                     android:paddingEnd="@dimen/screen_edge_margin"
                     tools:ignore="Suspicious0dp">
@@ -150,12 +154,14 @@
                         android:layout_height="match_parent" />
 
                     <!-- Shadow cast by the ACTIVE (left) pane onto the inactive right
-                         pane's divider side; fades out to the right, MT Manager style. -->
+                         pane's divider side; hugs the divider (the negative margin
+                         cancels the pane's inner padding), fading out to the right. -->
                     <View
                         android:id="@+id/rightPaneShadow"
                         android:layout_width="@dimen/two_pane_shadow_width"
                         android:layout_height="match_parent"
                         android:layout_gravity="start"
+                        android:layout_marginStart="@dimen/two_pane_shadow_negative_margin"
                         android:background="@drawable/two_pane_shadow_left_to_right"
                         android:visibility="gone" />
                 </FrameLayout>

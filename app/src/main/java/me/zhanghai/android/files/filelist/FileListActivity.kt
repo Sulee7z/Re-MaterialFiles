@@ -108,6 +108,21 @@ class FileListActivity : AppActivity() {
      *  is active (so the touch is consumed and no file drag/click starts in the panes). */
     private var dividerDragActive: Boolean = false
 
+    /** True once the active divider drag actually resized the panes: the handle is then
+     *  hidden immediately on release instead of lingering after a tap. */
+    private var dividerDragResized: Boolean = false
+
+    private val dividerHandleHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /** Hides the divider handle (also used as a short linger after a tap, so touching
+     *  the handle shows the user where it is even without dragging). */
+    private val dividerHandleHideRunnable = Runnable {
+        findViewById<View>(R.id.divider)?.apply {
+            setBackgroundResource(R.drawable.two_pane_divider)
+            isVisible = false
+        }
+    }
+
     /** The effective two-pane mode; false for picker intents even when the setting is on. */
     val isTwoPaneMode: Boolean
         get() = twoPaneAtCreation
@@ -459,9 +474,13 @@ class FileListActivity : AppActivity() {
         if (twoPaneAtCreation && !fabIsOpen) {
             val dividerTouchArea = findViewById<View>(R.id.dividerTouchArea)
             if (dividerTouchArea != null && dividerTouchArea.isVisible) {
-                val dividerCenterX = dividerTouchArea.x + dividerTouchArea.width / 2f
-                val dividerRadius =
-                    TWO_PANE_DIVIDER_TOUCH_RADIUS_DP * resources.displayMetrics.density
+                val dividerLocation = IntArray(2)
+                dividerTouchArea.getLocationOnScreen(dividerLocation)
+                val dividerCenterX = dividerLocation[0] + dividerTouchArea.width / 2f
+                val dividerCenterY = dividerLocation[1] + dividerTouchArea.height / 2f
+                val density = resources.displayMetrics.density
+                val dividerHalfWidth = TWO_PANE_DIVIDER_TOUCH_HALF_WIDTH_DP * density
+                val dividerHalfHeight = TWO_PANE_DIVIDER_TOUCH_HALF_HEIGHT_DP * density
                 // The navigation drawer sits over both panes when open: its touches must
                 // never reach the divider resize (a press near the divider center inside
                 // the open drawer would otherwise start a pane-width drag).
@@ -474,14 +493,19 @@ class FileListActivity : AppActivity() {
                 when (ev.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
                         if (!drawerOpen &&
-                            kotlin.math.abs(ev.rawX - dividerCenterX) <= dividerRadius
+                            kotlin.math.abs(ev.rawX - dividerCenterX) <= dividerHalfWidth &&
+                            kotlin.math.abs(ev.rawY - dividerCenterY) <= dividerHalfHeight
                         ) {
-                            // Press within the divider hit zone: start a pane resize. The
-                            // visual handle is hidden by default; show it while resizing.
+                            // Press on the resize handle's compact hit zone: show the
+                            // handle right away (so users can identify where it is) and
+                            // start a pane resize. It lingers briefly after a plain tap;
+                            // dragging turns it into the accent-colored active handle.
                             dividerDragActive = true
+                            dividerDragResized = false
+                            dividerHandleHandler.removeCallbacks(dividerHandleHideRunnable)
                             findViewById<View>(R.id.divider).apply {
                                 isVisible = true
-                                setBackgroundResource(R.drawable.two_pane_divider_active)
+                                setBackgroundResource(R.drawable.two_pane_divider)
                             }
                             return true
                         }
@@ -497,6 +521,12 @@ class FileListActivity : AppActivity() {
                                     ratio - TwoPaneState.paneWidthRatio
                                 ) >= 0.001f
                             ) {
+                                if (!dividerDragResized) {
+                                    dividerDragResized = true
+                                    findViewById<View>(R.id.divider).setBackgroundResource(
+                                        R.drawable.two_pane_divider_active
+                                    )
+                                }
                                 TwoPaneState.paneWidthRatio = ratio
                                 updateResponsivePanes()
                             }
@@ -506,10 +536,13 @@ class FileListActivity : AppActivity() {
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                         if (dividerDragActive) {
                             dividerDragActive = false
-                            findViewById<View>(R.id.divider).apply {
-                                setBackgroundResource(R.drawable.two_pane_divider)
-                                isVisible = false
-                            }
+                            // After a real resize hide immediately; after a plain tap
+                            // keep the handle visible for a moment so the user can see
+                            // where it is.
+                            val hideDelayMillis = if (dividerDragResized) 0L else 600L
+                            dividerHandleHandler.postDelayed(
+                                dividerHandleHideRunnable, hideDelayMillis
+                            )
                             return true
                         }
                     }
@@ -558,13 +591,17 @@ class FileListActivity : AppActivity() {
                     drawerLayout.isDrawerOpen(navigationView)
                 // The divider is the pane-resize drag handle: grabbing it must not flip
                 // the active pane either (a resize is not "operating" either pane). The
-                // hit zone extends symmetrically around the divider center, not the raw
-                // (narrow) divider view width, so a slightly-off press still resizes.
-                val dividerCenterX = dividerTouchArea.x + dividerTouchArea.width / 2f
-                val dividerRadius =
-                    TWO_PANE_DIVIDER_TOUCH_RADIUS_DP * resources.displayMetrics.density
+                // hit zone is the same compact rectangle around the handle as above.
+                val dividerLocation = IntArray(2)
+                dividerTouchArea.getLocationOnScreen(dividerLocation)
+                val dividerCenterX = dividerLocation[0] + dividerTouchArea.width / 2f
+                val dividerCenterY = dividerLocation[1] + dividerTouchArea.height / 2f
+                val density = resources.displayMetrics.density
                 val dividerTouched =
-                    kotlin.math.abs(ev.rawX - dividerCenterX) <= dividerRadius
+                    kotlin.math.abs(ev.rawX - dividerCenterX) <=
+                        TWO_PANE_DIVIDER_TOUCH_HALF_WIDTH_DP * density &&
+                    kotlin.math.abs(ev.rawY - dividerCenterY) <=
+                        TWO_PANE_DIVIDER_TOUCH_HALF_HEIGHT_DP * density
                 // Touches in the system back-gesture zones (screen edges) must not flip
                 // the active pane or evaluate the FAB: a horizontal swipe there is the
                 // system back gesture and has to pass through untouched.
@@ -682,14 +719,14 @@ class FileListActivity : AppActivity() {
     }
 
     /**
-     * The pane divider drag gesture lives in [dispatchTouchEvent]: a press within
-     * [TWO_PANE_DIVIDER_TOUCH_RADIUS_DP] of the divider center starts a resize (the
-     * visual divider is only 12dp wide so the panes get the full screen width, while a
-     * generous symmetric hit radius keeps the resize easy). The ratio is kept in
+     * The pane divider drag gesture lives in [dispatchTouchEvent]: a press on the resize
+     * handle's compact hit zone ([TWO_PANE_DIVIDER_TOUCH_HALF_WIDTH_DP] x
+     * [TWO_PANE_DIVIDER_TOUCH_HALF_HEIGHT_DP] around its center) shows the handle and
+     * starts a resize; touches elsewhere near the divider scroll/click normally. The
+     * handle lingers briefly after a plain tap so users can see where it is, and takes
+     * the accent color while actually resizing. The ratio is kept in
      * [TwoPaneState.paneWidthRatio], so it survives pane switches and Activity
-     * recreation. The visual handle is hidden by default so the panes look seamless;
-     * while the drag is in progress it appears and takes the accent color, so the
-     * user can see the handle is grabbed.
+     * recreation.
      */
     private fun setupDividerDrag() {
     }
@@ -1294,13 +1331,16 @@ class FileListActivity : AppActivity() {
         }
     }
 
-    /** Pushes the current divider screen position to both pane adapters, so a drag
-     *  starting on the divider touch area never triggers a cross-pane file move. */
+    /** Pushes the current divider handle screen position to both pane adapters, so a
+     *  drag starting on the handle never triggers a cross-pane file move. */
     private fun updatePaneAdapterDividerCenter() {
         val dividerTouchArea = findViewById<View>(R.id.dividerTouchArea)
-        val centerX = dividerTouchArea.x + dividerTouchArea.width / 2f
+        val location = IntArray(2)
+        dividerTouchArea.getLocationOnScreen(location)
+        val centerX = location[0] + dividerTouchArea.width / 2f
+        val centerY = location[1] + dividerTouchArea.height / 2f
         for (secondary in listOf(false, true)) {
-            findFileListFragment(secondary)?.setDividerScreenCenterX(centerX)
+            findFileListFragment(secondary)?.setDividerScreenCenter(centerX, centerY)
         }
     }
     /**
@@ -1410,10 +1450,11 @@ class FileListActivity : AppActivity() {
         /** The system back-gesture zone width at each screen edge (approximate). */
         private const val SYSTEM_GESTURE_ZONE_DP = 24
 
-        /** Extra hit radius (from the divider center) for the pane resize drag. The
-         *  visual divider is narrow (12dp) so the panes get the full width; this radius
-         *  keeps an easy grab without a hard width limit between the panes. */
-        private const val TWO_PANE_DIVIDER_TOUCH_RADIUS_DP = 24
+        /** Compact resize hit zone around the divider handle's center: half-width on X
+         *  (the visible pill is only 4dp wide) and half-height on Y (so touches far above
+         *  or below the pill scroll normally instead of resizing). */
+        const val TWO_PANE_DIVIDER_TOUCH_HALF_WIDTH_DP = 8
+        const val TWO_PANE_DIVIDER_TOUCH_HALF_HEIGHT_DP = 24
 
         /** True for picker intents (open file / directory / create), which must run in
          *  single-pane mode: two-pane mode hides the per-pane toolbar that carries the

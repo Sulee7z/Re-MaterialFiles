@@ -62,4 +62,13 @@
     <!-- Extra-key text: light grey normally, accent-teal when pressed/activated. -->
     <color name="terminal_key_text_normal">#B3FFFFFF</color>
     <color name="terminal_key_text_activated">#80DEEA</color>
+
+    <!-- Two-pane rows: thin inset lines separating the compact rows. -->
+    <color name="two_pane_row_divider">#14000000</color>
+    <!-- The inactive pane's divider-facing edge gradient: a short, steep shadow hugging
+         the divider (a light glow in dark/AMOLED mode, visible on pure black). Strong
+         enough to be clearly visible despite the narrow 4dp band. -->
+    <color name="two_pane_shadow_start">#30000000</color>
+    <color name="two_pane_shadow_center">#14000000</color>
+    <color name="two_pane_shadow_end">#00000000</color>
 </resources>

@@ -31,4 +31,11 @@
     <color name="file_icon_red">#F28B82</color>
     <color name="file_icon_deep_red">#E8877F</color>
     <color name="file_icon_yellow">#F8CF5C</color>
+
+    <!-- Two-pane AMOLED: row separators become faint white (visible on pure black),
+         and the inactive pane's edge shadow becomes a short, steep light glow. -->
+    <color name="two_pane_row_divider">#1AFFFFFF</color>
+    <color name="two_pane_shadow_start">#73FFFFFF</color>
+    <color name="two_pane_shadow_center">#33FFFFFF</color>
+    <color name="two_pane_shadow_end">#00000000</color>
 </resources>

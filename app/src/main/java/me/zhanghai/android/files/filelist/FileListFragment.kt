@@ -261,11 +261,12 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     internal lateinit var adapter: FileListAdapter
 
-    /** Forwards the divider's screen position to this pane's adapter (two-pane mode),
-     *  so a drag starting on the divider resize handle never triggers a cross-pane move. */
-    fun setDividerScreenCenterX(centerX: Float) {
+    /** Forwards the divider handle's screen position to this pane's adapter (two-pane
+     *  mode), so a drag starting on the resize handle never triggers a cross-pane move. */
+    fun setDividerScreenCenter(centerX: Float, centerY: Float) {
         if (::adapter.isInitialized) {
             adapter.dividerScreenCenterX = centerX
+            adapter.dividerScreenCenterY = centerY
         }
     }
 
@@ -500,6 +501,11 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             binding.breadcrumbLayout.isVisible = false
             adapter.hideMenuButtons = true
             adapter.isTwoPaneMode = true
+            // Thin inset hairlines between the compact rows, so the side-by-side lists
+            // have clear row separation (regular lists keep Material's whitespace only).
+            binding.recyclerView.addItemDecoration(
+                TwoPaneRowDividerItemDecoration(requireContext())
+            )
             // Icons (folders and files alike) are rendered at the right end of each row
             // (see FileListAdapter.onCreateViewHolder), MT Manager style.
             // Compactness (small font/icons/dense rows) is driven ENTIRELY by the
