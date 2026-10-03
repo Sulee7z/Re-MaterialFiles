@@ -1,4 +1,4 @@
-﻿name: MaterialFiles with Sora-Editor
+﻿name: Re-MaterialFiles
 
 on:
   workflow_dispatch:
