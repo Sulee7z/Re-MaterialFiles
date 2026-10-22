@@ -5,7 +5,6 @@
 
 package me.zhanghai.android.files.fileproperties.image
 
-import android.graphics.BitmapFactory
 import android.os.AsyncTask
 import android.util.Size
 import androidx.exifinterface.media.ExifInterface
@@ -19,6 +18,7 @@ import me.zhanghai.android.files.util.Failure
 import me.zhanghai.android.files.util.Loading
 import me.zhanghai.android.files.util.Stateful
 import me.zhanghai.android.files.util.Success
+import me.zhanghai.android.files.util.decodeImageBounds
 import me.zhanghai.android.files.util.valueCompat
 import okio.buffer
 import okio.source
@@ -62,11 +62,9 @@ class ImageInfoLiveData(
                         ImageInfo(dimensions, null)
                     }
                     else -> {
-                        val bitmapOptions = BitmapFactory.Options()
-                            .apply { inJustDecodeBounds = true }
-                        path.newInputStream()
-                            .buffered()
-                            .use { BitmapFactory.decodeStream(it, null, bitmapOptions) }
+                        // Decode the bounds from a file or a file descriptor when possible, so
+                        // that the encoded image data never travels through a Java byte array.
+                        val bitmapOptions = path.decodeImageBounds()
                         val width = bitmapOptions.outWidth
                         val height = bitmapOptions.outHeight
                         val dimensions = if (width != -1 && height != -1) {

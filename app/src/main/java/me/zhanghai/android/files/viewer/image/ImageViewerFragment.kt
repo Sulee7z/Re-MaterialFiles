@@ -33,6 +33,7 @@ import me.zhanghai.android.files.util.ParcelableListParceler
 import me.zhanghai.android.files.util.ParcelableState
 import me.zhanghai.android.files.util.args
 import me.zhanghai.android.files.util.createSendImageIntent
+import me.zhanghai.android.files.util.ensureTypefaces
 import me.zhanghai.android.files.util.extraPath
 import me.zhanghai.android.files.util.extraPathList
 import me.zhanghai.android.files.util.finish
@@ -200,6 +201,10 @@ class ImageViewerFragment : Fragment(), ConfirmDeleteDialogFragment.Listener {
         } else {
             null
         }
+        // The title and the subtitle are drawn by the toolbar's own text views, which cannot be
+        // accessed directly, so we walk the toolbar's hierarchy instead. A text view with a null
+        // typeface crashes the render thread with a native SIGSEGV while drawing the text.
+        binding.toolbar.ensureTypefaces()
     }
 
     private fun share() {

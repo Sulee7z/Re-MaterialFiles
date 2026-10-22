@@ -47,6 +47,7 @@ import me.zhanghai.android.files.ui.AnimatedListAdapter
 import me.zhanghai.android.files.ui.CheckableForegroundLinearLayout
 import me.zhanghai.android.files.ui.CheckableItemBackground
 import me.zhanghai.android.files.util.activity
+import me.zhanghai.android.files.util.ensureTypeface
 import me.zhanghai.android.files.util.getColorByAttr
 import me.zhanghai.android.files.util.isMaterial3Theme
 import me.zhanghai.android.files.util.layoutInflater
@@ -909,9 +910,11 @@ MotionEvent.ACTION_DOWN -> {
                 layoutParams = layoutParams.apply { width = size; height = size }
             }
         }
+        holder.nameText.ensureTypeface()
         holder.nameText.text = file.name
         // Folders show the date/size description just like files, regardless of the
         // long-name wrap setting (a wrapped name simply fills the row above).
+        holder.descriptionText?.ensureTypeface()
         holder.descriptionText?.text = run {
             val context = holder.descriptionText!!.context
             val lastModificationTime = attributes.lastModifiedTime().toInstant()

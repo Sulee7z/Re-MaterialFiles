@@ -5,7 +5,6 @@
 
 package me.zhanghai.android.files.viewer.image
 
-import android.graphics.BitmapFactory
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.view.isVisible
@@ -30,9 +29,10 @@ import me.zhanghai.android.files.file.asMimeType
 import me.zhanghai.android.files.file.asMimeTypeOrNull
 import me.zhanghai.android.files.file.fileProviderUri
 import me.zhanghai.android.files.provider.common.AndroidFileTypeDetector
-import me.zhanghai.android.files.provider.common.newInputStream
 import me.zhanghai.android.files.provider.common.readAttributes
 import me.zhanghai.android.files.ui.SimpleAdapter
+import me.zhanghai.android.files.util.decodeImageBounds
+import me.zhanghai.android.files.util.ensureTypeface
 import me.zhanghai.android.files.util.fadeInUnsafe
 import me.zhanghai.android.files.util.fadeOutUnsafe
 import me.zhanghai.android.files.util.layoutInflater
@@ -87,8 +87,9 @@ class ImageViewerAdapter(
     private fun Path.loadImageInfo(): ImageInfo {
         val attributes = readAttributes(BasicFileAttributes::class.java)
         val mimeType = AndroidFileTypeDetector.getMimeType(this, attributes).asMimeType()
-        val bitmapOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        newInputStream().use { BitmapFactory.decodeStream(it, null, bitmapOptions) }
+        // Decode the bounds from a file or a file descriptor when possible, so that the encoded
+        // image data never travels through a Java byte array.
+        val bitmapOptions = decodeImageBounds()
         return ImageInfo(
             attributes, bitmapOptions.outWidth, bitmapOptions.outHeight,
             bitmapOptions.outMimeType?.asMimeTypeOrNull() ?: mimeType
@@ -184,6 +185,7 @@ class ImageViewerAdapter(
 
     private fun showError(binding: ImageViewerItemBinding, throwable: Throwable) {
         binding.progress.fadeOutUnsafe()
+        binding.errorText.ensureTypeface()
         binding.errorText.text = throwable.toString()
         binding.errorText.fadeInUnsafe(true)
         binding.image.isVisible = false

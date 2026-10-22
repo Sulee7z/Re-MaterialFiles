@@ -50,6 +50,7 @@ import me.zhanghai.android.files.util.setDataSource
 import me.zhanghai.android.files.util.valueCompat
 import okio.buffer
 import okio.source
+import okio.Path.Companion.toOkioPath
 import java.io.Closeable
 import java.io.IOException
 import me.zhanghai.android.files.util.setDataSource as appSetDataSource
@@ -114,9 +115,8 @@ class PathAttributesFetcher(
                 }
             }
             mimeType.isImage || mimeType == MimeType.GENERIC -> {
-                val inputStream = path.newInputStream()
                 return SourceResult(
-                    ImageSource(inputStream.source().buffer(), options.context),
+                    path.toImageSource(options.context),
                     if (mimeType != MimeType.GENERIC) mimeType.value else null, path.dataSource
                 )
             }
@@ -154,6 +154,25 @@ class PathAttributesFetcher(
             }
         }
         return null
+    }
+
+    /**
+     * Returns an [ImageSource] for this path.
+     *
+     * Local files are backed by the file itself, so that the encoded image data can be decoded
+     * from a file descriptor, without the encoded bytes ever travelling through the Java heap.
+     * Paths without a local file are backed by a stream, and their image data is copied to a
+     * temporary file in the cache directory by [ImageDecoderFileDecoderFactory], so that it can
+     * be decoded from a file descriptor as well.
+     */
+    private fun Path.toImageSource(context: Context): ImageSource {
+        if (isLinuxPath) {
+            val file = toFile()
+            if (file.canRead()) {
+                return ImageSource(file.toOkioPath())
+            }
+        }
+        return ImageSource(newInputStream().source().buffer(), context)
     }
 
     class Factory(private val context: Context) : Fetcher.Factory<Pair<Path, BasicFileAttributes>> {

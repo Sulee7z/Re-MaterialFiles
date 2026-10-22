@@ -7,6 +7,8 @@ package me.zhanghai.android.files.util
 
 import android.graphics.Typeface
 import android.view.KeyEvent
+import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.TextView
 import androidx.core.widget.doAfterTextChanged
@@ -16,10 +18,37 @@ fun TextView.hideTextInputLayoutErrorOnTextChange(vararg textInputLayouts: TextI
     doAfterTextChanged { textInputLayouts.forEach { it.error = null } }
 }
 
+/**
+ * Makes sure that this text view has a non-null typeface.
+ *
+ * Drawing a text whose [android.graphics.Paint] has a null typeface crashes the render thread
+ * with a native SIGSEGV inside Skia (sktext::GlyphRunBuilder::blobToGlyphRunList), so we always
+ * fall back to [Typeface.DEFAULT].
+ */
+fun TextView.ensureTypeface() {
+    if (typeface == null) {
+        setTypeface(Typeface.DEFAULT)
+    }
+}
+
+/**
+ * Makes sure that this view and all its descendants have a non-null typeface.
+ *
+ * @see ensureTypeface
+ */
+fun View.ensureTypefaces() {
+    when (this) {
+        is TextView -> ensureTypeface()
+        is ViewGroup -> for (index in 0 until childCount) {
+            getChildAt(index).ensureTypefaces()
+        }
+    }
+}
+
 var TextView.isBold: Boolean
-    get() = typeface.isBold
+    get() = (typeface ?: Typeface.DEFAULT).isBold
     set(value) {
-        val typeface = typeface
+        val typeface = typeface ?: Typeface.DEFAULT
         if (typeface.isBold == value) {
             return
         }
@@ -37,9 +66,9 @@ var TextView.isBold: Boolean
     }
 
 var TextView.isItalic: Boolean
-    get() = typeface.isItalic
+    get() = (typeface ?: Typeface.DEFAULT).isItalic
     set(value) {
-        val typeface = typeface
+        val typeface = typeface ?: Typeface.DEFAULT
         if (typeface.isItalic == value) {
             return
         }
