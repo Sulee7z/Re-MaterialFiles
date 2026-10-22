@@ -15,6 +15,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import jcifs.context.SingletonContext
 import me.zhanghai.android.files.BuildConfig
 import me.zhanghai.android.files.coil.initializeCoil
+import me.zhanghai.android.files.filejob.TrashManager
 import me.zhanghai.android.files.filejob.fileJobNotificationTemplate
 import me.zhanghai.android.files.ftpserver.ftpServerServiceNotificationTemplate
 import me.zhanghai.android.files.hiddenapi.HiddenApi
@@ -118,6 +119,9 @@ private fun initializeLiveDataObjects() {
 StorageVolumeListLiveData.value
 Settings.FILE_LIST_DEFAULT_DIRECTORY.value
 SearchIndexDb.initialize(application)
+// The trash list is seeded from the persisted index; do that on the main thread too,
+// instead of whenever a background file job happens to touch it first.
+TrashManager.trashLiveData
 }
 
 private fun initializeStellarListeners() {

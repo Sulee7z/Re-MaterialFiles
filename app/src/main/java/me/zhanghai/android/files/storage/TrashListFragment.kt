@@ -56,6 +56,9 @@ class TrashListFragment : Fragment(), TrashListAdapter.Listener {
 
         setHasOptionsMenu(true)
         TrashManager.trashLiveData.observe(viewLifecycleOwner) { onTrashListChanged(it) }
+        // The persisted trash index is the source of truth: re-read it whenever the
+        // screen is opened, so that files trashed in a previous session show up.
+        TrashManager.refresh()
 
         // Enforce the auto-delete setting when the user opens the Trash screen.
         FileJobService.trashCleanup(requireContext())

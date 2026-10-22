@@ -51,8 +51,19 @@ object TrashManager {
     private val prefs: SharedPreferences
         get() = defaultSharedPreferences
 
-    private val _trashLiveData = MutableLiveData<List<TrashEntry>>(emptyList())
+    // The persisted index is the source of truth, so the LiveData is seeded from it
+    // instead of an empty list. Otherwise the Trash screen shows an empty list after a
+    // process restart, until the first mutation republishes the whole list.
+    private val _trashLiveData = MutableLiveData<List<TrashEntry>>(getAllInternal())
     val trashLiveData: LiveData<List<TrashEntry>> = _trashLiveData
+
+    /**
+     * Re-reads the persisted trash index and republishes it, so that observers always
+     * see the entries that are currently stored.
+     */
+    fun refresh() {
+        _trashLiveData.postValue(getAllInternal())
+    }
 
     fun add(originalPath: Path, trashPath: Path) {
         val entries = getAllInternal().toMutableList()
@@ -101,11 +112,24 @@ object TrashManager {
     private const val DAY_MILLIS = 24 * 60 * 60 * 1000L
 
     private fun getAllInternal(): List<TrashEntry> {
-        val encoded = prefs.getString(KEY_TRASH_LIST, null) ?: return emptyList()
-        return try {
-            val array = JSONArray(encoded)
-            buildList {
-                for (index in 0..<array.length()) {
+        val encoded = try {
+            prefs.getString(KEY_TRASH_LIST, null)
+        } catch (e: Exception) {
+            // The preferences might not be available yet (e.g. during a very early
+            // startup); treat that as "no entries" and let a later refresh() publish
+            // the real list.
+            e.printStackTrace()
+            null
+        } ?: return emptyList()
+        val array = try {
+            JSONArray(encoded)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return emptyList()
+        }
+        return buildList {
+            for (index in 0..<array.length()) {
+                try {
                     val json = array.getJSONObject(index)
                     add(
                         TrashEntry(
@@ -114,11 +138,12 @@ object TrashManager {
                             deletedAtMillis = json.getLong("deletedAtMillis")
                         )
                     )
+                } catch (e: Exception) {
+                    // Skip a malformed entry instead of dropping the whole index: the
+                    // remaining entries are still valid and must survive.
+                    e.printStackTrace()
                 }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            emptyList()
         }
     }
 
