@@ -6,24 +6,20 @@
 package me.zhanghai.android.files.provider.archive
 
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.security.MessageDigest
-import java8.nio.file.Files
-import java8.nio.file.LinkOption
 import java8.nio.file.Path
 import java8.nio.file.Paths
-import java8.nio.file.StandardCopyOption
 import java8.nio.file.attribute.BasicFileAttributes
 import me.zhanghai.android.files.app.application
-import me.zhanghai.android.files.provider.common.copyTo
-import me.zhanghai.android.files.provider.common.moveTo
+import me.zhanghai.android.files.provider.common.newInputStream
+import me.zhanghai.android.files.provider.common.readAttributes
 import me.zhanghai.android.files.provider.ftp.isFtpPath
 
 private val archiveCacheLock = Any()
 
 private const val CACHE_DIRECTORY_NAME = "archives"
-
-private const val CACHE_MAX_AGE_MILLIS = 7L * 24 * 60 * 60 * 1000
 
 /**
  * FTP random access reconnects a whole session per seek (see FileByteChannel), so parsing an
@@ -40,12 +36,9 @@ fun Path.cacheIfFtpArchive(): Path {
     if (!isFtpPath) {
         return this
     }
-    val attributes = try {
-        Files.readAttributes(this, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
-    } catch (e: Exception) {
-        // Cannot stat the archive (e.g. transient network error): let the direct path try.
-        return this
-    }
+    // Use the same backport attribute call as ForeignCopyMove, following links as the copy does.
+    // A stat/download failure must reach the caller, not fall back to random access over FTP.
+    val attributes = readAttributes(BasicFileAttributes::class.java)
     val cacheDirectory = File(application.cacheDir, CACHE_DIRECTORY_NAME)
     val cacheKey = cacheKey(this)
     val cacheName =
@@ -53,32 +46,50 @@ fun Path.cacheIfFtpArchive(): Path {
     val cacheFile = File(cacheDirectory, cacheName)
     synchronized(archiveCacheLock) {
         if (cacheFile.exists()) {
+            cacheFile.checkDownload(attributes.size())
             return Paths.get(cacheFile.path)
         }
-        cacheDirectory.mkdirs()
+        if (!cacheDirectory.isDirectory && !cacheDirectory.mkdirs()) {
+            throw IOException("Cannot create archive cache directory: $cacheDirectory")
+        }
         val tempFile = File.createTempFile("archive-", ".tmp", cacheDirectory)
-        val tempPath = Paths.get(tempFile.path)
         try {
-            // createTempFile() already created the empty file; replace it with the copy.
-            copyTo(tempPath, StandardCopyOption.REPLACE_EXISTING)
+            // Keep remote reads provider-aware, but write/publish locally so the cache stays
+            // app-owned even when the file provider's root strategy is ALWAYS.
+            newInputStream().use { inputStream ->
+                FileOutputStream(tempFile).use { outputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+            }
+            tempFile.checkDownload(attributes.size())
+            if (!tempFile.renameTo(cacheFile)) {
+                throw IOException("Cannot publish archive cache file: $tempFile -> $cacheFile")
+            }
+            cacheFile.checkDownload(attributes.size())
         } catch (t: Throwable) {
             try {
-                Files.deleteIfExists(tempPath)
+                if (!tempFile.delete() && tempFile.exists()) {
+                    throw IOException("Cannot delete archive cache temporary file: $tempFile")
+                }
             } catch (e: Exception) {
-                e.printStackTrace()
+                t.addSuppressed(e)
             }
             throw t
         }
-        tempPath.moveTo(Paths.get(cacheFile.path), StandardCopyOption.REPLACE_EXISTING)
-        // Drop older versions of this archive and best-effort prune long-unused entries.
-        val cachePrefix = "$cacheKey-"
-        val maxAgeCutoff = System.currentTimeMillis() - CACHE_MAX_AGE_MILLIS
-        cacheDirectory.listFiles { file ->
-            (file.name.startsWith(cachePrefix) && file.name != cacheName) ||
-                file.lastModified() < maxAgeCutoff
-        }?.forEach { it.delete() }
+        // Do not prune on open: returned paths and older versions can still be used by other
+        // readers, including in another process. Leave eviction to app-cache management, which
+        // also avoids pruning active temporary downloads. Only our failed download is removed.
     }
     return Paths.get(cacheFile.path)
+}
+
+@Throws(IOException::class)
+private fun File.checkDownload(expectedSize: Long) {
+    if (!isFile || length() != expectedSize) {
+        throw IOException(
+            "Missing or incomplete archive cache file: $this (expected $expectedSize bytes)"
+        )
+    }
 }
 
 private fun cacheKey(path: Path): String =

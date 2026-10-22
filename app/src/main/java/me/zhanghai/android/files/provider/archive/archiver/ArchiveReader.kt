@@ -139,6 +139,11 @@ object ArchiveReader {
         val channel = try {
             CacheSizeSeekableByteChannel(readFile.newByteChannel())
         } catch (e: Exception) {
+            if (readFile != file) {
+                // A cached FTP archive must support local random access. Report cache failures
+                // directly instead of retrying the same missing/broken cache as a stream.
+                throw e
+            }
             e.printStackTrace()
             null
         }
