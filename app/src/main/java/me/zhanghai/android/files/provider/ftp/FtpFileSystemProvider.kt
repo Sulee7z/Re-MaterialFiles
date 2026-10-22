@@ -99,8 +99,13 @@ object FtpFileSystemProvider : FileSystemProvider(), PathObservableProvider, Sea
     override fun getPath(uri: URI): Path {
         uri.requireSameScheme()
         val authority = uri.ftpAuthority
-        val path = uri.decodedPathByteString
+        val decodedPath = uri.decodedPathByteString
             ?: throw IllegalArgumentException("URI must have a path")
+        // A URI without a path (e.g. "ftp://host") decodes to an empty path instead of
+        // null, which would be sent to the server as an empty argument and reported as an
+        // empty path in errors. Use the root directory instead, so that the path is never
+        // empty.
+        val path = decodedPath.takeIf { it.isNotEmpty() } ?: "/".toByteString()
         return getOrNewFileSystem(authority).getPath(path)
     }
 

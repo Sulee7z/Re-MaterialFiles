@@ -22,8 +22,6 @@ import me.zhanghai.android.files.provider.common.DelegateOutputStream
 import me.zhanghai.android.files.provider.common.LocalWatchService
 import me.zhanghai.android.files.provider.common.NotifyEntryModifiedOutputStream
 import me.zhanghai.android.files.provider.common.NotifyEntryModifiedSeekableByteChannel
-import me.zhanghai.android.files.settings.Settings
-import me.zhanghai.android.files.util.valueCompat
 import org.apache.commons.net.ftp.FTPClient
 import org.apache.commons.net.ftp.FTPClientConfig
 import org.apache.commons.net.ftp.FTPCmd
@@ -99,7 +97,13 @@ object Client {
             configure(FTPClientConfig(""))
             // This has to be set before connect().
             controlEncoding = authority.encoding
-            listHiddenFiles = true
+            // Never enable listHiddenFiles: commons-net would then send "LIST -a <path>".
+            // The argument of LIST is a mask list (space separated masks, "-" prefixed
+            // options) and not a literal path, so a directory whose name contains a space
+            // or a "-" is split into masks and not found by the server, which answers 550.
+            // Some servers (FileZilla Server) also reject "-a" as an unsupported LIST
+            // parameter. Directories are listed with MLSD instead, whose argument is a
+            // literal path.
             connect(authority.host, authority.port)
             try {
                 if (!FTPReply.isPositiveCompletion(replyCode)) {
@@ -271,15 +275,13 @@ object Client {
             return childPaths
         }
         useClient(path.authority) { client ->
-            // Whether MLSD returns dot files is entirely up to the server; the app's
-            // "show hidden files" setting is only honored by the traditional LIST path
-            // (listHiddenFiles appends "-a"). So when the user enables the setting, fall
-            // back to LIST to make sure dot files actually appear.
-            val showHiddenFiles = Settings.FILE_LIST_SHOW_HIDDEN_FILES.valueCompat
-            val files = (
-                if (showHiddenFiles) client.listFiles(path.remotePath.escapeFtpGlob())
-                else client.mlistDirCompat(path.remotePath)
-                ) ?: client.throwNegativeReplyCodeException()
+            // Always list with MLSD: its argument is a literal path, while the argument of
+            // LIST is a mask list (space separated masks, "-" prefixed options), so a
+            // directory whose name contains a space or a "-" is not found by the server,
+            // which answers 550. Whether dot files are listed is up to the server; the app
+            // itself hides them according to the "show hidden files" setting.
+            val files = client.mlistDirCompat(path.remotePath)
+                ?: client.throwNegativeReplyCodeException()
             // commons-net silently returns an empty listing when the data connection
             // cannot be established (e.g. an FTPS server rejecting a non-resumed TLS
             // session): surface the server error instead of showing an empty folder.
