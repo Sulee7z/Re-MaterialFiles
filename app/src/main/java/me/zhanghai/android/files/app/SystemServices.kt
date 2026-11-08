@@ -16,10 +16,10 @@ import android.os.storage.StorageManager
 import android.view.inputmethod.InputMethodManager
 import androidx.core.app.NotificationManagerCompat
 import androidx.preference.PreferenceManager
+import java.util.concurrent.Executor
 import me.zhanghai.android.files.compat.getSystemServiceCompat
 import me.zhanghai.android.files.compat.mainExecutorCompat
 import okhttp3.OkHttpClient
-import java.util.concurrent.Executor
 
 val appClassLoader = AppProvider::class.java.classLoader
 

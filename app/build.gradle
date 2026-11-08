@@ -16,7 +16,7 @@ buildscript {
     }
     dependencies {
         classpath 'com.google.gms:google-services:4.5.0'
-        classpath 'com.google.firebase:firebase-crashlytics-gradle:3.0.7'
+        classpath 'com.google.firebase:firebase-crashlytics-gradle:3.0.8'
     }
 }
 apply plugin: 'com.google.gms.google-services'
@@ -37,10 +37,11 @@ def versionPatch = versionProperties.getProperty('versionPatch', '0').toInteger(
 def appVersionName = "${versionMajor}.${versionMinor}.${versionPatch}"
 
 android {
-    namespace = 'me.zhanghai.android.files'
-    buildToolsVersion = '36.0.0'
-    compileSdk 37
-    ndkVersion = '28.1.13356709'
+    namespace 'me.zhanghai.android.files'
+    buildToolsVersion = '37.0.0'
+    compileSdk = 37
+    compileSdkMinor = 2
+    ndkVersion '28.1.13356709'
     defaultConfig {
         applicationId 'me.zhanghai.android.files'
         minSdk 26
@@ -125,7 +126,10 @@ repositories {
     }
 }
 dependencies {
-    // We need https://github.com/bitfireAT/dav4jvm/commit/c1bc14348831bcdb00f3a6eec4859b81c7dc3728
+    // We need
+    // https://github.com/bitfireAT/dav4jvm/commit/c1bc14348831bcdb00f3a6eec4859b81c7dc3728 , but we
+    // don't want
+    // https://github.com/bitfireAT/dav4jvm/commit/37c2bde745b166383efe108568506c8905723d91 .
     implementation('com.github.bitfireAT:dav4jvm:02fe1a95e6b86e323bec3784d7d2fe2d4081dde6') {
         exclude group: 'org.ogce', module: 'xpp3'
     }
@@ -179,11 +183,11 @@ dependencies {
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$kotlinx_coroutines_version"
 
     implementation 'androidx.activity:activity-ktx:1.13.0'
-    implementation 'androidx.appcompat:appcompat:1.7.1'
-    implementation 'androidx.core:core-ktx:1.18.0'
+    implementation 'androidx.appcompat:appcompat:1.8.0'
+    implementation 'androidx.core:core-ktx:1.19.1'
     implementation 'androidx.drawerlayout:drawerlayout:1.2.0'
     implementation 'androidx.exifinterface:exifinterface:1.4.2'
-    implementation 'androidx.fragment:fragment-ktx:1.8.9'
+    implementation 'androidx.fragment:fragment-ktx:1.9.1'
     def androidx_lifecycle_version = '2.11.0'
     implementation "androidx.lifecycle:lifecycle-common-java8:$androidx_lifecycle_version"
     implementation "androidx.lifecycle:lifecycle-livedata-ktx:$androidx_lifecycle_version"
@@ -200,22 +204,23 @@ dependencies {
     implementation 'com.drakeet.drawer:drawer:1.0.3'
     implementation 'com.h6ah4i.android.materialshadowninepatch:materialshadowninepatch:1.0.0'
     implementation 'com.h6ah4i.android.widget.advrecyclerview:advrecyclerview:1.0.0'
-    // SMBJ 0.12.0 breaks anonymous authentication: https://github.com/hierynomus/smbj/issues/792
-    //noinspection GradleDependency
+    // SMBJ 0.12.0 broke anonymous authentication: https://github.com/hierynomus/smbj/issues/792 ,
+    // and it's still an issue in 0.14.0 according to
+    // https://github.com/hierynomus/smbj/issues/792#issuecomment-2548018378 .
+    //noinspection NewerVersionAvailable
     implementation ('com.hierynomus:smbj:0.11.5') {
         // org.bouncycastle:bcprov-jdk15on uses bytecode version unsupported by Jetifier, so use
         // org.bouncycastle:bcprov-jdk15to18 instead.
         exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
     }
-    def bouncy_castle_version = '1.85.1'
-    def bouncy_castle_pkix_version = '1.85'
+    def bouncy_castle_version = '1.86'
     implementation "org.bouncycastle:bcprov-jdk15to18:$bouncy_castle_version"
     implementation "org.bouncycastle:bcutil-jdk15to18:$bouncy_castle_version"
     implementation ('com.hierynomus:sshj:0.40.0') {
         exclude group: 'org.bouncycastle', module: 'bcprov-jdk18on'
         exclude group: 'org.bouncycastle', module: 'bcpkix-jdk18on'
     }
-    implementation "org.bouncycastle:bcpkix-jdk15to18:$bouncy_castle_pkix_version"
+    implementation "org.bouncycastle:bcpkix-jdk15to18:$bouncy_castle_version"
     implementation 'com.leinardi.android:speed-dial:3.3.0'
     implementation ('com.rapid7.client:dcerpc:0.12.13') {
         // SMBJ-RPC depends on the JRE flavor of Guava which targets Java 8.
@@ -224,14 +229,14 @@ dependencies {
         exclude group: 'com.hierynomus', module: 'smbj'
         exclude group: 'org.bouncycastle', module: 'bcprov-jdk18on'
     }
-    implementation 'com.google.guava:guava:33.6.0-android'
+    implementation 'com.google.guava:guava:33.7.1-android'
     // Guava conflicts with com.google.guava:listenablefuture:1.0 pulled in by AndroidX Core
     implementation 'com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava'
     implementation 'com.takisoft.preferencex:preferencex:1.1.0'
     implementation 'commons-net:commons-net:3.13.0'
     // LicensesDialog 2.2.0 pulls in androidx.webkit and uses setForceDark() instead of correctly
     // setting colors.
-    //noinspection GradleDependency
+    //noinspection NewerVersionAvailable
     implementation 'de.psdev.licensesdialog:licensesdialog:2.1.0'
     // dev.chrisbanesinsetter:insetter:0.6.0 makes inset unstable when entering immersive.
     implementation 'dev.chrisbanes:insetter-ktx:0.3.1'
@@ -265,7 +270,7 @@ dependencies {
     implementation 'org.slf4j:slf4j-android:1.7.36'
 
 //#ifdef NONFREE
-    implementation platform('com.google.firebase:firebase-bom:34.16.0')
+    implementation platform('com.google.firebase:firebase-bom:34.19.0')
     implementation 'com.google.firebase:firebase-analytics'
     implementation 'com.google.firebase:firebase-crashlytics-ndk'
 //#endif

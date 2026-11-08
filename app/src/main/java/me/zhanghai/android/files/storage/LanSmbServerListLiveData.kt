@@ -6,14 +6,20 @@
 package me.zhanghai.android.files.storage
 
 import android.os.AsyncTask
+import java.net.Inet4Address
+import java.net.InetAddress
+import java.net.UnknownHostException
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.Future
 import jcifs.context.SingletonContext
 import jcifs.smb.SmbException
 import jcifs.smb.SmbFile
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.channels.consumeEach
-import kotlinx.coroutines.channels.produce
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import me.zhanghai.android.files.util.CloseableLiveData
@@ -22,14 +28,6 @@ import me.zhanghai.android.files.util.Loading
 import me.zhanghai.android.files.util.Stateful
 import me.zhanghai.android.files.util.Success
 import me.zhanghai.android.files.util.getLocalAddress
-import me.zhanghai.android.files.util.toLinkedSet
-import me.zhanghai.android.files.util.valueCompat
-import java.net.Inet4Address
-import java.net.InetAddress
-import java.net.UnknownHostException
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import java.util.concurrent.Future
 
 class LanSmbServerListLiveData : CloseableLiveData<Stateful<List<LanSmbServer>>>() {
     private var loadFuture: Future<*>? = null
@@ -40,36 +38,29 @@ class LanSmbServerListLiveData : CloseableLiveData<Stateful<List<LanSmbServer>>>
 
     fun loadValue() {
         cancelLoadingValue()
-        value = Loading(value?.value)
+        val oldServers = value?.value
+        value = Loading(oldServers)
         loadFuture = (AsyncTask.THREAD_POOL_EXECUTOR as ExecutorService).submit {
+            // toMutableSet() preserves insertion order and thus UI stability.
+            val servers = oldServers?.toMutableSet() ?: mutableSetOf()
             try {
-                val newServerSet = mutableSetOf<LanSmbServer>()
+                val newServers = mutableSetOf<LanSmbServer>()
                 Executors.newFixedThreadPool(60).asCoroutineDispatcher().use { dispatcher ->
-                    runBlocking(dispatcher) {
-                        val serverChannel = produce {
-                            launch {
-                                getServersByComputerBrowserService().consumeEach { send(it) }
+                    runBlocking {
+                        merge(getServersByComputerBrowserService(), getServersByScanningSubnet())
+                            .flowOn(dispatcher)
+                            .collect {
+                                servers += it
+                                postValue(Loading(servers.toList()))
+                                newServers += it
                             }
-                            launch {
-                                getServersByScanningSubnet().consumeEach { send(it) }
-                            }
-                        }
-                        serverChannel.consumeEach {
-                            // Use linked set to preserve UI stability.
-                            val serverSet = valueCompat.value?.toLinkedSet() ?: linkedSetOf()
-                            serverSet += it
-                            val servers = serverSet.toList()
-                            postValue(Loading(servers))
-                            newServerSet += it
-                        }
                     }
                 }
-                // Remove old servers that aren't found any more.
-                val newServers = (valueCompat.value ?: emptyList()).toMutableList()
-                newServers.retainAll(newServerSet)
-                postValue(Success(newServers))
+                // Remove old servers that aren't found anymore.
+                servers.retainAll(newServers)
+                postValue(Success(servers.toList()))
             } catch (e: Exception) {
-                postValue(Failure(valueCompat.value, e))
+                postValue(Failure(servers.toList(), e))
             }
         }
     }
@@ -80,9 +71,8 @@ class LanSmbServerListLiveData : CloseableLiveData<Stateful<List<LanSmbServer>>>
     // it doesn't have a good standalone Java implementation and Samba doesn't support it.
     // https://social.technet.microsoft.com/Forums/en-US/bd0af6aa-51ec-477a-8c81-888a4e60bd94/master-browser-service-broken-after-creator-update#2c6b9e65-da8a-4e41-a2cb-db086443ef87
     // https://docs.microsoft.com/en-nz/windows-server/storage/file-server/troubleshoot/smbv1-not-installed-by-default-in-windows
-    private fun CoroutineScope.getServersByComputerBrowserService(
-    ): ReceiveChannel<LanSmbServer> =
-        produce {
+    private fun getServersByComputerBrowserService(): Flow<LanSmbServer> =
+        channelFlow {
             launch {
                 @Suppress("DEPRECATION")
                 val lan = SmbFile("smb://")
@@ -119,8 +109,8 @@ class LanSmbServerListLiveData : CloseableLiveData<Stateful<List<LanSmbServer>>>
             }
         }
 
-    private fun CoroutineScope.getServersByScanningSubnet(): ReceiveChannel<LanSmbServer> =
-        produce {
+    private fun getServersByScanningSubnet(): Flow<LanSmbServer> =
+        channelFlow {
             launch {
                 val localAddress = InetAddress::class.getLocalAddress()
                 if (localAddress !is Inet4Address || !localAddress.isSiteLocalAddress) {

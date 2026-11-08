@@ -1,3 +1,5 @@
+import org.gradle.internal.extensibility.DefaultExtraPropertiesExtension
+
 /*
  * Copyright (c) 2018 Hai Zhang <dreaming.in.code.zh@gmail.com>
  * All Rights Reserved.
@@ -7,14 +9,14 @@
 
 buildscript {
     ext {
-        kotlin_version = '2.4.10'
+        kotlin_version = '2.4.20'
     }
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:9.1.0'
+        classpath 'com.android.tools.build:gradle:9.4.1'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
 
         // NOTE: Do not place your application dependencies here; they belong
@@ -32,7 +34,7 @@ allprojects {
 // Project-level Kotlin version, shared with subprojects (explicit lookup avoids the
 // deprecated implicit parent-project property resolution).
 ext {
-    kotlin_version = '2.4.10'
+    kotlin_version = '2.4.20'
 }
 
 tasks.register('clean', Delete) {
