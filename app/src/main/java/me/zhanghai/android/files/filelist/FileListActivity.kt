@@ -711,7 +711,7 @@ class FileListActivity : AppActivity() {
                     ) {
                         // Note: the trashed files stay in the recycle bin unless the user
                         // chose Undo or explicitly empties the bin from the Trash screen.
-                        me.zhanghai.android.files.filejob.DeleteUndoManager.clear()
+                        me.zhanghai.android.files.filejob.DeleteUndoManager.clear(undo)
                     }
                 })
                 .show()

@@ -12,6 +12,7 @@ import android.provider.Settings
 import android.view.KeyEvent
 import android.view.View
 import androidx.activity.OnBackPressedCallback
+import androidx.core.view.WindowCompat
 import androidx.fragment.app.commit
 import me.zhanghai.android.files.app.AppActivity
 import me.zhanghai.android.files.util.args
@@ -25,6 +26,9 @@ class TerminalActivity : AppActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // TerminalFragment owns system-bar and IME insets. adjustResize alone does not
+        // move the extra keys when edge-to-edge is enforced on recent Android versions.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         // The previous instance may have finished with the bubble shown; a fresh instance
         // (rotation, or relaunching from the bubble) should not re-show it.
         minimizeToBubble = false

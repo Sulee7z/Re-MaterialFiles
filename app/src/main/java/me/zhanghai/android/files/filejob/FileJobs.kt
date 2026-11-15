@@ -992,65 +992,57 @@ private fun FileJob.deleteRecursively(
 }
 
 /**
- * Moves files/directories into the app's private trash directory instead of deleting
- * them, then records each (originalPath, trashPath) pair so the UI can offer an Undo
- * action. The trash directory lives in the app's own cache/external-files area, so it
- * works for any file system this app can write to (including root-accessed paths).
+ * Renames local files to unique hidden siblings on the same filesystem. The index is
+ * persisted before the rename, so process death cannot leave an unrecorded trash file.
  */
 class TrashFileJob(private val paths: List<Path>) : FileJob() {
     @Throws(IOException::class)
     override fun run() {
         val trashedEntries = mutableListOf<Pair<Path, Path>>()
         val permanentlyDeleted = mutableListOf<Path>()
-        for (path in paths) {
-            if (!path.isLinuxPath) {
-                // Remote filesystems (FTP, SMB, SFTP, WebDAV) cannot reliably rename
-                // files in place for a recycle bin (and the recycled name would be
-                // invisible to the server's user anyway). Permanently delete them.
-                permanentlyDeleted.add(path)
-                continue
-            }
-            val target = getUniqueTrashTarget(path)
-            try {
-                path.moveTo(target, LinkOption.NOFOLLOW_LINKS, StandardCopyOption.REPLACE_EXISTING)
-            } catch (e: InterruptedIOException) {
-                throw e
-            } catch (e: IOException) {
-                e.printStackTrace()
-                continue
-            }
-            trashedEntries += path to target
-            TrashManager.add(path, target)
-            throwIfInterrupted()
-        }
-        if (permanentlyDeleted.isNotEmpty()) {
-            val scanInfo = scan(
-                permanentlyDeleted, R.plurals.file_job_delete_scan_notification_title_format
-            )
-            val transferInfo = TransferInfo(scanInfo, null)
-            val actionAllInfo = ActionAllInfo()
-            for (path in permanentlyDeleted) {
-                deleteRecursively(path, transferInfo, actionAllInfo)
+        try {
+            for (path in paths) {
+                if (!path.isLinuxPath) {
+                    // Remote providers keep their existing permanent-delete behavior.
+                    permanentlyDeleted.add(path)
+                    continue
+                }
+                synchronized(TrashManager.operationLock) {
+                    throwIfInterrupted()
+                    val target = getUniqueTrashTarget(path)
+                    TrashManager.add(path, target)
+                    // Keep the record on failure: the provider may have already renamed it.
+                    path.moveTo(target, LinkOption.NOFOLLOW_LINKS)
+                    trashedEntries += path to target
+                }
                 throwIfInterrupted()
             }
+            if (permanentlyDeleted.isNotEmpty()) {
+                val scanInfo = scan(
+                    permanentlyDeleted, R.plurals.file_job_delete_scan_notification_title_format
+                )
+                val transferInfo = TransferInfo(scanInfo, null)
+                val actionAllInfo = ActionAllInfo()
+                for (path in permanentlyDeleted) {
+                    deleteRecursively(path, transferInfo, actionAllInfo)
+                    throwIfInterrupted()
+                }
+            }
+        } finally {
+            // A later failure or cancellation must not hide undo for earlier successes.
+            DeleteUndoManager.record(trashedEntries)
         }
-        DeleteUndoManager.record(trashedEntries)
     }
 
     @Throws(IOException::class)
     private fun getUniqueTrashTarget(source: Path): Path {
-        val baseName = source.fileName
-        var target = source.resolveSibling(".trash_$baseName")
-        if (!target.exists(LinkOption.NOFOLLOW_LINKS)) {
-            return target
-        }
-        var index = 2
         while (true) {
-            target = source.resolveSibling(".trash_$baseName ($index)")
+            // Fixed length avoids NAME_MAX failures for long original filenames; UUIDs
+            // prevent stale undo requests from referring to a later deletion of that name.
+            val target = source.resolveSibling(".trash_${java.util.UUID.randomUUID()}")
             if (!target.exists(LinkOption.NOFOLLOW_LINKS)) {
                 return target
             }
-            ++index
         }
     }
 }
@@ -1061,14 +1053,12 @@ class RestoreFromTrashJob(private val entries: List<Pair<Path, Path>>) : FileJob
     @Throws(IOException::class)
     override fun run() {
         for ((original, trash) in entries) {
-            try {
-                trash.moveTo(original, LinkOption.NOFOLLOW_LINKS,
-                    StandardCopyOption.REPLACE_EXISTING)
+            synchronized(TrashManager.operationLock) {
+                throwIfInterrupted()
+                // Ignore stale snackbar/UI requests, not a new file at the same path.
+                if (!TrashManager.contains(trash, original)) return@synchronized
+                trash.moveTo(original, LinkOption.NOFOLLOW_LINKS)
                 TrashManager.remove(trash)
-            } catch (e: InterruptedIOException) {
-                throw e
-            } catch (e: IOException) {
-                e.printStackTrace()
             }
             throwIfInterrupted()
         }
@@ -1079,12 +1069,13 @@ class RestoreFromTrashJob(private val entries: List<Pair<Path, Path>>) : FileJob
 class PermanentDeleteJob(private val paths: List<Path>) : FileJob() {
     @Throws(IOException::class)
     override fun run() {
-        val scanInfo = scan(paths, R.plurals.file_job_delete_scan_notification_title_format)
-        val transferInfo = TransferInfo(scanInfo, null)
-        val actionAllInfo = ActionAllInfo()
         for (path in paths) {
-            deleteRecursively(path, transferInfo, actionAllInfo)
-            TrashManager.remove(path)
+            synchronized(TrashManager.operationLock) {
+                throwIfInterrupted()
+                if (!TrashManager.contains(path)) return@synchronized
+                deleteTrashTree(path)
+                TrashManager.remove(path)
+            }
             throwIfInterrupted()
         }
     }
@@ -1107,18 +1098,16 @@ class TrashCleanupJob : FileJob() {
         if (expired.isEmpty()) {
             return
         }
-        // Keep only files that still exist; delete the rest silently (they may have been
-        // deleted manually or the entry is stale).
-        val toDelete = expired.mapNotNull { entry ->
-            val trashPath = entry.toTrashPath()
-            trashPath
-        }
-        if (toDelete.isEmpty()) {
-            return
-        }
-        for (path in toDelete) {
+        for (entry in expired) {
             try {
-                deleteIgnoringErrors(path)
+                synchronized(TrashManager.operationLock) {
+                    throwIfInterrupted()
+                    val path = entry.toTrashPath()
+                    if (TrashManager.contains(path, entry.toOriginalPath())) {
+                        deleteTrashTree(path)
+                        TrashManager.remove(path)
+                    }
+                }
             } catch (e: InterruptedIOException) {
                 throw e
             } catch (e: IOException) {
@@ -1127,56 +1116,6 @@ class TrashCleanupJob : FileJob() {
                 e.printStackTrace()
             }
             throwIfInterrupted()
-        }
-        // Remove all expired entries (including already-gone ones) from the record.
-        TrashManager.removeEntries(expired)
-    }
-
-    /**
-     * Deletes [path] recursively, ignoring failures per-file and treating a missing path as
-     * success. Unlike [deleteRecursively] this does not prompt the user: cleanup is best
-     * effort and must not interrupt the user with error dialogs.
-     */
-    @Throws(IOException::class)
-    private fun deleteIgnoringErrors(path: Path) {
-        if (!path.exists(LinkOption.NOFOLLOW_LINKS)) {
-            return
-        }
-        try {
-            Files.walkFileTree(path, object : SimpleFileVisitor<Path>() {
-                @Throws(IOException::class)
-                override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
-                    try {
-                        file.delete()
-                    } catch (e: IOException) {
-                        e.printStackTrace()
-                    }
-                    throwIfInterrupted()
-                    return FileVisitResult.CONTINUE
-                }
-
-                @Throws(IOException::class)
-                override fun visitFileFailed(file: Path, exception: IOException): FileVisitResult {
-                    exception.printStackTrace()
-                    return FileVisitResult.CONTINUE
-                }
-
-                @Throws(IOException::class)
-                override fun postVisitDirectory(
-                    directory: Path,
-                    exception: IOException?
-                ): FileVisitResult {
-                    try {
-                        directory.delete()
-                    } catch (e: IOException) {
-                        e.printStackTrace()
-                    }
-                    throwIfInterrupted()
-                    return FileVisitResult.CONTINUE
-                }
-            })
-        } catch (e: IOException) {
-            e.printStackTrace()
         }
     }
 }
@@ -1188,60 +1127,20 @@ class TrashCleanupJob : FileJob() {
 class ClearTrashJob : FileJob() {
     @Throws(IOException::class)
     override fun run() {
-        val entries = TrashManager.getAll()
+        val entries = TrashManager.getAllForOperation()
         if (entries.isEmpty()) {
             return
         }
         for (entry in entries) {
-            val trashPath = entry.toTrashPath()
-            // Best-effort deletion exactly like TrashCleanupJob: no user dialogs, missing
-            // files are fine, failures are logged.
-            deleteIgnoringErrors(trashPath)
+            synchronized(TrashManager.operationLock) {
+                throwIfInterrupted()
+                val path = entry.toTrashPath()
+                if (TrashManager.contains(path, entry.toOriginalPath())) {
+                    deleteTrashTree(path)
+                    TrashManager.remove(path)
+                }
+            }
             throwIfInterrupted()
-        }
-        TrashManager.clear()
-    }
-
-    @Throws(IOException::class)
-    private fun deleteIgnoringErrors(path: Path) {
-        if (!path.exists(LinkOption.NOFOLLOW_LINKS)) {
-            return
-        }
-        try {
-            Files.walkFileTree(path, object : SimpleFileVisitor<Path>() {
-                @Throws(IOException::class)
-                override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
-                    try {
-                        file.delete()
-                    } catch (e: IOException) {
-                        e.printStackTrace()
-                    }
-                    throwIfInterrupted()
-                    return FileVisitResult.CONTINUE
-                }
-
-                @Throws(IOException::class)
-                override fun visitFileFailed(file: Path, exception: IOException): FileVisitResult {
-                    exception.printStackTrace()
-                    return FileVisitResult.CONTINUE
-                }
-
-                @Throws(IOException::class)
-                override fun postVisitDirectory(
-                    directory: Path,
-                    exception: IOException?
-                ): FileVisitResult {
-                    try {
-                        directory.delete()
-                    } catch (e: IOException) {
-                        e.printStackTrace()
-                    }
-                    throwIfInterrupted()
-                    return FileVisitResult.CONTINUE
-                }
-            })
-        } catch (e: IOException) {
-            e.printStackTrace()
         }
     }
 }

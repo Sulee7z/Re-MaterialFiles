@@ -7,4 +7,5 @@ package me.zhanghai.android.files.app
 
 object NotificationIds {
     const val FTP_SERVER = 1
+    const val FILE_JOBS = 2
 }

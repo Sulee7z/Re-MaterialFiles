@@ -171,30 +171,33 @@ class FileByteChannel(
         try {
             outputStream.close()
         } finally {
-            client.completePendingCommand()
+            if (!client.completePendingCommand()) {
+                client.throwNegativeReplyCodeException()
+            }
         }
     }
 
     @Throws(IOException::class)
     override fun onClose() {
         synchronized(clientLock) {
-            if (needsTruncate && openOutputStream == null) {
-                // Opened for truncation but nothing was written: truncate explicitly.
-                ensureFreshConnectionForNewTransfer()
-                InputStream::class.nullInputStream().use {
-                    if (!client.storeFile(path, it)) {
-                        client.throwNegativeReplyCodeException()
+            try {
+                if (needsTruncate && openOutputStream == null) {
+                    // Opened for truncation but nothing was written: truncate explicitly.
+                    ensureFreshConnectionForNewTransfer()
+                    InputStream::class.nullInputStream().use {
+                        if (!client.storeFile(path, it)) {
+                            client.throwNegativeReplyCodeException()
+                        }
                     }
                 }
+                closeOpenInputStream()
+                closeOpenOutputStream()
+            } finally {
+                releaseClient(client)
             }
-            closeOpenInputStream()
-            closeOpenOutputStream()
-            releaseClient(client)
         }
     }
 }
-
-
 
 
 

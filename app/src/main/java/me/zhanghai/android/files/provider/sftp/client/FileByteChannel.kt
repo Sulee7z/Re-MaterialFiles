@@ -9,6 +9,7 @@ import me.zhanghai.android.files.provider.common.AbstractFileByteChannel
 import me.zhanghai.android.files.provider.common.EMPTY
 import me.zhanghai.android.files.provider.common.asFuture
 import me.zhanghai.android.files.provider.common.map
+import me.zhanghai.android.files.provider.common.writeByteBuffer
 import me.zhanghai.android.files.util.closeSafe
 import me.zhanghai.android.files.util.findCauseByClass
 import net.schmizz.sshj.sftp.PacketType
@@ -47,11 +48,11 @@ class FileByteChannel(
                         }
                         else -> throw SFTPException("Unexpected packet type ${response.type}")
                     }
-                    if (dataLength == 0) {
-                        return@map ByteBuffer::class.EMPTY
+                    if (dataLength <= 0 || dataLength > size ||
+                        dataLength > response.array().size - response.rpos()) {
+                        throw SFTPException("Invalid SFTP data length: $dataLength (requested $size)")
                     }
-                    val length = dataLength.coerceAtMost(size)
-                    ByteBuffer.wrap(response.array(), response.rpos(), length)
+                    ByteBuffer.wrap(response.array(), response.rpos(), dataLength)
                 }, { e ->
                     ((e as? ExecutionException)?.cause as? IOException)?.maybeToSpecificException()
                         ?.let { ExecutionException(it) } ?: e
@@ -60,16 +61,15 @@ class FileByteChannel(
 
     @Throws(IOException::class)
     override fun onWrite(position: Long, source: ByteBuffer) {
-        // I don't think we are using native or read-only ByteBuffer, so just call array() here.
         try {
-            file.write(
-                position, source.array(), source.arrayOffset() + source.position(),
-                source.remaining()
-            )
+            var offset = position
+            writeByteBuffer(source) { bytes, start, length ->
+                file.write(offset, bytes, start, length)
+                offset += length
+            }
         } catch (e: IOException) {
             throw e.maybeToSpecificException()
         }
-        source.position(source.limit())
     }
 
     @Throws(IOException::class)

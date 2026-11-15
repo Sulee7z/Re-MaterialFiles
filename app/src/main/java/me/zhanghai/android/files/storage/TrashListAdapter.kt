@@ -18,9 +18,7 @@ class TrashListAdapter(
     private val listener: Listener
 ) : SimpleAdapter<TrashManager.TrashEntry, TrashListAdapter.ViewHolder>() {
     override val hasStableIds: Boolean
-        get() = true
-
-    override fun getItemId(position: Int): Long = getItem(position).hashCode().toLong()
+        get() = false
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder =
         ViewHolder(TrashItemBinding.inflate(parent.context.layoutInflater, parent, false))

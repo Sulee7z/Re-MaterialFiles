@@ -33,6 +33,7 @@ import me.zhanghai.android.files.provider.common.WalkFileTreeSearchable
 import me.zhanghai.android.files.provider.common.decodedPathByteString
 import me.zhanghai.android.files.provider.common.decodedQueryByteString
 import me.zhanghai.android.files.provider.common.isSameFile
+import me.zhanghai.android.files.provider.common.readBytesBounded
 import me.zhanghai.android.files.provider.common.toAccessModes
 import me.zhanghai.android.files.provider.common.toByteString
 import me.zhanghai.android.files.provider.common.toOpenOptions
@@ -138,19 +139,14 @@ private const val MAX_READ_SIZE = 64 * 1024 * 1024
         // work at all. Uses the existing newInputStream path so passwords/encrypted
         // archives keep working. Entries larger than MAX_READ_SIZE are rejected instead
         // of being buffered into memory (a big .so inside an APK would OOM the process).
-        val bytes = file.fileSystem.newInputStream(file).use {
-            val buffer = it.readBytes()
-            if (buffer.size > MAX_READ_SIZE) {
-                throw java.io.IOException("File too large to open in archive: ${file}")
-            }
-            buffer
-        }
+        val bytes = file.fileSystem.newInputStream(file).use { it.readBytesBounded(MAX_READ_SIZE) }
         return object : SeekableByteChannel {
             private var position = 0L
             private var closed = false
 
             override fun read(dst: java.nio.ByteBuffer): Int {
                 checkOpen()
+                if (!dst.hasRemaining()) return 0
                 if (position >= bytes.size) {
                     return -1
                 }
@@ -171,6 +167,7 @@ private const val MAX_READ_SIZE = 64 * 1024 * 1024
 
             override fun position(newPosition: Long): SeekableByteChannel {
                 checkOpen()
+                require(newPosition >= 0) { "Negative position: $newPosition" }
                 position = newPosition
                 return this
             }

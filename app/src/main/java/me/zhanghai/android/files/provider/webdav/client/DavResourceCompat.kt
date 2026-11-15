@@ -32,7 +32,14 @@ import java.util.concurrent.CountDownLatch
 
 @Throws(DavException::class, IOException::class)
 fun DavResource.getCompat(accept: String, headers: Headers?): InputStream =
-    get(accept, headers).also { checkStatus(it) }.body!!.byteStream()
+    get(accept, headers).also { response ->
+        try {
+            checkStatus(response)
+        } catch (t: Throwable) {
+            response.close()
+            throw t
+        }
+    }.body!!.byteStream()
 
 @Throws(DavException::class, IOException::class)
 fun DavResource.getRangeCompat(
@@ -47,14 +54,24 @@ fun DavResource.getRangeCompat(
             request.headers(headers)
         }
         request.header("Accept", accept)
+        request.header("Accept-Encoding", "identity")
         val lastIndex = offset + size - 1
         request.header("Range", "bytes=$offset-$lastIndex")
         httpClient.newCall(request.build()).execute()
     }
         .also {
-            checkStatus(it)
-            if (it.code != HttpURLConnection.HTTP_PARTIAL) {
-                throw HttpException(it)
+            try {
+                checkStatus(it)
+                if (it.code != HttpURLConnection.HTTP_PARTIAL) {
+                    throw HttpException(it)
+                }
+                val rangeStart = it.header("Content-Range")?.substringBefore('-')
+                if (rangeStart != "bytes $offset") {
+                    throw IOException("Unexpected WebDAV Content-Range: ${it.header("Content-Range")}")
+                }
+            } catch (t: Throwable) {
+                it.close()
+                throw t
             }
         }
         .body!!.byteStream()

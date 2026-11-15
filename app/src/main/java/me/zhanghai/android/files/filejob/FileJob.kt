@@ -11,7 +11,8 @@ import java.io.InterruptedIOException
 import java.util.Random
 
 abstract class FileJob {
-    val id = Random().nextInt()
+    // Keep IDs positive and outside the range reserved for service notifications.
+    val id = Random().nextInt(Int.MAX_VALUE - 2) + 3
 
     internal lateinit var service: FileJobService
         private set

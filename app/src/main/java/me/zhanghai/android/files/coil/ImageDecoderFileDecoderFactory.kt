@@ -22,12 +22,7 @@ import java.io.IOException
  * A [Decoder.Factory] that decodes images with [android.graphics.ImageDecoder], reading the
  * encoded image from a file (or a file descriptor) instead of from a Java [java.io.InputStream].
  *
- * Coil's own [coil.decode.BitmapFactoryDecoder] decodes images with
- * [android.graphics.BitmapFactory.decodeStream], which hands a Java byte array to the native
- * decoder, which reads the encoded image from that array through ART's JNI array copy
- * (art::JNI<false>::GetByteArrayRegion). A concurrent moving garbage collection can relocate
- * that array while the native decoder is still reading it, which crashes the process with a
- * native SIGSEGV.
+ * Avoid passing custom remote/archive InputStreams to BitmapFactory's native stream adapter.
  *
  * [android.graphics.ImageDecoder] reads the encoded image from a file descriptor, so the encoded
  * bytes never travel through the Java heap.
@@ -51,12 +46,8 @@ class ImageDecoderFileDecoderFactory : Decoder.Factory {
         // it from a file descriptor. If the image data is not backed by a file yet, this copies
         // it to a temporary file in the cache directory, which is deleted when the image source
         // is closed.
-        try {
-            source.file()
-        } catch (e: IOException) {
-            e.printStackTrace()
-            return null
-        }
+        // A failed download must be reported, not retried via the stream decoder.
+        source.file()
         return ImageDecoderDecoder(source, options)
     }
 

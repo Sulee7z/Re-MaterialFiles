@@ -17,6 +17,10 @@ import android.view.inputmethod.InputMethodManager
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.getSystemService
 import androidx.core.view.isVisible
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsAnimationCompat
+import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import com.termux.terminal.TerminalSession
 import me.zhanghai.android.files.R
@@ -68,6 +72,7 @@ class TerminalFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        setupWindowInsets(view)
 
         val activity = requireActivity() as AppCompatActivity
         activity.setSupportActionBar(binding.toolbar)
@@ -130,6 +135,64 @@ class TerminalFragment : Fragment() {
         setupRepeatingKey(binding.leftKey, "\u001b[D")
         setupRepeatingKey(binding.rightKey, "\u001b[C")
         setupCollapseKey()
+    }
+
+    private fun setupWindowInsets(view: View) {
+        val initialLeft = view.paddingLeft
+        val initialTop = view.paddingTop
+        val initialRight = view.paddingRight
+        val initialBottom = view.paddingBottom
+        var imeAnimating = false
+        var latestInsets: WindowInsetsCompat? = null
+
+        fun applyInsets(insets: WindowInsetsCompat) {
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            // IME already includes the bottom navigation area; adding both would leave a gap.
+            view.updatePadding(
+                left = initialLeft + bars.left,
+                top = initialTop + bars.top,
+                right = initialRight + bars.right,
+                bottom = initialBottom + maxOf(bars.bottom, ime.bottom)
+            )
+        }
+
+        ViewCompat.setOnApplyWindowInsetsListener(view) { _, insets ->
+            latestInsets = insets
+            if (!imeAnimating) {
+                applyInsets(insets)
+            }
+            // This root owns all padding; the app bar must not apply the status bar again.
+            WindowInsetsCompat.CONSUMED
+        }
+        ViewCompat.setWindowInsetsAnimationCallback(
+            view,
+            object : WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_STOP) {
+                override fun onPrepare(animation: WindowInsetsAnimationCompat) {
+                    if (animation.typeMask and WindowInsetsCompat.Type.ime() != 0) {
+                        imeAnimating = true
+                    }
+                }
+
+                override fun onProgress(
+                    insets: WindowInsetsCompat,
+                    runningAnimations: MutableList<WindowInsetsAnimationCompat>
+                ): WindowInsetsCompat {
+                    applyInsets(insets)
+                    return insets
+                }
+
+                override fun onEnd(animation: WindowInsetsAnimationCompat) {
+                    if (animation.typeMask and WindowInsetsCompat.Type.ime() != 0) {
+                        imeAnimating = false
+                        latestInsets?.let { applyInsets(it) }
+                    }
+                }
+            }
+        )
+        ViewCompat.requestApplyInsets(view)
     }
 
     /** Modifier keys: tap toggles (temporary, applies to the next key), long press locks. */
@@ -238,6 +301,8 @@ class TerminalFragment : Fragment() {
 
     override fun onDestroyView() {
         handler.removeCallbacksAndMessages(null)
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root, null)
+        ViewCompat.setWindowInsetsAnimationCallback(binding.root, null)
         super.onDestroyView()
     }
 

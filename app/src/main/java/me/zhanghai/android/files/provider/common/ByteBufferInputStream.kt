@@ -19,6 +19,9 @@ class ByteBufferInputStream(buffer: ByteBuffer) : InputStream() {
 
     override fun read(bytes: ByteArray, offset: Int, length: Int): Int {
         val buffer = ensureOpen()
+        if (offset < 0 || length < 0 || offset > bytes.size - length) {
+            throw IndexOutOfBoundsException("size=${bytes.size}, off=$offset, len=$length")
+        }
         if (length == 0) {
             return 0
         }
@@ -36,7 +39,7 @@ class ByteBufferInputStream(buffer: ByteBuffer) : InputStream() {
         if (length <= 0) {
             return 0
         }
-        val skippedLength = length.toInt().coerceAtMost(buffer.remaining())
+        val skippedLength = length.coerceAtMost(buffer.remaining().toLong()).toInt()
         buffer.position(buffer.position() + skippedLength)
         return skippedLength.toLong()
     }

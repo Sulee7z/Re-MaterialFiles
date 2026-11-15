@@ -96,11 +96,14 @@ class ReadArchive : Closeable {
             }
             Archive.readSetSkipCallback<Any?>(archive) { _, _, request ->
                 try {
-                    channel.position(channel.position() + request)
+                    val position = channel.position()
+                    val skipped = request.coerceAtLeast(0)
+                        .coerceAtMost((channel.size() - position).coerceAtLeast(0))
+                    channel.position(position + skipped)
+                    skipped
                 } catch (e: IOException) {
                     throw e.toArchiveException("SeekableByteChannel.position")
                 }
-                request
             }
             Archive.readSetSeekCallback<Any?>(archive) { _, _, offset, whence ->
                 val newPosition: Long
@@ -200,7 +203,7 @@ class ReadArchive : Closeable {
         stringUtf8 ?: string?.toString(charset)
 
     @Throws(ArchiveException::class)
-    fun newDataInputStream(): InputStream = DataInputStream()
+    fun newDataInputStream(): InputStream = ArchiveDataInputStream { Archive.readData(archive, it) }
 
     @Throws(ArchiveException::class)
     override fun close() {
@@ -227,27 +230,4 @@ class ReadArchive : Closeable {
             get() = type == PosixFileType.SYMBOLIC_LINK
     }
 
-    private inner class DataInputStream : InputStream() {
-        private val oneByteBuffer = ByteBuffer.allocateDirect(1)
-
-        @Throws(IOException::class)
-        override fun read(): Int {
-            read(oneByteBuffer)
-            return if (oneByteBuffer.hasRemaining()) oneByteBuffer.get().toUByte().toInt() else -1
-        }
-
-        @Throws(IOException::class)
-        override fun read(b: ByteArray, off: Int, len: Int): Int {
-            val buffer = ByteBuffer.wrap(b, off, len)
-            read(buffer)
-            return if (buffer.hasRemaining()) buffer.remaining() else -1
-        }
-
-        @Throws(IOException::class)
-        private fun read(buffer: ByteBuffer) {
-            buffer.clear()
-            Archive.readData(archive, buffer)
-            buffer.flip()
-        }
-    }
 }

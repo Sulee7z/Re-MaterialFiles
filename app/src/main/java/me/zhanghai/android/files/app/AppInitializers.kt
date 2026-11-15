@@ -7,6 +7,8 @@ package me.zhanghai.android.files.app
 
 import android.os.AsyncTask
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.webkit.WebView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -212,21 +214,31 @@ private fun initializeTerminalBubbleLifecycle() {
  * and only when the setting is non-zero.
  */
 private fun cleanupExpiredTrash() {
-    Thread {
-        try {
-            Thread.sleep(TRASH_CLEANUP_DELAY_MILLIS)
-        } catch (e: InterruptedException) {
-            return@Thread
+    Handler(Looper.getMainLooper()).postDelayed({
+        if ((Settings.TRASH_AUTO_DELETE_DAYS.valueCompat ?: 0) <= 0) {
+            return@postDelayed
         }
-        try {
-            me.zhanghai.android.files.filejob.FileJobService.trashCleanup(application)
-        } catch (e: Throwable) {
-            e.printStackTrace()
+        val lifecycle = ProcessLifecycleOwner.get().lifecycle
+        fun startCleanup() {
+            if ((Settings.TRASH_AUTO_DELETE_DAYS.valueCompat ?: 0) > 0) {
+                me.zhanghai.android.files.filejob.FileJobService.trashCleanup(application)
+            }
         }
-    }.apply {
-        name = "TrashCleanup"
-        priority = Thread.MIN_PRIORITY
-    }.start()
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            startCleanup()
+        } else {
+            // An automatic cleanup is not a background-FGS exemption. Defer it until
+            // the app returns to the foreground instead of creating an idle service.
+            lifecycle.addObserver(object : LifecycleEventObserver {
+                override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
+                    if (event == Lifecycle.Event.ON_START) {
+                        lifecycle.removeObserver(this)
+                        startCleanup()
+                    }
+                }
+            })
+        }
+    }, TRASH_CLEANUP_DELAY_MILLIS)
 }
 
 private const val TRASH_CLEANUP_DELAY_MILLIS = 5000L

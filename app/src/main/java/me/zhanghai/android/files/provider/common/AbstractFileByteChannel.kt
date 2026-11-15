@@ -89,7 +89,11 @@ abstract class AbstractFileByteChannel(
                 onWrite(position, source)
                 position += remaining - source.remaining()
             }
-            return remaining
+            val written = remaining - source.remaining()
+            if (written > 0) {
+                readBuffer.invalidate(position)
+            }
+            return written
         }
     }
 
@@ -115,6 +119,7 @@ abstract class AbstractFileByteChannel(
 
     final override fun position(newPosition: Long): SeekableByteChannel {
         ensureOpen()
+        require(newPosition >= 0) { "Negative position: $newPosition" }
         if (isAppend) {
             // Ignored.
             return this
@@ -143,6 +148,7 @@ abstract class AbstractFileByteChannel(
             }
             onTruncate(size)
             position = position.coerceAtMost(size)
+            readBuffer.invalidate(position)
         }
         return this
     }
@@ -263,10 +269,15 @@ abstract class AbstractFileByteChannel(
             if (newBufferPosition in 0..buffer.limit()) {
                 buffer.position(newBufferPosition.toInt())
             } else {
-                cancelPendingRead()
-                buffer.limit(0)
-                bufferedPosition = newPosition
+                invalidate(newPosition)
             }
+        }
+
+        fun invalidate(newPosition: Long) {
+            cancelPendingRead()
+            buffer.clear()
+            buffer.limit(0)
+            bufferedPosition = newPosition
         }
 
         override fun close() {

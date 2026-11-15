@@ -362,6 +362,7 @@ object EverythingClient {
         connection.connectTimeout = CONNECT_TIMEOUT_MILLIS
         connection.readTimeout = READ_TIMEOUT_MILLIS
         connection.instanceFollowRedirects = true
+        connection.setRequestProperty("Accept-Encoding", "identity")
         if (rangeStart > 0) {
             connection.setRequestProperty("Range", "bytes=$rangeStart-")
         }
@@ -373,6 +374,12 @@ object EverythingClient {
                 throw NoSuchFileException(path.toString())
             }
             throw IOException("Everything HTTP server returned $responseCode")
+        }
+        if (rangeStart > 0 && (responseCode != HttpURLConnection.HTTP_PARTIAL ||
+                connection.getHeaderField("Content-Range")
+                    ?.substringBefore('-') != "bytes $rangeStart")) {
+            connection.disconnect()
+            throw IOException("Everything HTTP server returned an invalid byte range")
         }
         return connection
     }
@@ -419,6 +426,7 @@ object EverythingClient {
             if (closed) {
                 throw ClosedChannelException()
             }
+            if (!destination.hasRemaining()) return 0
             val size = size
             if (size >= 0 && position >= size) {
                 return -1
@@ -434,6 +442,7 @@ object EverythingClient {
             }
             destination.put(buffer, 0, bytesRead)
             position += bytesRead
+            streamStartPosition = position
             return bytesRead
         }
 

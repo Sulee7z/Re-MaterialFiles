@@ -9,22 +9,22 @@ import android.graphics.BitmapFactory
 import android.system.Os
 import android.system.OsConstants
 import java8.nio.file.Path
+import me.zhanghai.android.files.app.application
 import me.zhanghai.android.files.provider.common.newInputStream
 import me.zhanghai.android.files.provider.document.isDocumentPath
 import me.zhanghai.android.files.provider.document.resolver.DocumentResolver
 import me.zhanghai.android.files.provider.linux.isLinuxPath
 import java.io.FileDescriptor
+import java.io.File
+import java.io.InterruptedIOException
 import java.io.IOException
 
 /**
  * Decodes the bounds (size and MIME type) of the image at this path.
  *
- * [BitmapFactory.decodeStream] reads the encoded image into a Java byte array and hands the raw
- * pointer of that array to the native decoder, which reads the encoded image from that array
- * through ART's JNI array copy (art::JNI<false>::GetByteArrayRegion). A concurrent moving
- * garbage collection can relocate the array while the native decoder is still reading it, which
- * crashes the process with a native SIGSEGV. Decoding from a file path or from a file descriptor
- * keeps the encoded bytes out of the Java heap and is therefore immune to that failure.
+ * Use a local file or seekable descriptor for native decoding. Remote and archive streams
+ * are first copied to an app-owned temporary file; no custom InputStream is handed to the
+ * framework's native image decoder.
  *
  * The returned options have [BitmapFactory.Options.inJustDecodeBounds] set, so only the
  * `outWidth`, `outHeight` and `outMimeType` fields are filled in.
@@ -71,11 +71,26 @@ fun Path.decodeImageBounds(): BitmapFactory.Options {
             }
         }
     }
-    // There is neither a local file nor a file descriptor for this path (e.g. FTP, SFTP and SMB
-    // paths). The decode still completes before the stream is closed, but the encoded bytes still
-    // travel through a Java byte array, so the ART relocation hazard remains for these paths.
-    newInputStream().use { BitmapFactory.decodeStream(it, null, options) }
-    return options
+    val temporaryFile = File.createTempFile("image-bounds-", ".tmp", application.cacheDir)
+    try {
+        newInputStream().use { input ->
+            temporaryFile.outputStream().use { output ->
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                while (true) {
+                    if (Thread.currentThread().isInterrupted) {
+                        throw InterruptedIOException()
+                    }
+                    val count = input.read(buffer)
+                    if (count == -1) break
+                    output.write(buffer, 0, count)
+                }
+            }
+        }
+        BitmapFactory.decodeFile(temporaryFile.path, options)
+        return options
+    } finally {
+        temporaryFile.delete()
+    }
 }
 
 /**

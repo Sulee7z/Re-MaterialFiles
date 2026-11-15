@@ -51,8 +51,10 @@ class FileByteChannel(
                     if (data.isEmpty()) {
                         return@map ByteBuffer::class.EMPTY
                     }
-                    val length = data.size.coerceAtMost(size)
-                    ByteBuffer.wrap(data, 0, length)
+                    if (data.size > size) {
+                        throw IOException("SMB read exceeded requested size: ${data.size} > $size")
+                    }
+                    ByteBuffer.wrap(data)
                 }, { e ->
                     ExecutionException(SMBRuntimeException(e).toIOException())
                 }

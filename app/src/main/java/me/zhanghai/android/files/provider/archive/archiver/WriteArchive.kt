@@ -13,6 +13,7 @@ import me.zhanghai.android.files.provider.common.PosixFileType
 import me.zhanghai.android.files.provider.common.PosixGroup
 import me.zhanghai.android.files.provider.common.PosixUser
 import me.zhanghai.android.files.provider.common.toInt
+import me.zhanghai.android.files.provider.common.writeFully
 import me.zhanghai.android.libarchive.Archive
 import me.zhanghai.android.libarchive.ArchiveEntry
 import me.zhanghai.android.libarchive.ArchiveException
@@ -46,7 +47,7 @@ class WriteArchive @Throws(ArchiveException::class) constructor(
                 )
             }
             Archive.writeOpen(
-                archive, null, null, { _, _, buffer -> channel.write(buffer) }, null
+                archive, null, null, { _, _, buffer -> writeFully(buffer) { channel.write(it) } }, null
             )
             successful = true
         } finally {
@@ -139,14 +140,21 @@ class WriteArchive @Throws(ArchiveException::class) constructor(
         override fun write(b: Int) {
             oneByteBuffer.clear()
             oneByteBuffer.put(b.toByte())
-            Archive.writeData(archive, oneByteBuffer)
+            oneByteBuffer.flip()
+            writeFully(oneByteBuffer) { buffer ->
+                val before = buffer.remaining()
+                Archive.writeData(archive, buffer)
+                before - buffer.remaining()
+            }
         }
 
         @Throws(IOException::class)
         override fun write(b: ByteArray, off: Int, len: Int) {
             val buffer = ByteBuffer.wrap(b, off, len)
-            while (buffer.hasRemaining()) {
-                Archive.writeData(archive, buffer)
+            writeFully(buffer) {
+                val before = it.remaining()
+                Archive.writeData(archive, it)
+                before - it.remaining()
             }
         }
     }

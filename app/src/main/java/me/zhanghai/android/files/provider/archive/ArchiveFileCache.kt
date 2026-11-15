@@ -8,6 +8,7 @@ package me.zhanghai.android.files.provider.archive
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InterruptedIOException
 import java.security.MessageDigest
 import java8.nio.file.Path
 import java8.nio.file.Paths
@@ -16,6 +17,7 @@ import me.zhanghai.android.files.app.application
 import me.zhanghai.android.files.provider.common.newInputStream
 import me.zhanghai.android.files.provider.common.readAttributes
 import me.zhanghai.android.files.provider.ftp.isFtpPath
+import me.zhanghai.android.files.provider.webdav.isWebDavPath
 
 private val archiveCacheLock = Any()
 
@@ -27,17 +29,18 @@ private const val CACHE_DIRECTORY_NAME = "archives"
  * and the archive never finishes loading. Download the archive to the local cache once and
  * parse that local copy instead.
  *
- * Only FTP is affected (it is the provider without server-side random access); other remote
- * providers keep their direct channels. The cache is keyed by the file's URI plus its
+ * WebDAV archives also use a complete sequential download: range support and correct byte
+ * offsets cannot be assumed across servers/proxies, especially for compressed tar streams.
+ * Other remote providers keep their direct channels. The cache is keyed by the file's URI plus its
  * modification time and size, so a changed remote archive is re-downloaded automatically.
  */
 @Throws(IOException::class)
-fun Path.cacheIfFtpArchive(): Path {
-    if (!isFtpPath) {
+fun Path.cacheIfRemoteArchive(): Path {
+    if (!isFtpPath && !isWebDavPath) {
         return this
     }
     // Use the same backport attribute call as ForeignCopyMove, following links as the copy does.
-    // A stat/download failure must reach the caller, not fall back to random access over FTP.
+    // A stat/download failure must reach the caller, not fall back to remote random access.
     val attributes = readAttributes(BasicFileAttributes::class.java)
     val cacheDirectory = File(application.cacheDir, CACHE_DIRECTORY_NAME)
     val cacheKey = cacheKey(this)
@@ -46,8 +49,13 @@ fun Path.cacheIfFtpArchive(): Path {
     val cacheFile = File(cacheDirectory, cacheName)
     synchronized(archiveCacheLock) {
         if (cacheFile.exists()) {
-            cacheFile.checkDownload(attributes.size())
-            return Paths.get(cacheFile.path)
+            if (cacheFile.isFile && cacheFile.length() == attributes.size()) {
+                return Paths.get(cacheFile.path)
+            }
+            // An interrupted or externally truncated cache must be recoverable on retry.
+            if (!cacheFile.delete()) {
+                throw IOException("Cannot remove incomplete archive cache file: $cacheFile")
+            }
         }
         if (!cacheDirectory.isDirectory && !cacheDirectory.mkdirs()) {
             throw IOException("Cannot create archive cache directory: $cacheDirectory")
@@ -58,7 +66,16 @@ fun Path.cacheIfFtpArchive(): Path {
             // app-owned even when the file provider's root strategy is ALWAYS.
             newInputStream().use { inputStream ->
                 FileOutputStream(tempFile).use { outputStream ->
-                    inputStream.copyTo(outputStream)
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (true) {
+                        if (Thread.currentThread().isInterrupted) {
+                            throw InterruptedIOException()
+                        }
+                        val count = inputStream.read(buffer)
+                        if (count == -1) break
+                        if (count == 0) throw IOException("Archive download made no progress")
+                        outputStream.write(buffer, 0, count)
+                    }
                 }
             }
             tempFile.checkDownload(attributes.size())

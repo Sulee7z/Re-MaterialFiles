@@ -11,6 +11,7 @@ import at.bitfire.dav4jvm.property.webdav.GetContentLength
 import me.zhanghai.android.files.provider.common.AbstractFileByteChannel
 import me.zhanghai.android.files.provider.common.EMPTY
 import me.zhanghai.android.files.provider.common.readFully
+import me.zhanghai.android.files.provider.common.writeByteBuffer
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.io.OutputStream
@@ -31,8 +32,11 @@ class FileByteChannel(
             resource.getRangeCompat("*/*", position, size, null)
         } catch (e: HttpException) {
             if (e.code == HTTP_RANGE_NOT_SATISFIABLE) {
-                // We were reading at/past end of file
-                return ByteBuffer::class.EMPTY
+                // Some servers reject ranges for other reasons. Do not turn a failed
+                // request inside the file into silent EOF and a truncated archive.
+                if (position >= onSize()) {
+                    return ByteBuffer::class.EMPTY
+                }
             }
             throw e
         }
@@ -57,13 +61,10 @@ class FileByteChannel(
                 }
                 val outputStream = sequentialWriteOutputStream
                     ?: resource.putCompat().also { sequentialWriteOutputStream = it }
-                val remaining = source.remaining()
-                // I don't think we are using native or read-only ByteBuffer, so just call array()
-                // here.
-                outputStream.write(
-                    source.array(), source.arrayOffset() + source.position(), remaining
-                )
-                nextSequentialWritePosition += remaining
+                writeByteBuffer(source) { bytes, start, length ->
+                    outputStream.write(bytes, start, length)
+                    nextSequentialWritePosition += length
+                }
             }
         }
     }
