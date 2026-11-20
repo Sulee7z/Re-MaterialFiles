@@ -1,146 +1,267 @@
-﻿name: Re-MaterialFiles
+name: Re-MaterialFiles
 
 on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag to upload to (e.g. v1.7.9, optional)'
+        description: 'Optional release tag, e.g. v1.8.7 or 1.8.7-hotfix1; leave blank for an automatic build'
         required: false
         type: string
   push:
-    branches: [Sora-Editor_1.7, main]
-    tags: ['*']
+    branches:
+      - Sora-Editor_1.7
+      - main
+    tags:
+      - 'v*'
+      - '[0-9]*'
+      - '!*-build-*'
 
 permissions:
   contents: write
 
+# Serialize version allocation and publishing so auto-build tags do not collide.
+concurrency:
+  group: re-materialfiles-publish
+  cancel-in-progress: false
+  queue: max
+
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
-    # Expose signing credentials to every step (incl. Gradle build).
+    timeout-minutes: 120
     env:
-      STORE_FILE: key.jks
+      STORE_FILE: ${{ github.workspace }}/key.jks
       STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
       KEY_ALIAS: ${{ secrets.ALIAS }}
-      KEY_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || secrets.KEY_STORE_PASSWORD }}
 
     steps:
-    - name: Check out repository
-      uses: actions/checkout@v7
-      with:
-        show-progress: false
+      - name: Checkout source and tags
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          show-progress: false
 
-    - name: Get version and short SHA
-      id: get_tag
-      run: |
-        # The version comes from version.properties, the single source of truth shared
-        # with app/build.gradle (versionName/versionCode) 鈥?bump one file, everything
-        # follows.
-        major=$(grep -Po '^versionMajor=\K[0-9]+' version.properties)
-        minor=$(grep -Po '^versionMinor=\K[0-9]+' version.properties)
-        patch=$(grep -Po '^versionPatch=\K[0-9]+' version.properties)
-        if [ -z "$major" ] || [ -z "$minor" ] || [ -z "$patch" ]; then
-          tag='1.7.9'
-        else
-          tag="$major.$minor.$patch"
-        fi
-        echo "tag=$tag" >> $GITHUB_OUTPUT
-        echo "Short_SHA=$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_OUTPUT
+      - name: Fetch latest remote tags
+        run: git fetch --force --tags origin
 
-    - name: Determine release tag
-      id: release_tag
-      run: |
-        if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-          # Pushed for an explicit tag (e.g. v1.7.9): upload to that tag.
-          echo "release=$GITHUB_REF_NAME" >> $GITHUB_OUTPUT
-        elif [ -n "${{ inputs.release_tag }}" ]; then
-          # Manual run with a chosen tag: upload to it.
-          echo "release=${{ inputs.release_tag }}" >> $GITHUB_OUTPUT
-        else
-          # Branch push: keep the previous auto-versioned build tag.
-          echo "release=${{ steps.get_tag.outputs.tag }}-build-${{ github.run_number }}" >> $GITHUB_OUTPUT
-        fi
+      - name: Determine version, update build metadata and select release tag
+        id: version
+        shell: bash
+        env:
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag || '' }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
 
-    - name: Delete Non-Free Code
-      run: |
-        rm -rf app/src/main/java/me/zhanghai/android/files/nonfree
-        find app/src -type f -exec sed -i '/\/\/#ifdef NONFREE/,/\/\/#endif/d' {} +
+          def git(*args):
+              return subprocess.check_output(['git', *args], text=True).strip()
 
-    - name: Write Signing Configuration
-      run: |
-        if [ -n "${{ secrets.KEY_STORE }}" ]; then
-          printf '%s' "${{ secrets.KEY_STORE }}" | tr -d '[:space:]' | base64 --decode > key.jks
-          if [ ! -s key.jks ]; then echo "::error::Failed to decode KEY_STORE secret"; exit 1; fi
-          echo "Signing keystore written; credentials passed via environment"
-        else
-          echo "No signing secrets configured, falling back to debug signing"
-          sed -i 's/signingConfig signingConfigs.release/signingConfig signingConfigs.debug/' app/build.gradle
-        fi
+          properties_path = Path('version.properties')
+          properties_text = properties_path.read_text(encoding='utf-8')
+          keys = ('versionMajor', 'versionMinor', 'versionPatch')
+          original = []
+          for key in keys:
+              match = re.search(rf'(?m)^{key}[ \t]*=[ \t]*(\d+)[ \t]*$', properties_text)
+              if not match:
+                  raise SystemExit(f'Missing {key} in version.properties')
+              original.append(int(match.group(1)))
+          configured_version = tuple(original)
 
-    - name: Set up JDK
-      uses: actions/setup-java@v5
-      with:
-        distribution: 'temurin'
-        java-version: '25'
+          all_tags = git('tag', '--list').splitlines()
+          # Accept legacy tags with or without v and official hotfix tags.
+          official_re = re.compile(r'^v?(\d+)\.(\d+)\.(\d+)(?:-hotfix\d+)?$')
+          official_versions = []
+          for tag in all_tags:
+              match = official_re.fullmatch(tag)
+              if match:
+                  official_versions.append((tuple(map(int, match.groups())), tag))
+          latest = max(official_versions, key=lambda item: item[0], default=None)
+          latest_version = latest[0] if latest else (0, 0, 0)
+          latest_tag = latest[1] if latest else 'none'
 
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v5
+          explicit = (os.environ.get('INPUT_RELEASE_TAG') or '').strip()
+          is_tag_push = os.environ['GITHUB_REF_TYPE'] == 'tag'
+          if is_tag_push:
+              release_tag = os.environ['GITHUB_REF_NAME']
+          elif explicit:
+              release_tag = explicit
+          else:
+              # Never downgrade an intentional version.properties bump.
+              version = max(configured_version, latest_version)
+              prefix = '.'.join(map(str, version))
+              build_numbers = []
+              build_re = re.compile(rf'^v?{re.escape(prefix)}-build[-.](\d+)$')
+              for tag in all_tags:
+                  match = build_re.fullmatch(tag)
+                  if match:
+                      build_numbers.append(int(match.group(1)))
+              next_build = max(max(build_numbers, default=0) + 1,
+                               int(os.environ['GITHUB_RUN_NUMBER']))
+              release_tag = f'{prefix}-build-{next_build}'
 
-    - name: Build with Gradle
-      run: ./gradlew assembleRelease --parallel --stacktrace
+          match = re.fullmatch(r'v?(\d+)\.(\d+)\.(\d+)(?:-([A-Za-z0-9][A-Za-z0-9.-]*))?', release_tag)
+          if not match:
+              raise SystemExit(f'Invalid release tag: {release_tag!r}')
+          version = tuple(map(int, match.group(1, 2, 3)))
+          suffix = match.group(4) or ''
+          is_preview = (not (is_tag_push or explicit)) or (bool(suffix) and not re.fullmatch(r'hotfix\d+', suffix))
 
-    - name: Rename artifact
-      id: rename
-      working-directory: app/build/outputs/apk/release/
-      run: |
-        APK=$(ls app-release*.apk)
-        if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-          NAME="MaterialFiles.Sora-Editor-$GITHUB_REF_NAME.apk"
-        elif [ -n "${{ inputs.release_tag }}" ]; then
-          NAME="MaterialFiles.Sora-Editor-${{ inputs.release_tag }}.apk"
-        else
-          NAME="MaterialFiles.Sora-Editor-${{ steps.get_tag.outputs.tag }}@${{ steps.get_tag.outputs.Short_SHA }}.apk"
-        fi
-        mv "$APK" "$NAME"
-        echo "apk_name=$NAME" >> $GITHUB_OUTPUT
+          # An existing tag must point to the source that is actually being built.
+          if release_tag in all_tags:
+              tag_commit = git('rev-list', '-n', '1', f'refs/tags/{release_tag}')
+              if tag_commit != git('rev-parse', 'HEAD'):
+                  raise SystemExit(f'Tag {release_tag} points to {tag_commit}, but checkout is at HEAD; '
+                                   'run this workflow on the matching tag or choose a new tag.')
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: MaterialFiles-release ${{ steps.get_tag.outputs.tag }}@${{ steps.get_tag.outputs.Short_SHA }}
-        path: app/build/outputs/apk/release/*.apk
-        retention-days: 28
+          for key, value in zip(keys, version):
+              properties_text, count = re.subn(
+                  rf'(?m)^({key}[ \t]*=[ \t]*)\d+[ \t]*$',
+                  lambda m, n=value: m.group(1) + str(n),
+                  properties_text,
+              )
+              if count != 1:
+                  raise SystemExit(f'Unable to update {key}')
+          properties_path.write_text(properties_text, encoding='utf-8')
 
-    - name: Upload to GitHub Release
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        RELEASE_TAG="${{ steps.release_tag.outputs.release }}"
-        APK="app/build/outputs/apk/release/${{ steps.rename.outputs.apk_name }}"
-        if [ -f RELEASE_NOTES.md ]; then
-          # Strip the leading "# title" line: the release title already carries it.
-          NOTES=$(printf '%s\n' "$(tail -n +2 RELEASE_NOTES.md)")
-        else
-          NOTES="Automated build of commit ${{ github.sha }}"
-        fi
-        if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-          # Release (or its tag) already exists: attach the APK to it.
-          gh release upload "$RELEASE_TAG" "$APK" --clobber
-        elif [ "$GITHUB_REF_TYPE" = "tag" ]; then
-          # Explicit tag push: a real release with notes from RELEASE_NOTES.md.
-          gh release create \
-            "$RELEASE_TAG" \
-            "$APK" \
-            --title "Re-MaterialFiles $RELEASE_TAG" \
-            --notes "$NOTES"
-        else
-          # Branch push: auto-versioned build tag, minimal notes.
-          gh release create \
-            "$RELEASE_TAG" \
-            "$APK" \
-            --title "MaterialFiles Sora-Editor $RELEASE_TAG" \
-            --notes "Automated build of commit ${{ github.sha }}"
-        fi
+          # This repository uses versionNameSuffix '.Sora-Editor' in app/build.gradle.
+          # Add build/hotfix identifiers to Android's actual versionName as well.
+          gradle_path = Path('app/build.gradle')
+          gradle_text = gradle_path.read_text(encoding='utf-8')
+          needle = "versionNameSuffix '.Sora-Editor'"
+          if gradle_text.count(needle) != 1:
+              raise SystemExit('Expected a single versionNameSuffix in app/build.gradle')
+          extra = ('-' + suffix) if suffix else ''
+          android_suffix = '.Sora-Editor' + extra
+          gradle_path.write_text(
+              gradle_text.replace(needle, f"versionNameSuffix '{android_suffix}'", 1),
+              encoding='utf-8',
+          )
 
+          short_sha = git('rev-parse', '--short=7', 'HEAD')
+          apk_name = f'Re-MaterialFiles-{release_tag}-{short_sha}.apk'
+          code = version[0] * 10000 + version[1] * 100 + version[2]
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              for key, value in {
+                  'tag': release_tag,
+                  'base_version': '.'.join(map(str, version)),
+                  'android_version_name': '.'.join(map(str, version)) + android_suffix,
+                  'version_code': code,
+                  'latest_official_tag': latest_tag,
+                  'preview': str(bool(is_preview)).lower(),
+                  'apk_name': apk_name,
+                  'short_sha': short_sha,
+              }.items():
+                  print(f'{key}={value}', file=output)
+          print(f'Latest official tag: {latest_tag}')
+          print(f'Release tag: {release_tag}')
+          print(f'Android versionName: {".".join(map(str, version)) + android_suffix}')
+          print(f'Android versionCode: {code}')
+          PY
+
+      - name: Remove NONFREE code
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf app/src/main/java/me/zhanghai/android/files/nonfree
+          find app/src -type f \( -name '*.java' -o -name '*.kt' \) -print0 \
+            | xargs -0 -r sed -i '/\/\/#ifdef NONFREE/,/\/\/#endif/d'
+          sed -i '/\/\/#ifdef NONFREE/,/\/\/#endif/d' app/build.gradle
+
+      - name: Configure APK signing
+        shell: bash
+        env:
+          KEY_STORE_B64: ${{ secrets.KEY_STORE }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$KEY_STORE_B64" ]]; then
+            if [[ -z "$STORE_PASSWORD" || -z "$KEY_ALIAS" || -z "$KEY_PASSWORD" ]]; then
+              echo '::error::KEY_STORE is set, but signing passwords or ALIAS are missing.'
+              exit 1
+            fi
+            umask 077
+            printf '%s' "$KEY_STORE_B64" | base64 --decode > "$STORE_FILE"
+            test -s "$STORE_FILE"
+            echo 'Release signing configured.'
+          else
+            echo '::warning::KEY_STORE is missing; using the debug key for this release build.'
+            sed -i -E 's/signingConfig[[:space:]]*=[[:space:]]*signingConfigs\.release/signingConfig = signingConfigs.debug/' app/build.gradle
+            grep -q 'signingConfig = signingConfigs.debug' app/build.gradle
+          fi
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Build release APK
+        run: ./gradlew assembleRelease --parallel --build-cache --stacktrace
+
+      - name: Rename APK and generate checksum
+        id: apk
+        shell: bash
+        env:
+          APK_NAME: ${{ steps.version.outputs.apk_name }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apks=(app/build/outputs/apk/release/*.apk)
+          if (( ${#apks[@]} != 1 )); then
+            echo "::error::Expected exactly one release APK, found ${#apks[@]}."
+            exit 1
+          fi
+          mkdir -p dist
+          cp "${apks[0]}" "dist/$APK_NAME"
+          (cd dist && sha256sum "$APK_NAME" > SHA256SUMS.txt)
+          printf 'apk=dist/%s\n' "$APK_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Actions artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Re-MaterialFiles-${{ steps.version.outputs.tag }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 28
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          IS_PREVIEW: ${{ steps.version.outputs.preview }}
+          BASE_VERSION: ${{ steps.version.outputs.base_version }}
+          ANDROID_VERSION_NAME: ${{ steps.version.outputs.android_version_name }}
+          VERSION_CODE: ${{ steps.version.outputs.version_code }}
+          APK: ${{ steps.apk.outputs.apk }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=("$APK" dist/SHA256SUMS.txt)
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+            exit 0
+          fi
+
+          if [[ "$IS_PREVIEW" == true ]]; then
+            printf 'Automated build of commit `%s`\n\n' "$GITHUB_SHA" > release-notes.txt
+            printf -- '- Base version: `%s`\n- Android versionName: `%s`\n- versionCode: `%s`\n' \
+              "$BASE_VERSION" "$ANDROID_VERSION_NAME" "$VERSION_CODE" >> release-notes.txt
+          elif [[ -f RELEASE_NOTES.md ]]; then
+            cp RELEASE_NOTES.md release-notes.txt
+          else
+            printf 'Re-MaterialFiles %s\n\nBuilt from commit `%s`.\n' \
+              "$RELEASE_TAG" "$GITHUB_SHA" > release-notes.txt
+          fi
+
+          flags=(--target "$GITHUB_SHA" --title "Re-MaterialFiles $RELEASE_TAG" --notes-file release-notes.txt)
+          if [[ "$IS_PREVIEW" == true ]]; then
+            flags+=(--prerelease --latest=false)
+          fi
+          gh release create "$RELEASE_TAG" "${assets[@]}" "${flags[@]}"
